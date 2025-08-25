@@ -2,22 +2,56 @@
 
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { ChevronRight, BarChart3, Settings } from "lucide-react";
+import {
+  ChevronRight,
+  FileText,
+  CheckCircle,
+  ArrowLeft,
+  Briefcase,
+  BuildingIcon,
+  Building2,
+} from "lucide-react";
 import type { Variants } from "framer-motion";
 import Link from "next/link";
-
-export default function AdminDashboard() {
+export default function ITJobsFactoryDashboard() {
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
 
-  const dashboardCards = [
+  const reportCards = [
     {
-      id: "it-jobs-factory",
-      title: "IT Jobs Factory Fees",
+      id: "preplacement-report",
+      title: "Pre-Placement Report",
       description:
-        "Monitor and manage job posting fees, payment tracking, and revenue analytics",
-      icon: BarChart3,
-      gradient: "from-purple-500 to-indigo-600",
-      path: "/fee-dashboard", // You can update this path as needed
+        "Track and manage job posting fees, candidate applications, and pre-placement analytics",
+      icon: FileText,
+      gradient: "from-blue-500 to-cyan-600",
+      path: "/pre-placement",
+    },
+    {
+      id: "postplacement-report",
+      title: "Post-Placement Report",
+      description:
+        "Monitor successful placements, completion fees, and post-placement performance metrics",
+      icon: CheckCircle,
+      gradient: "from-green-500 to-emerald-600",
+      path: "/post-placement",
+    },
+    {
+      id: "excel-sheets",
+      title: "Excel Sheets",
+      description:
+        "This section contains all excel sheets of IT Jobs Factory with respective name",
+      icon: Briefcase,
+      gradient: "from-yellow-500 to-amber-600",
+      path: "/excel-sheets",
+    },
+    {
+      id: "HR database",
+      title: "HR Database",
+      description:
+        "This section contains the HR database of IT Jobs Factory with all the details of HR",
+      icon: Building2,
+      gradient: "from-red-500 to-rose-600",
+      path: "/hr-database",
     },
   ];
 
@@ -44,7 +78,7 @@ export default function AdminDashboard() {
       scale: 1,
       transition: {
         duration: 0.5,
-        ease: "easeOut" as const, // ✅ type-safe
+        ease: "easeOut" as const,
       },
     },
     hover: {
@@ -52,7 +86,7 @@ export default function AdminDashboard() {
       scale: 1.02,
       transition: {
         duration: 0.3,
-        ease: "easeInOut" as const, // ✅
+        ease: "easeInOut" as const,
       },
     },
   };
@@ -62,10 +96,7 @@ export default function AdminDashboard() {
     visible: {
       opacity: 1,
       y: 0,
-      transition: {
-        duration: 0.6,
-        ease: [0.16, 1, 0.3, 1], // ✅ smooth ease-out curve
-      },
+      transition: { duration: 0.6, ease: "easeOut" },
     },
   };
 
@@ -74,23 +105,23 @@ export default function AdminDashboard() {
       {/* Background decoration - subtle moving dots */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div
-          className="absolute top-20 left-20 w-2 h-2 bg-purple-400 rounded-full opacity-40 animate-bounce"
+          className="absolute top-20 left-20 w-2 h-2 bg-blue-400 rounded-full opacity-40 animate-bounce"
           style={{ animationDelay: "0s" }}
         ></div>
         <div
-          className="absolute top-40 right-32 w-1 h-1 bg-indigo-400 rounded-full opacity-30 animate-bounce"
+          className="absolute top-40 right-32 w-1 h-1 bg-cyan-400 rounded-full opacity-30 animate-bounce"
           style={{ animationDelay: "1s" }}
         ></div>
         <div
-          className="absolute top-60 left-1/3 w-1.5 h-1.5 bg-blue-400 rounded-full opacity-35 animate-bounce"
+          className="absolute top-60 left-1/3 w-1.5 h-1.5 bg-green-400 rounded-full opacity-35 animate-bounce"
           style={{ animationDelay: "2s" }}
         ></div>
         <div
-          className="absolute bottom-40 right-20 w-2 h-2 bg-purple-300 rounded-full opacity-25 animate-bounce"
+          className="absolute bottom-40 right-20 w-2 h-2 bg-emerald-300 rounded-full opacity-25 animate-bounce"
           style={{ animationDelay: "3s" }}
         ></div>
         <div
-          className="absolute bottom-60 left-40 w-1 h-1 bg-indigo-300 rounded-full opacity-30 animate-bounce"
+          className="absolute bottom-60 left-40 w-1 h-1 bg-teal-300 rounded-full opacity-30 animate-bounce"
           style={{ animationDelay: "1.5s" }}
         ></div>
         <div
@@ -105,23 +136,45 @@ export default function AdminDashboard() {
         initial="hidden"
         animate="visible"
       >
+        {/* Back Button */}
+        <motion.div
+          className="mb-8"
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <Link href={"/"}>
+            {" "}
+            <button className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors duration-200 group">
+              <ArrowLeft
+                size={20}
+                className="group-hover:-translate-x-1 transition-transform duration-200"
+              />
+              <span>Back to Dashboards</span>
+            </button>
+          </Link>
+        </motion.div>
+
         {/* Header Section */}
         <motion.div className="text-center mb-16" variants={titleVariants}>
-          <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-purple-400 via-indigo-400 to-blue-400 bg-clip-text text-transparent mb-4">
-            IT Jobs Factory Dashboards
+          <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-blue-400 via-cyan-400 to-green-400 bg-clip-text text-transparent mb-4">
+            IT Jobs Factory
           </h1>
+          <h2 className="text-2xl md:text-3xl font-semibold text-gray-200 mb-4">
+            Fee Dashboard
+          </h2>
           <p className="text-xl text-gray-300 max-w-2xl mx-auto leading-relaxed">
-            Comprehensive analytics and management tools for your business
-            operations
+            Comprehensive reporting and analytics for job placement fees and
+            performance metrics
           </p>
         </motion.div>
 
-        {/* Dashboard Cards Grid */}
+        {/* Report Cards Grid */}
         <motion.div
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto"
+          className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto"
           variants={containerVariants}
         >
-          {dashboardCards.map((card) => {
+          {reportCards.map((card) => {
             const IconComponent = card.icon;
             return (
               <motion.div
@@ -132,9 +185,8 @@ export default function AdminDashboard() {
                 onHoverStart={() => setHoveredCard(card.id)}
                 onHoverEnd={() => setHoveredCard(null)}
               >
-                {" "}
                 <Link href={card.path}>
-                  <div className="relative h-72 rounded-2xl overflow-hidden shadow-xl bg-slate-800 border border-slate-700">
+                  <div className="relative h-80 rounded-2xl overflow-hidden shadow-xl bg-slate-800 border border-slate-700">
                     {/* Gradient background */}
                     <div
                       className={`absolute inset-0 bg-gradient-to-br ${card.gradient} opacity-90`}
@@ -143,9 +195,9 @@ export default function AdminDashboard() {
                     {/* Content overlay */}
                     <div className="relative z-10 h-full flex flex-col justify-between p-8 text-white">
                       {/* Icon and title section */}
-                      <div>
+                      <div className="text-center">
                         <motion.div
-                          className="mb-4"
+                          className="mb-6 flex justify-center"
                           animate={{
                             rotate: hoveredCard === card.id ? 360 : 0,
                             scale: hoveredCard === card.id ? 1.1 : 1,
@@ -153,23 +205,23 @@ export default function AdminDashboard() {
                           transition={{ duration: 0.6, ease: "easeInOut" }}
                         >
                           <IconComponent
-                            size={48}
+                            size={64}
                             className="text-white drop-shadow-lg"
                           />
                         </motion.div>
 
-                        <h3 className="text-2xl font-bold mb-3 leading-tight">
+                        <h3 className="text-2xl md:text-3xl font-bold mb-4 leading-tight">
                           {card.title}
                         </h3>
 
-                        <p className="text-purple-100 text-sm leading-relaxed opacity-90">
+                        <p className="text-white/90 text-base leading-relaxed opacity-90">
                           {card.description}
                         </p>
                       </div>
 
                       {/* Arrow indicator */}
                       <motion.div
-                        className="self-end"
+                        className="self-center mt-6"
                         animate={{
                           x: hoveredCard === card.id ? 8 : 0,
                           opacity: hoveredCard === card.id ? 1 : 0.7,
@@ -177,7 +229,7 @@ export default function AdminDashboard() {
                         transition={{ duration: 0.3 }}
                       >
                         <ChevronRight
-                          size={32}
+                          size={36}
                           className="text-white drop-shadow-lg"
                         />
                       </motion.div>
@@ -195,22 +247,6 @@ export default function AdminDashboard() {
               </motion.div>
             );
           })}
-
-          {/* Placeholder cards for future dashboards */}
-          {[1, 2].map((index) => (
-            <motion.div
-              key={`placeholder-${index}`}
-              className="h-72 rounded-2xl border-2 border-dashed border-gray-600 flex flex-col items-center justify-center text-gray-400 bg-slate-800/50 backdrop-blur-sm"
-              variants={cardVariants}
-              whileHover={{ scale: 1.02 }}
-            >
-              <Settings size={48} className="mb-4 opacity-50" />
-              <p className="text-lg font-semibold mb-2">Coming Soon</p>
-              <p className="text-sm text-center px-4">
-                More dashboard modules will be added here
-              </p>
-            </motion.div>
-          ))}
         </motion.div>
 
         {/* Footer section */}
@@ -221,8 +257,8 @@ export default function AdminDashboard() {
           transition={{ delay: 0.8, duration: 0.6 }}
         >
           <p className="text-gray-400 text-sm">
-            Select a dashboard to get started with your analytics and management
-            tools
+            Select a report type to view detailed analytics and manage your job
+            placement operations
           </p>
         </motion.div>
       </motion.div>
