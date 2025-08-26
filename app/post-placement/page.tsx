@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useMemo, useState, useCallback } from "react";
@@ -46,60 +47,14 @@ import {
   Pie,
   Cell,
 } from "recharts";
-import { debug } from "console";
-// TypeScript interfaces
-interface ChartData {
-  [key: string]: any;
-}
 
-interface ChartConfig {
-  kind: "bar" | "line";
-  xKey: string;
-  yKeys: string[];
-}
-
-interface MessageContent {
-  type?: "chart" | "list" | "text";
-  text?: string;
-  data?: ChartData[];
-  chart?: ChartConfig;
-  rows?: any[];
-  unit?: string;
-}
-
-interface Message {
-  role: "user" | "assistant";
-  content: MessageContent;
-}
 // ======================
 // TYPES & CONFIG
 // ======================
-const SHEETDB_URL = "https://sheetdb.io/api/v1/90i9ywtmyetw4";
-
-export type RawRow = {
-  "STUDENT NAME"?: string;
-  "OFFER DATE"?: string;
-  "HR NAME"?: string;
-  "HR CONTACT NUMBER"?: string;
-  "HR MAIL ID"?: string;
-  "COMPANY NAME"?: string;
-  LOCATION?: string;
-  "JOINING DATE"?: string;
-  PACKAGE?: string;
-  "TOTAL POST PLACEMENT FEE"?: string;
-  "REMAINING PRE PLACEMENT FEE"?: string;
-  DISCOUNT?: string;
-  "1ST INSTALLMENT"?: string;
-  "2ND INSTALLMENT"?: string;
-  "3RD INSTALLMENT"?: string;
-  "4TH INSTALLMENT"?: string;
-  "5TH INSTALLMENT"?: string;
-  "6TH INSTALLMENT"?: string;
-  "REMAINING FEE"?: string;
-  [k: string]: any;
-};
+const API_BASE_URL = "http://localhost:8000/api/post-placement";
 
 export type RecordRow = {
+  _id: string;
   studentName: string;
   offerDate: string | null;
   joiningDate: string | null;
@@ -123,7 +78,7 @@ export type RecordRow = {
   remaining: number;
   status: "paid" | "partial" | "overdue";
   daysSinceOffer: number;
-  raw: RawRow;
+  raw: any;
 };
 
 type FilterState = {
@@ -135,32 +90,33 @@ type FilterState = {
   search: string;
 };
 
+interface ChartData {
+  [key: string]: any;
+}
+
+interface ChartConfig {
+  kind: "bar" | "line";
+  xKey: string;
+  yKeys: string[];
+}
+
+interface MessageContent {
+  type?: "chart" | "list" | "text";
+  text?: string;
+  data?: ChartData[];
+  chart?: ChartConfig;
+  rows?: any[];
+  unit?: string;
+}
+
+interface Message {
+  role: "user" | "assistant";
+  content: MessageContent;
+}
+
 // ======================
 // UTILITIES
 // ======================
-const toNumber = (val?: string | number | null): number => {
-  if (typeof val === "number") return val;
-  if (!val) return 0;
-  const cleaned = String(val)
-    .replace(/\((.*?)\)/g, "$1")
-    .replace(/[^0-9.\-]/g, "");
-  const parsed = parseFloat(cleaned);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const parseDMY = (input?: string | null): string | null => {
-  if (!input) return null;
-  const m = input.match(/(\d{2})[-/](\d{2})[-/](\d{4})/);
-  if (!m) return null;
-  const [_, dd, mm, yyyy] = m;
-  return `${yyyy}-${mm}-${dd}`;
-};
-
-const monthKey = (iso: string | null): string => {
-  if (!iso || iso.length < 7) return "";
-  return `${iso.slice(0, 4)}-${iso.slice(5, 7)}`;
-};
-
 const currency = (n: number) =>
   new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -182,6 +138,78 @@ const getDaysDiff = (from: string | null, to: Date = new Date()): number => {
   const diff = to.getTime() - new Date(from).getTime();
   return Math.floor(diff / (1000 * 3600 * 24));
 };
+
+const monthKey = (iso: string | null): string => {
+  if (!iso || iso.length < 7) return "";
+  return `${iso.slice(0, 4)}-${iso.slice(5, 7)}`;
+};
+
+// ======================
+// API SERVICE
+// ======================
+class PostPlacementService {
+  static async fetchOffers(filters: FilterState = {
+    companies: [],
+    locations: [],
+    packages: [],
+    statuses: [],
+    offerMonth: "",
+    search: "",
+  }): Promise<RecordRow[]> {
+    try {
+      const params = new URLSearchParams();
+      
+      if (filters.search) params.append('search', filters.search);
+      if (filters.companies.length) params.append('companies', filters.companies.join(','));
+      if (filters.locations.length) params.append('locations', filters.locations.join(','));
+      if (filters.packages.length) params.append('packages', filters.packages.join(','));
+      if (filters.statuses.length) params.append('statuses', filters.statuses.join(','));
+      if (filters.offerMonth) params.append('offerMonth', filters.offerMonth);
+      
+      // Set overdue threshold to 60 days
+      params.append('overdueDays', '60');
+      params.append('limit', '1000');
+
+      const response = await fetch(`${API_BASE_URL}/offers?${params}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.items || [];
+    } catch (error) {
+      console.error('Failed to fetch offers:', error);
+      throw error;
+    }
+  }
+
+  static async fetchOffer(id: string): Promise<RecordRow> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/offers/${id}?overdueDays=60`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Failed to fetch offer:', error);
+      throw error;
+    }
+  }
+}
 
 // ======================
 // KPI BELT COMPONENT
@@ -549,7 +577,7 @@ function StatusBreakdown({
                 <div className="text-right">
                   <div className="text-white font-semibold">{item.value}</div>
                   <div className="text-purple-200/80 text-sm">
-                    {((item.value / rows.length) * 100).toFixed(1)}%
+                    {rows.length > 0 ? ((item.value / rows.length) * 100).toFixed(1) : 0}%
                   </div>
                 </div>
               </button>
@@ -974,7 +1002,7 @@ function EnhancedStudentTable({
           <tbody>
             {sortedRows.map((row, idx) => (
               <tr
-                key={`${row.studentName}-${idx}`}
+                key={`${row._id}-${idx}`}
                 onClick={() => onRowClick(row)}
                 className={`cursor-pointer hover:bg-white/10 transition-all duration-200 border-b border-purple-300/10 ${
                   row.status === "overdue" ? "bg-red-500/5" : ""
@@ -1275,87 +1303,9 @@ function EnhancedStudentDrawer({
   );
 }
 
-// Helper functions
-function applyFilters(rows: RecordRow[], f: FilterState) {
-  return rows.filter((r) => {
-    const byCompany = f.companies.length
-      ? f.companies.includes(r.company)
-      : true;
-    const byLocation = f.locations.length
-      ? f.locations.includes(r.location)
-      : true;
-    const byPackage = f.packages.length ? f.packages.includes(r.package) : true;
-    const byStatus = f.statuses.length ? f.statuses.includes(r.status) : true;
-    const byMonth = f.offerMonth
-      ? monthKey(r.offerDate) === f.offerMonth
-      : true;
-    const bySearch = f.search
-      ? [r.studentName, r.company, r.location, r.hrName].some((v) =>
-          (v || "").toLowerCase().includes(f.search.toLowerCase())
-        )
-      : true;
-    return (
-      byCompany && byLocation && byPackage && byStatus && byMonth && bySearch
-    );
-  });
-}
-
-function mapRawRow(raw: RawRow): RecordRow {
-  const offer = parseDMY(raw["OFFER DATE"]);
-  const joining = parseDMY(raw["JOINING DATE"]);
-  const totalPPFee = toNumber(raw["TOTAL POST PLACEMENT FEE"]);
-  const collected =
-    toNumber(raw["1ST INSTALLMENT"]) +
-    toNumber(raw["2ND INSTALLMENT"]) +
-    toNumber(raw["3RD INSTALLMENT"]) +
-    toNumber(raw["4TH INSTALLMENT"]) +
-    toNumber(raw["5TH INSTALLMENT"]) +
-    toNumber(raw["6TH INSTALLMENT"]);
-
-  const remaining = Math.max(totalPPFee - collected, 0);
-
-  const status: RecordRow["status"] =
-    remaining <= 0
-      ? "paid"
-      : offer && new Date(offer) < new Date()
-      ? "partial"
-      : "partial";
-
-  return {
-    studentName: raw["STUDENT NAME"] || "",
-    offerDate: offer,
-    joiningDate: joining,
-    hrName: raw["HR NAME"] || "",
-    hrContact: raw["HR CONTACT NUMBER"] || "",
-    hrEmail: raw["HR MAIL ID"] || "",
-    company: raw["COMPANY NAME"] || "",
-    location: raw["LOCATION"] || "",
-    package: raw["PACKAGE"] || "",
-    totalPPFee,
-    remainingPreFee: raw["REMAINING PRE PLACEMENT FEE"] || "",
-    discount: raw["DISCOUNT"] || "",
-    installments: [
-      {
-        amount: toNumber(raw["1ST INSTALLMENT"]),
-        dueDate: null,
-        paidDate: null,
-        status: "paid",
-      },
-      {
-        amount: toNumber(raw["2ND INSTALLMENT"]),
-        dueDate: null,
-        paidDate: null,
-        status: "paid",
-      },
-    ],
-    collected,
-    remainingFee: raw["REMAINING FEE"] || "",
-    remaining,
-    status,
-    daysSinceOffer: getDaysDiff(offer),
-    raw,
-  };
-}
+// ======================
+// AI CHAT SIDEBAR
+// ======================
 function AIChatSidebar() {
   const [open, setOpen] = useState<boolean>(false);
   const [input, setInput] = useState<string>("");
@@ -1686,6 +1636,8 @@ function AIChatSidebar() {
 // ======================
 export default function PostPlacementPage() {
   const [rows, setRows] = useState<RecordRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<FilterState>({
     companies: [],
     locations: [],
@@ -1696,52 +1648,125 @@ export default function PostPlacementPage() {
   });
   const [selected, setSelected] = useState<RecordRow | null>(null);
 
+  // Load data using the API service
   useEffect(() => {
-    (async () => {
-      const res = await fetch(SHEETDB_URL, { cache: "no-store" });
-      const data: RawRow[] = await res.json();
-      setRows(data.map(mapRawRow));
-    })();
-  }, []);
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await PostPlacementService.fetchOffers(filters);
+        setRows(data);
+      } catch (err) {
+        console.error('Failed to load placement data:', err);
+        setError('Failed to load placement data. Please check your connection and try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const filteredRows = useMemo(
-    () => applyFilters(rows, filters),
-    [rows, filters]
-  );
+    loadData();
+  }, [filters]);
+
+  const filteredRows = useMemo(() => {
+    // Since API already handles filtering, we return rows as-is
+    // But we can add client-side filtering for real-time search if needed
+    if (!filters.search) return rows;
+    
+    const searchTerm = filters.search.toLowerCase();
+    return rows.filter(row => 
+      row.studentName.toLowerCase().includes(searchTerm) ||
+      row.company.toLowerCase().includes(searchTerm) ||
+      row.location.toLowerCase().includes(searchTerm) ||
+      row.hrName.toLowerCase().includes(searchTerm)
+    );
+  }, [rows, filters.search]);
 
   const handleFilterClick = (partial: Partial<FilterState>) => {
-    setFilters((prev) => ({ ...prev, ...partial }));
+    setFilters(prev => ({ ...prev, ...partial }));
   };
+
+  const refreshData = async () => {
+    try {
+      setLoading(true);
+      const data = await PostPlacementService.fetchOffers(filters);
+      setRows(data);
+    } catch (err) {
+      setError('Failed to refresh data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-indigo-900 to-purple-800 flex items-center justify-center">
+        <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-purple-300/20 p-8 max-w-md mx-auto text-center">
+          <AlertTriangle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-white mb-2">Error Loading Data</h2>
+          <p className="text-purple-200/80 mb-4">{error}</p>
+          <button
+            onClick={refreshData}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors mx-auto"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-indigo-900 to-purple-800">
       <div className="p-6 max-w-7xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-200 to-indigo-200 bg-clip-text text-transparent mb-2">
-            Post Placement Fee Report
-          </h1>
+          <div className="flex items-center justify-center gap-4 mb-4">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-200 to-indigo-200 bg-clip-text text-transparent">
+              Post Placement Fee Report
+            </h1>
+            <button
+              onClick={refreshData}
+              disabled={loading}
+              className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-all disabled:opacity-50"
+              title="Refresh data"
+            >
+              <RefreshCw className={`w-5 h-5 text-purple-200 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
           <p className="text-purple-200/80">
             Comprehensive student placement fee tracking and analytics
           </p>
         </div>
 
+        {/* Loading State */}
+        {loading && (
+          <div className="flex items-center justify-center py-12">
+            <div className="flex items-center gap-3 text-purple-200">
+              <RefreshCw className="w-5 h-5 animate-spin" />
+              <span>Loading placement data...</span>
+            </div>
+          </div>
+        )}
+
         {/* Dashboard Content */}
-        <div className="space-y-8">
-          <KpiBelt rows={filteredRows} onFilterClick={handleFilterClick} />
-          <FiltersBar
-            rows={rows}
-            filters={filters}
-            onFiltersChange={setFilters}
-          />
-          <StatusBreakdown
-            rows={filteredRows}
-            onFilterClick={handleFilterClick}
-          />
-          <TrendsSection rows={filteredRows} />
-          <AlertsPanel rows={filteredRows} />
-          <EnhancedStudentTable rows={filteredRows} onRowClick={setSelected} />
-        </div>
+        {!loading && (
+          <div className="space-y-8">
+            <KpiBelt rows={filteredRows} onFilterClick={handleFilterClick} />
+            <FiltersBar
+              rows={rows}
+              filters={filters}
+              onFiltersChange={setFilters}
+            />
+            <StatusBreakdown
+              rows={filteredRows}
+              onFilterClick={handleFilterClick}
+            />
+            <TrendsSection rows={filteredRows} />
+            <AlertsPanel rows={filteredRows} />
+            <EnhancedStudentTable rows={filteredRows} onRowClick={setSelected} />
+          </div>
+        )}
 
         {/* Student Detail Drawer */}
         {selected && (
