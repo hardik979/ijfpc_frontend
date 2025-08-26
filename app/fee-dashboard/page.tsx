@@ -24,7 +24,7 @@ export default function ITJobsFactoryDashboard() {
         "Track and manage job posting fees, candidate applications, and pre-placement analytics",
       icon: FileText,
       gradient: "from-blue-500 to-cyan-600",
-      path: "/pre-placement",
+      path: "/fee-dashboard/pre-placement",
     },
     {
       id: "postplacement-report",
@@ -33,7 +33,7 @@ export default function ITJobsFactoryDashboard() {
         "Monitor successful placements, completion fees, and post-placement performance metrics",
       icon: CheckCircle,
       gradient: "from-green-500 to-emerald-600",
-      path: "/post-placement",
+      path: "/fee-dashboard/post-placement",
     },
     {
       id: "excel-sheets",
@@ -42,7 +42,7 @@ export default function ITJobsFactoryDashboard() {
         "This section contains all excel sheets of IT Jobs Factory with respective name",
       icon: Briefcase,
       gradient: "from-yellow-500 to-amber-600",
-      path: "/excel-sheets",
+      path: "/fee-dashboard/excel-sheets",
     },
     {
       id: "HR database",
@@ -51,7 +51,7 @@ export default function ITJobsFactoryDashboard() {
         "This section contains the HR database of IT Jobs Factory with all the details of HR",
       icon: Building2,
       gradient: "from-red-500 to-rose-600",
-      path: "/hr-database",
+      path: "/fee-dashboard/hr-database",
     },
   ];
 

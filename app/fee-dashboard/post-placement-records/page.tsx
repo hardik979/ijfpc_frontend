@@ -14,6 +14,7 @@ import {
   Trash2,
   CreditCard,
 } from "lucide-react";
+import { API_BASE_URL } from "@/lib/api";
 
 const PAYMENT_MODES = [
   "CASH",
@@ -136,7 +137,7 @@ const PostPlacementDashboard: React.FC = () => {
   const fetchStudents = async (): Promise<void> => {
     try {
       setLoading(true);
-      const response = await fetch("http://localhost:8000/api/offers/list");
+      const response = await fetch(`${API_BASE_URL}/api/offers/list`);
       if (!response.ok) throw new Error("Failed to fetch students");
       const data: PostPlacementOffer[] = await response.json();
       setStudents(data);
@@ -178,7 +179,7 @@ const PostPlacementDashboard: React.FC = () => {
     studentData: Partial<PostPlacementOffer>
   ): Promise<boolean> => {
     try {
-      const response = await fetch("http://localhost:8000/api/offers/create", {
+      const response = await fetch(`${API_BASE_URL}/api/offers/create`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -201,7 +202,7 @@ const PostPlacementDashboard: React.FC = () => {
     updateData: Partial<PostPlacementOffer>
   ): Promise<boolean> => {
     try {
-      const response = await fetch(`http://localhost:8000/api/offers/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/offers/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -225,7 +226,7 @@ const PostPlacementDashboard: React.FC = () => {
       return;
 
     try {
-      const response = await fetch(`http://localhost:8000/api/offers/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/offers/${id}`, {
         method: "DELETE",
       });
       if (!response.ok) throw new Error("Failed to delete student");
@@ -242,7 +243,7 @@ const PostPlacementDashboard: React.FC = () => {
   ): Promise<boolean> => {
     try {
       const res = await fetch(
-        `http://localhost:8000/api/offers/${studentId}/installments/${installmentId}`,
+        `${API_BASE_URL}/api/offers/${studentId}/installments/${installmentId}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -268,7 +269,7 @@ const PostPlacementDashboard: React.FC = () => {
   ): Promise<boolean> => {
     try {
       const response = await fetch(
-        `http://localhost:8000/api/offers/${studentId}/installments`,
+        `${API_BASE_URL}/api/offers/${studentId}/installments`,
         {
           method: "POST",
           headers: {
@@ -299,7 +300,7 @@ const PostPlacementDashboard: React.FC = () => {
 
     try {
       const response = await fetch(
-        `http://localhost:8000/api/offers/${studentId}/installments/${installmentId}`,
+        `${API_BASE_URL}/api/offers/${studentId}/installments/${installmentId}`,
         {
           method: "DELETE",
         }

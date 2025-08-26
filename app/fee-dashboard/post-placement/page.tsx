@@ -1,20 +1,17 @@
-
 "use client";
 
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Calendar,
   Users,
   IndianRupee,
   Search,
   X,
-  ChevronRight,
   RefreshCw,
   TrendingUp,
   AlertTriangle,
   Filter,
   Building2,
-  MapPin,
   Clock,
   CheckCircle,
   XCircle,
@@ -23,9 +20,6 @@ import {
   Mail,
   Copy,
   ChevronDown,
-  Eye,
-  EyeOff,
-  MessageCircle,
   Send,
   Bot,
   BarChart3,
@@ -40,18 +34,17 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  BarChart,
   Bar,
   ComposedChart,
   PieChart,
   Pie,
   Cell,
 } from "recharts";
+import { API_BASE_URL } from "@/lib/api";
 
 // ======================
 // TYPES & CONFIG
 // ======================
-const API_BASE_URL = "http://localhost:8000/api/post-placement";
 
 export type RecordRow = {
   _id: string;
@@ -148,34 +141,43 @@ const monthKey = (iso: string | null): string => {
 // API SERVICE
 // ======================
 class PostPlacementService {
-  static async fetchOffers(filters: FilterState = {
-    companies: [],
-    locations: [],
-    packages: [],
-    statuses: [],
-    offerMonth: "",
-    search: "",
-  }): Promise<RecordRow[]> {
+  static async fetchOffers(
+    filters: FilterState = {
+      companies: [],
+      locations: [],
+      packages: [],
+      statuses: [],
+      offerMonth: "",
+      search: "",
+    }
+  ): Promise<RecordRow[]> {
     try {
       const params = new URLSearchParams();
-      
-      if (filters.search) params.append('search', filters.search);
-      if (filters.companies.length) params.append('companies', filters.companies.join(','));
-      if (filters.locations.length) params.append('locations', filters.locations.join(','));
-      if (filters.packages.length) params.append('packages', filters.packages.join(','));
-      if (filters.statuses.length) params.append('statuses', filters.statuses.join(','));
-      if (filters.offerMonth) params.append('offerMonth', filters.offerMonth);
-      
-      // Set overdue threshold to 60 days
-      params.append('overdueDays', '60');
-      params.append('limit', '1000');
 
-      const response = await fetch(`${API_BASE_URL}/offers?${params}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      if (filters.search) params.append("search", filters.search);
+      if (filters.companies.length)
+        params.append("companies", filters.companies.join(","));
+      if (filters.locations.length)
+        params.append("locations", filters.locations.join(","));
+      if (filters.packages.length)
+        params.append("packages", filters.packages.join(","));
+      if (filters.statuses.length)
+        params.append("statuses", filters.statuses.join(","));
+      if (filters.offerMonth) params.append("offerMonth", filters.offerMonth);
+
+      // Set overdue threshold to 60 days
+      params.append("overdueDays", "60");
+      params.append("limit", "1000");
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/post-placement/offers?${params}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
       if (!response.ok) {
         throw new Error(`API Error: ${response.status}`);
@@ -184,19 +186,22 @@ class PostPlacementService {
       const data = await response.json();
       return data.items || [];
     } catch (error) {
-      console.error('Failed to fetch offers:', error);
+      console.error("Failed to fetch offers:", error);
       throw error;
     }
   }
 
   static async fetchOffer(id: string): Promise<RecordRow> {
     try {
-      const response = await fetch(`${API_BASE_URL}/offers/${id}?overdueDays=60`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      const response = await fetch(
+        `${API_BASE_URL}/offers/${id}?overdueDays=60`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
       if (!response.ok) {
         throw new Error(`API Error: ${response.status}`);
@@ -205,7 +210,7 @@ class PostPlacementService {
       const data = await response.json();
       return data;
     } catch (error) {
-      console.error('Failed to fetch offer:', error);
+      console.error("Failed to fetch offer:", error);
       throw error;
     }
   }
@@ -577,7 +582,10 @@ function StatusBreakdown({
                 <div className="text-right">
                   <div className="text-white font-semibold">{item.value}</div>
                   <div className="text-purple-200/80 text-sm">
-                    {rows.length > 0 ? ((item.value / rows.length) * 100).toFixed(1) : 0}%
+                    {rows.length > 0
+                      ? ((item.value / rows.length) * 100).toFixed(1)
+                      : 0}
+                    %
                   </div>
                 </div>
               </button>
@@ -796,110 +804,6 @@ function MultiSelect({
 // ======================
 // ALERTS PANEL
 // ======================
-function AlertsPanel({ rows }: { rows: RecordRow[] }) {
-  const alerts = useMemo(() => {
-    const overdue = rows
-      .filter((r) => r.status === "overdue")
-      .sort((a, b) => b.remaining - a.remaining)
-      .slice(0, 5);
-
-    const upcomingDue = rows
-      .filter((r) => {
-        const nextDue = r.installments.find((i) => i.status === "pending");
-        if (!nextDue?.dueDate) return false;
-        const daysUntilDue = getDaysDiff(
-          new Date().toISOString().split("T")[0],
-          new Date(nextDue.dueDate)
-        );
-        return daysUntilDue <= 7 && daysUntilDue >= 0;
-      })
-      .slice(0, 5);
-
-    return { overdue, upcomingDue };
-  }, [rows]);
-
-  if (alerts.overdue.length === 0 && alerts.upcomingDue.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-purple-300/20 p-6 mb-8">
-      <h3 className="text-lg font-medium text-white mb-6 flex items-center gap-2">
-        <AlertTriangle className="w-5 h-5 text-amber-400" />
-        Alerts & Exceptions
-      </h3>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {alerts.overdue.length > 0 && (
-          <div>
-            <h4 className="text-sm font-medium text-red-300 mb-3">
-              Overdue Watchlist
-            </h4>
-            <div className="space-y-2">
-              {alerts.overdue.map((row, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center justify-between p-3 rounded-xl bg-red-500/10 border border-red-400/30"
-                >
-                  <div>
-                    <p className="text-red-200 font-semibold text-sm">
-                      {currency(row.remaining)}
-                    </p>
-                    <p className="text-red-300/80 text-xs">
-                      {row.daysSinceOffer}d overdue
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {alerts.upcomingDue.length > 0 && (
-          <div>
-            <h4 className="text-sm font-medium text-amber-300 mb-3">
-              Due This Week
-            </h4>
-            <div className="space-y-2">
-              {alerts.upcomingDue.map((row, idx) => {
-                const nextDue = row.installments.find(
-                  (i) => i.status === "pending"
-                );
-                const daysUntil = nextDue?.dueDate
-                  ? getDaysDiff(
-                      new Date().toISOString().split("T")[0],
-                      new Date(nextDue.dueDate)
-                    )
-                  : 0;
-                return (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between p-3 rounded-xl bg-amber-500/10 border border-amber-400/30"
-                  >
-                    <div>
-                      <p className="text-white font-medium text-sm">
-                        {row.studentName}
-                      </p>
-                      <p className="text-amber-300/80 text-xs">{row.company}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-amber-200 font-semibold text-sm">
-                        {currency(nextDue?.amount || 0)}
-                      </p>
-                      <p className="text-amber-300/80 text-xs">
-                        Due in {daysUntil}d
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 // ======================
 // ENHANCED STUDENT TABLE
@@ -1320,7 +1224,7 @@ function AIChatSidebar() {
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:8000/api/ai/query", {
+      const res = await fetch(`${API_BASE_URL}/api/ai/query`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: question, debug: true }),
@@ -1657,8 +1561,10 @@ export default function PostPlacementPage() {
         const data = await PostPlacementService.fetchOffers(filters);
         setRows(data);
       } catch (err) {
-        console.error('Failed to load placement data:', err);
-        setError('Failed to load placement data. Please check your connection and try again.');
+        console.error("Failed to load placement data:", err);
+        setError(
+          "Failed to load placement data. Please check your connection and try again."
+        );
       } finally {
         setLoading(false);
       }
@@ -1671,18 +1577,19 @@ export default function PostPlacementPage() {
     // Since API already handles filtering, we return rows as-is
     // But we can add client-side filtering for real-time search if needed
     if (!filters.search) return rows;
-    
+
     const searchTerm = filters.search.toLowerCase();
-    return rows.filter(row => 
-      row.studentName.toLowerCase().includes(searchTerm) ||
-      row.company.toLowerCase().includes(searchTerm) ||
-      row.location.toLowerCase().includes(searchTerm) ||
-      row.hrName.toLowerCase().includes(searchTerm)
+    return rows.filter(
+      (row) =>
+        row.studentName.toLowerCase().includes(searchTerm) ||
+        row.company.toLowerCase().includes(searchTerm) ||
+        row.location.toLowerCase().includes(searchTerm) ||
+        row.hrName.toLowerCase().includes(searchTerm)
     );
   }, [rows, filters.search]);
 
   const handleFilterClick = (partial: Partial<FilterState>) => {
-    setFilters(prev => ({ ...prev, ...partial }));
+    setFilters((prev) => ({ ...prev, ...partial }));
   };
 
   const refreshData = async () => {
@@ -1691,7 +1598,7 @@ export default function PostPlacementPage() {
       const data = await PostPlacementService.fetchOffers(filters);
       setRows(data);
     } catch (err) {
-      setError('Failed to refresh data');
+      setError("Failed to refresh data");
     } finally {
       setLoading(false);
     }
@@ -1702,7 +1609,9 @@ export default function PostPlacementPage() {
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-indigo-900 to-purple-800 flex items-center justify-center">
         <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-purple-300/20 p-8 max-w-md mx-auto text-center">
           <AlertTriangle className="w-12 h-12 text-red-400 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-white mb-2">Error Loading Data</h2>
+          <h2 className="text-xl font-semibold text-white mb-2">
+            Error Loading Data
+          </h2>
           <p className="text-purple-200/80 mb-4">{error}</p>
           <button
             onClick={refreshData}
@@ -1731,7 +1640,11 @@ export default function PostPlacementPage() {
               className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-all disabled:opacity-50"
               title="Refresh data"
             >
-              <RefreshCw className={`w-5 h-5 text-purple-200 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw
+                className={`w-5 h-5 text-purple-200 ${
+                  loading ? "animate-spin" : ""
+                }`}
+              />
             </button>
           </div>
           <p className="text-purple-200/80">
@@ -1763,8 +1676,11 @@ export default function PostPlacementPage() {
               onFilterClick={handleFilterClick}
             />
             <TrendsSection rows={filteredRows} />
-            <AlertsPanel rows={filteredRows} />
-            <EnhancedStudentTable rows={filteredRows} onRowClick={setSelected} />
+
+            <EnhancedStudentTable
+              rows={filteredRows}
+              onRowClick={setSelected}
+            />
           </div>
         )}
 
