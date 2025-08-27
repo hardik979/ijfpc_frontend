@@ -15,6 +15,7 @@ import {
   CreditCard,
 } from "lucide-react";
 import { API_BASE_URL } from "@/lib/api";
+import Link from "next/link";
 
 const PAYMENT_MODES = [
   "CASH",
@@ -346,13 +347,13 @@ const PostPlacementDashboard: React.FC = () => {
                 </p>
               </div>
             </div>
-            <button
-              onClick={() => setIsCreating(true)}
-              className="flex items-center space-x-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-colors"
-            >
-              <Plus className="h-5 w-5" />
-              <span>New Student</span>
-            </button>
+            <Link href="/post-placement-student-creation/student-data-fill">
+              {" "}
+              <button className="flex items-center space-x-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-colors">
+                <Plus className="h-5 w-5" />
+                <span>New Student</span>
+              </button>
+            </Link>
           </div>
         </div>
       </div>
