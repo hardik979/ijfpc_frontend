@@ -35,24 +35,6 @@ export default function ITJobsFactoryDashboard() {
       gradient: "from-green-500 to-emerald-600",
       path: "/fee-dashboard/post-placement",
     },
-    {
-      id: "excel-sheets",
-      title: "Excel Sheets",
-      description:
-        "This section contains all excel sheets of IT Jobs Factory with respective name",
-      icon: Briefcase,
-      gradient: "from-yellow-500 to-amber-600",
-      path: "/fee-dashboard/excel-sheets",
-    },
-    {
-      id: "HR database",
-      title: "HR Database",
-      description:
-        "This section contains the HR database of IT Jobs Factory with all the details of HR",
-      icon: Building2,
-      gradient: "from-red-500 to-rose-600",
-      path: "/fee-dashboard/hr-database",
-    },
   ];
 
   const containerVariants = {
@@ -157,8 +139,8 @@ export default function ITJobsFactoryDashboard() {
 
         {/* Header Section */}
         <motion.div className="text-center mb-16" variants={titleVariants}>
-          <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-blue-400 via-cyan-400 to-green-400 bg-clip-text text-transparent mb-4">
-            IT Jobs Factory
+          <h1 className="text-5xl md:text-6xl font-bold text-sky-400 mb-4 font-[Righteous]">
+            <span className="text-yellow-400">IT</span> Jobs Factory
           </h1>
           <h2 className="text-2xl md:text-3xl font-semibold text-gray-200 mb-4">
             Fee Dashboard

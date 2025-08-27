@@ -2,7 +2,13 @@
 
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { ChevronRight, BarChart3, Settings } from "lucide-react";
+import {
+  ChevronRight,
+  BarChart3,
+  Settings,
+  SheetIcon,
+  Database,
+} from "lucide-react";
 import type { Variants } from "framer-motion";
 import Link from "next/link";
 
@@ -18,6 +24,24 @@ export default function AdminDashboard() {
       icon: BarChart3,
       gradient: "from-purple-500 to-indigo-600",
       path: "/fee-dashboard", // You can update this path as needed
+    },
+    {
+      id: "it-jobs-factory-sheets",
+      title: "Excel Sheets",
+      description:
+        "Track and get access to all the Excel sheets of all the data at one place",
+      icon: SheetIcon,
+      gradient: "from-blue-500 to-sky-400",
+      path: "/fee-dashboard/excel-sheets", // You can update this path as needed
+    },
+    {
+      id: "it-jobs-factory-hrdb",
+      title: "HR Database",
+      description:
+        "Get access to the database of all hr contacts from different company in one place",
+      icon: Database,
+      gradient: "from-emerald-500 to-green-400",
+      path: "/fee-dashboard/hr-database", // You can update this path as needed
     },
   ];
 
@@ -107,8 +131,8 @@ export default function AdminDashboard() {
       >
         {/* Header Section */}
         <motion.div className="text-center mb-16" variants={titleVariants}>
-          <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-purple-400 via-indigo-400 to-blue-400 bg-clip-text text-transparent mb-4">
-            IT Jobs Factory Dashboards
+          <h1 className="text-5xl md:text-5xl font-bold text-sky-400 mb-4 font-[Righteous]">
+            <span className="text-yellow-400">IT</span> Jobs Factory Dashboards
           </h1>
           <p className="text-xl text-gray-300 max-w-2xl mx-auto leading-relaxed">
             Comprehensive analytics and management tools for your business
@@ -197,20 +221,6 @@ export default function AdminDashboard() {
           })}
 
           {/* Placeholder cards for future dashboards */}
-          {[1, 2].map((index) => (
-            <motion.div
-              key={`placeholder-${index}`}
-              className="h-72 rounded-2xl border-2 border-dashed border-gray-600 flex flex-col items-center justify-center text-gray-400 bg-slate-800/50 backdrop-blur-sm"
-              variants={cardVariants}
-              whileHover={{ scale: 1.02 }}
-            >
-              <Settings size={48} className="mb-4 opacity-50" />
-              <p className="text-lg font-semibold mb-2">Coming Soon</p>
-              <p className="text-sm text-center px-4">
-                More dashboard modules will be added here
-              </p>
-            </motion.div>
-          ))}
         </motion.div>
 
         {/* Footer section */}
