@@ -18,7 +18,7 @@ import "react-toastify/dist/ReactToastify.css";
 import { API_BASE_URL } from "@/lib/api";
 
 // ------------------ Types & Constants ------------------
-export const PAYMENT_MODES = [
+const PAYMENT_MODES = [
   "CASH",
   "UPI",
   "CARD",
