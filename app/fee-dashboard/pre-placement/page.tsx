@@ -4,752 +4,1122 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   Calendar,
   Users,
-  TrendingUp,
-  Search,
-  X,
-  ChevronRight,
   IndianRupee,
+  ArrowLeft,
+  RefreshCw,
+  TrendingUp,
+  AlertTriangle,
+  Building2,
   Clock,
-  Receipt,
-  UserIcon,
+  Package,
+  Copy,
+  X,
+  BarChart3,
+  Search,
+  Filter,
+  UserCheck,
+  UserX,
+  GraduationCap,
 } from "lucide-react";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  ComposedChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+} from "recharts";
 
-// ====== CONFIG ======
-const SHEETDB_URL = "https://sheetdb.io/api/v1/vu58z0w3ted3o";
-
-// Source row as it comes from SheetDB
-export type RawRow = {
-  S?: string;
-  "Sr. No."?: string;
-  Name?: string;
-  "Course Name"?: string;
-  Fees?: string;
-  "Due Date"?: string;
-  "Fees Received"?: string;
-  "Date of recpt."?: string;
-  "Mode "?: string;
-  "RECEIPT No."?: string;
-  "Remaining Fees"?: string;
-  Remarks?: string;
-};
-
-// Normalized transaction per student
-export type Payment = {
-  amount: number;
-  date: string | null;
-  y?: number | null;
-  m?: number | null;
-  receiptNo: string | null;
-  mode: string | null;
-  remarks: string | null;
-};
-
-export type Student = {
-  id: string;
+// ======================
+// TYPES & CONFIG
+// ======================
+import { API_BASE_URL } from "@/lib/api";
+export type PrePlacementStudent = {
+  _id: string;
   name: string;
-  courseName: string | null;
-  totalFees: number | null;
-  sumReceived: number;
-  remaining: number | null;
-  lastPaymentDate: string | null;
-  payments: Payment[];
+  courseName: string;
+  terms: string;
+  totalFee: number;
+  totalReceived: number;
+  remainingFee: number;
+  status: "ACTIVE" | "DROPPED";
+  dueDate: string | null;
+  createdAt: string;
+  updatedAt: string;
+  paymentsCount: number;
+  payments: {
+    amount: number;
+    date: string | null;
+    mode: string;
+    receiptNos: string[];
+    note: string;
+  }[];
+  collectedInRange?: number;
+  paymentsInRange?: any[];
 };
 
-// ====== UTILITIES ======
-const n = (v?: string): number | null => {
-  if (!v) return null;
-  const cleaned = v.toString().replace(/[,\s]/g, "").replace(/₹/g, "");
-  const parsed = Number(cleaned);
-  return Number.isFinite(parsed) ? parsed : null;
+type SummaryData = {
+  totalStudents: number;
+  totalFee: number;
+  totalReceived: number;
+  remainingFee: number;
+  collectedInRange?: number;
+  monthly: {
+    _id: { y: number; m: number };
+    collected: number;
+  }[];
+  range?: { from: Date; to: Date } | null;
+  filters: { status: string | null; course: string | null };
 };
 
-const normName = (v?: string) => (v || "").trim();
-const keyName = (v?: string) => normName(v).toLowerCase();
+type ViewState = "dashboard" | "collected" | "remaining" | "students";
 
-const parseMonthYear = (v?: string): { y: number | null; m: number | null } => {
-  if (!v) return { y: null, m: null };
-  const s = v.trim();
-  const t = Date.parse(s);
-  if (Number.isFinite(t)) {
-    const d = new Date(t);
-    return { y: d.getFullYear(), m: d.getMonth() + 1 };
-  }
-  const m1 = s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
-  if (m1) {
-    const d = Number(m1[1]);
-    const m = Number(m1[2]);
-    let y = Number(m1[3]);
-    if (y < 100) y += 2000;
-    if (m >= 1 && m <= 12) return { y, m };
-  }
-  return { y: null, m: null };
+const STATUSES = ["ACTIVE", "DROPPED"];
+
+// ======================
+// UTILITIES
+// ======================
+const currency = (n: number) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(Math.round(n));
+
+const formatDate = (date: string | null) => {
+  if (!date) return "—";
+  return new Date(date).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 };
-function paidUpToMonth(s: Student, y: number, m: number) {
-  return s.payments.reduce((sum, p) => {
-    if (!p.y || !p.m) return sum;
-    const isBeforeOrSame = p.y < y || (p.y === y && p.m <= m);
-    return isBeforeOrSame ? sum + p.amount : sum;
-  }, 0);
-}
 
-// Remaining for a student as of end of the selected month
-function remainingAsOfMonth(s: Student, y: number, m: number) {
-  if (s.totalFees == null) return null; // unknown total, can't compute
-  const paid = paidUpToMonth(s, y, m);
-  return Math.max(s.totalFees - paid, 0);
-}
-function deriveStudents(rows: RawRow[]): Student[] {
-  const map = new Map<string, Student>();
-
-  for (const r of rows) {
-    const displayName = normName(r.Name);
-    if (!displayName) continue;
-    const id = keyName(displayName);
-
-    const totalFeesCandidate = n(r.Fees ?? undefined);
-    const receivedCandidate = n(r["Fees Received"] ?? undefined) ?? 0;
-    const courseName = normName(r["Course Name"]) || null;
-    const remainingCandidate = n(r["Remaining Fees"] ?? undefined);
-
-    const { y, m } = parseMonthYear(r["Date of recpt."] ?? undefined);
-
-    const payment: Payment | null = receivedCandidate
-      ? {
-          amount: receivedCandidate,
-          date: (r["Date of recpt."] ?? "").toString().trim() || null,
-          y,
-          m,
-          receiptNo: normName(r["RECEIPT No."]) || null,
-          mode: normName(r["Mode "]) || null,
-          remarks: normName(r.Remarks) || null,
-        }
-      : null;
-
-    if (!map.has(id)) {
-      map.set(id, {
-        id,
-        name: displayName,
-        courseName,
-        totalFees: totalFeesCandidate ?? null,
-        sumReceived: 0,
-        remaining: remainingCandidate ?? null,
-        lastPaymentDate: null,
-        payments: [],
-      });
-    }
-
-    const s = map.get(id)!;
-
-    if (!s.courseName && courseName) s.courseName = courseName;
-
-    if (totalFeesCandidate != null) {
-      s.totalFees =
-        s.totalFees != null
-          ? Math.max(s.totalFees, totalFeesCandidate)
-          : totalFeesCandidate;
-    }
-
-    if (payment) {
-      s.payments.push(payment);
-      s.sumReceived += payment.amount;
-      if (payment.date) s.lastPaymentDate = payment.date;
-    }
-
-    if (remainingCandidate != null) s.remaining = remainingCandidate;
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case "ACTIVE":
+      return "text-emerald-300 bg-emerald-500/20 border-emerald-400/30";
+    case "DROPPED":
+      return "text-red-300 bg-red-500/20 border-red-400/30";
+    default:
+      return "text-purple-300 bg-purple-500/20 border-purple-400/30";
   }
+};
 
-  for (const s of map.values()) {
-    if (s.remaining == null && s.totalFees != null) {
-      s.remaining = Math.max(s.totalFees - s.sumReceived, 0);
-    }
-
-    s.payments.sort((a, b) => {
-      if (!a.date && !b.date) return 0;
-      if (!a.date) return 1;
-      if (!b.date) return -1;
-      const da = Date.parse(a.date);
-      const db = Date.parse(b.date);
-      if (Number.isFinite(da) && Number.isFinite(db)) return db - da;
-      return (b.date || "").localeCompare(a.date || "");
+// ======================
+// API SERVICE
+// ======================
+class PrePlacementService {
+  static async fetchSummary(filters = {}): Promise<SummaryData> {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) params.append(key, String(value));
     });
 
-    if (s.payments.length && s.payments[0].date)
-      s.lastPaymentDate = s.payments[0].date!;
-  }
-
-  return Array.from(map.values());
-}
-
-function computeAllTimeTotals(students: Student[]) {
-  let totalFees = 0;
-  let totalReceived = 0;
-  let totalRemaining = 0;
-  for (const s of students) {
-    totalFees += s.totalFees || 0;
-    totalReceived += s.sumReceived;
-    totalRemaining += s.remaining || 0;
-  }
-  return { totalFees, totalReceived, totalRemaining };
-}
-
-function sumReceivedForMonth(students: Student[], y: number, m: number) {
-  let sum = 0;
-  for (const s of students) {
-    for (const p of s.payments) {
-      if (p.y === y && p.m === m) sum += p.amount;
-    }
-  }
-  return sum;
-}
-
-// ====== COMPONENTS ======
-const StatCard = ({
-  title,
-  value,
-  icon: Icon,
-  gradient,
-  onClick,
-  clickable = false,
-  subtitle,
-}: any) => (
-  <div
-    className={`group relative overflow-hidden rounded-3xl border border-white/10 p-8 transition-all duration-500 ${
-      clickable ? "cursor-pointer hover:scale-105 hover:border-white/20" : ""
-    } ${gradient} backdrop-blur-xl`}
-    onClick={onClick}
-  >
-    <div className="relative z-10">
-      <div className="flex items-center justify-between mb-4">
-        <Icon className="h-8 w-8 text-white/90" />
-        {clickable && (
-          <ChevronRight className="h-5 w-5 text-white/60 group-hover:translate-x-1 transition-transform" />
-        )}
-      </div>
-      <div className="space-y-2">
-        <p className="text-white/80 text-sm font-medium">{title}</p>
-        <p className="text-3xl font-bold text-white">{value}</p>
-        {subtitle && <p className="text-white/60 text-xs">{subtitle}</p>}
-      </div>
-    </div>
-    <div className="absolute inset-0 bg-gradient-to-r from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-  </div>
-);
-
-const AnimatedCounter = ({ value }: { value: number }) => {
-  const [displayValue, setDisplayValue] = useState(0);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDisplayValue(value);
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [value]);
-
-  return <span>₹ {displayValue.toLocaleString()}</span>;
-};
-
-export default function PrePlacementDashboard() {
-  const [rows, setRows] = useState<RawRow[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [loading, setLoading] = useState(true);
-
-  // Month selection flow
-  const [showMonthPicker, setShowMonthPicker] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
-  const [showStudentsPanel, setShowStudentsPanel] = useState(false);
-
-  // Student modal
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [showStudentModal, setShowStudentModal] = useState(false);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        setError(null);
-        setLoading(true);
-        const res = await fetch(SHEETDB_URL, { cache: "no-store" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = (await res.json()) as RawRow[];
-        setRows(data);
-      } catch (e: any) {
-        setError(e?.message || "Failed to fetch data");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
-
-  const students = useMemo(() => deriveStudents(rows || []), [rows]);
-  const totals = useMemo(() => computeAllTimeTotals(students), [students]);
-
-  const filteredStudents = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const base = students;
-    if (!q) return base;
-    return base.filter(
-      (s) =>
-        s.name.toLowerCase().includes(q) ||
-        (s.courseName || "").toLowerCase().includes(q)
+    const response = await fetch(
+      `${API_BASE_URL}/api/preplacement/summary?${params}`
     );
-  }, [students, query]);
+    if (!response.ok) throw new Error(`API Error: ${response.status}`);
+    return response.json();
+  }
 
-  const selectedStudent = useMemo(() => {
-    if (!selectedId) return null;
-    return students.find((s) => s.id === selectedId) || null;
-  }, [students, selectedId]);
+  static async fetchStudents(
+    page = 1,
+    limit = 20,
+    filters = {}
+  ): Promise<{
+    page: number;
+    limit: number;
+    total: number;
+    rows: PrePlacementStudent[];
+    range?: { from: Date; to: Date } | null;
+  }> {
+    const params = new URLSearchParams();
+    params.append("page", String(page));
+    params.append("limit", String(limit));
+    params.append("includePayments", "true");
 
-  const selectedYM = useMemo(() => {
-    if (!selectedMonth) return null;
-    const [yy, mm] = selectedMonth.split("-").map(Number);
-    if (!yy || !mm) return null;
-    return { y: yy, m: mm };
-  }, [selectedMonth]);
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) params.append(key, String(value));
+    });
 
-  const monthReceived = useMemo(() => {
-    if (!selectedYM) return null;
-    return sumReceivedForMonth(students, selectedYM.y, selectedYM.m);
-  }, [students, selectedYM]);
-  const monthRemaining = useMemo(() => {
-    if (!selectedYM) return totals.totalRemaining; // fallback to all-time if no month selected
-    return students.reduce((acc, s) => {
-      const r = remainingAsOfMonth(s, selectedYM.y, selectedYM.m);
-      return acc + (r ?? 0);
-    }, 0);
-  }, [students, totals.totalRemaining, selectedYM]);
+    const response = await fetch(
+      `${API_BASE_URL}/api/preplacement/students?${params}`
+    );
+    if (!response.ok) throw new Error(`API Error: ${response.status}`);
+    return response.json();
+  }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
-          <p className="text-white/80 mt-4">Loading dashboard...</p>
+  static async updateStudentStatus(
+    studentId: string,
+    status: string
+  ): Promise<PrePlacementStudent> {
+    const response = await fetch(
+      `${API_BASE_URL}/api/preplacement/students/${studentId}/status`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      }
+    );
+    if (!response.ok) throw new Error(`API Error: ${response.status}`);
+    return response.json();
+  }
+}
+
+// ======================
+// DASHBOARD VIEW
+// ======================
+function DashboardView({
+  summary,
+  onNavigate,
+}: {
+  summary: SummaryData;
+  onNavigate: (view: ViewState) => void;
+}) {
+  const chartData = useMemo(() => {
+    return [
+      {
+        name: "Collected",
+        value: summary.totalReceived,
+        color: "#10b981",
+      },
+      {
+        name: "Remaining",
+        value: summary.remainingFee,
+        color: "#f59e0b",
+      },
+    ];
+  }, [summary]);
+
+  const monthlyData = useMemo(() => {
+    return summary.monthly.map((item) => ({
+      month: `${item._id.y}-${String(item._id.m).padStart(2, "0")}`,
+      collected: item.collected,
+    }));
+  }, [summary.monthly]);
+
+  const collectionRate = useMemo(() => {
+    const rate =
+      summary.totalFee > 0
+        ? (summary.totalReceived / summary.totalFee) * 100
+        : 0;
+    return Math.round(rate);
+  }, [summary]);
+  const formatINRShort = (n: number) => {
+    const sign = n < 0 ? "-" : "";
+    const v = Math.abs(n);
+    if (v >= 1e7)
+      return `${sign}₹${+(v / 1e7).toFixed(v % 1e7 === 0 ? 0 : 1)}Cr`;
+    if (v >= 1e5)
+      return `${sign}₹${+(v / 1e5).toFixed(v % 1e5 === 0 ? 0 : 1)}L`;
+    if (v >= 1e3)
+      return `${sign}₹${+(v / 1e3).toFixed(v % 1e3 === 0 ? 0 : 1)}K`;
+    return `${sign}₹${v}`;
+  };
+
+  return (
+    <div className="space-y-8">
+      {/* Main KPI Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <button
+          onClick={() => onNavigate("collected")}
+          className="group relative overflow-hidden rounded-2xl border border-emerald-300/20 bg-emerald-500/10 backdrop-blur-sm p-6 text-left shadow-lg hover:shadow-xl hover:bg-emerald-500/20 transition-all duration-300"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-12 h-12 rounded-xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center">
+              <IndianRupee className="w-6 h-6 text-emerald-400" />
+            </div>
+            <TrendingUp className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform" />
+          </div>
+          <h3 className="text-emerald-300 text-sm font-medium mb-2">
+            Total Collected
+          </h3>
+          <p className="text-2xl font-bold text-white">
+            {currency(summary.totalReceived)}
+          </p>
+          <p className="text-emerald-200/60 text-sm mt-2">
+            Click to view collections
+          </p>
+        </button>
+
+        <button
+          onClick={() => onNavigate("remaining")}
+          className="group relative overflow-hidden rounded-2xl border border-amber-300/20 bg-amber-500/10 backdrop-blur-sm p-6 text-left shadow-lg hover:shadow-xl hover:bg-amber-500/20 transition-all duration-300"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-400/30 flex items-center justify-center">
+              <AlertTriangle className="w-6 h-6 text-amber-400" />
+            </div>
+            <Clock className="w-5 h-5 text-amber-400 group-hover:scale-110 transition-transform" />
+          </div>
+          <h3 className="text-amber-300 text-sm font-medium mb-2">
+            Remaining Fee
+          </h3>
+          <p className="text-2xl font-bold text-white">
+            {currency(summary.remainingFee)}
+          </p>
+          <p className="text-amber-200/60 text-sm mt-2">
+            Click to view pending
+          </p>
+        </button>
+        <button
+          onClick={() => onNavigate("students")}
+          className="group relative overflow-hidden rounded-2xl border border-purple-300/20 bg-purple-500/10 backdrop-blur-sm p-6 text-left shadow-lg hover:shadow-xl hover:bg-purple-500/20 transition-all duration-300"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-12 h-12 rounded-xl bg-purple-500/20 border border-purple-400/30 flex items-center justify-center">
+              <Users className="w-6 h-6 text-purple-400" />
+            </div>
+            <GraduationCap className="w-5 h-5 text-purple-400 group-hover:scale-110 transition-transform" />
+          </div>
+          <h3 className="text-purple-300 text-sm font-medium mb-2">
+            Total Students
+          </h3>
+          <p className="text-2xl font-bold text-white">
+            {summary.totalStudents}
+          </p>
+          <p className="text-purple-200/60 text-sm mt-2">
+            Click to view all students
+          </p>
+        </button>
+      </div>
+
+      {/* Charts Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Fee Collection Overview */}
+        <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-purple-300/20 p-6">
+          <h3 className="text-lg font-medium text-white mb-6 flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-purple-400" />
+            Fee Collection Overview
+          </h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie
+                data={chartData}
+                cx="50%"
+                cy="50%"
+                innerRadius={60}
+                outerRadius={120}
+                paddingAngle={5}
+                dataKey="value"
+              >
+                {chartData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Pie>
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "#55bcc2",
+                  border: "1px solid #6b46c1",
+                  borderRadius: "12px",
+                  backdropFilter: "blur(10px)",
+                }}
+                formatter={(value) => [currency(value as number), "Amount"]}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Monthly Collections Trend */}
+        <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-purple-300/20 p-6">
+          <h3 className="text-lg font-medium text-white mb-6 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-emerald-400" />
+            Monthly Collections
+          </h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={monthlyData}>
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="#6b46c1"
+                opacity={0.3}
+              />
+              <XAxis dataKey="month" stroke="#c4b5fd" fontSize={12} />
+              <YAxis
+                stroke="#c4b5fd"
+                fontSize={12}
+                tickFormatter={(value) => formatINRShort(value as number)}
+              />
+
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "#1e1b3a",
+                  border: "1px solid #6b46c1",
+                  borderRadius: "12px",
+                  backdropFilter: "blur(10px)",
+                }}
+                labelStyle={{ color: "#e2e8f0" }}
+                // For tooltip value, show full INR with Indian commas:
+                formatter={(value) => [
+                  new Intl.NumberFormat("en-IN", {
+                    style: "currency",
+                    currency: "INR",
+                    maximumFractionDigits: 0,
+                  }).format(value as number),
+                  "Collected",
+                ]}
+              />
+
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "#1e1b3a",
+                  border: "1px solid #6b46c1",
+                  borderRadius: "12px",
+                  backdropFilter: "blur(10px)",
+                }}
+                labelStyle={{ color: "#e2e8f0" }}
+                formatter={(value) => [currency(value as number), "Collected"]}
+              />
+              <Line
+                type="monotone"
+                dataKey="collected"
+                stroke="#10b981"
+                strokeWidth={3}
+                dot={{ fill: "#10b981", strokeWidth: 2, r: 4 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ======================
+// COLLECTED VIEW
+// ======================
+function CollectedView({ students }: { students: PrePlacementStudent[] }) {
+  const fullyPaidStudents = useMemo(() => {
+    return students.filter((student) => student.remainingFee === 0);
+  }, [students]);
+
+  const monthlyCollections = useMemo(() => {
+    const collections: Record<string, { month: string; collected: number }> =
+      {};
+
+    students.forEach((student) => {
+      student.payments?.forEach((payment) => {
+        if (payment.date) {
+          const date = new Date(payment.date);
+          const month = `${date.getFullYear()}-${String(
+            date.getMonth() + 1
+          ).padStart(2, "0")}`;
+          if (!collections[month]) {
+            collections[month] = { month, collected: 0 };
+          }
+          collections[month].collected += payment.amount;
+        }
+      });
+    });
+
+    return Object.values(collections)
+      .sort((a, b) => a.month.localeCompare(b.month))
+      .slice(-12);
+  }, [students]);
+
+  return (
+    <div className="space-y-8">
+      {/* Monthly Collections Graph */}
+      <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-purple-300/20 p-6">
+        <h3 className="text-lg font-medium text-white mb-6 flex items-center gap-2">
+          <TrendingUp className="w-5 h-5 text-emerald-400" />
+          Monthly Collections Trend
+        </h3>
+        <ResponsiveContainer width="100%" height={300}>
+          <LineChart data={monthlyCollections}>
+            <CartesianGrid
+              strokeDasharray="3 3"
+              stroke="#6b46c1"
+              opacity={0.3}
+            />
+            <XAxis dataKey="month" stroke="#c4b5fd" fontSize={12} />
+            <YAxis
+              stroke="#c4b5fd"
+              fontSize={12}
+              tickFormatter={(value) => `₹${value / 1000}K`}
+            />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: "#1e1b3a",
+                border: "1px solid #6b46c1",
+                borderRadius: "12px",
+                backdropFilter: "blur(10px)",
+              }}
+              labelStyle={{ color: "#e2e8f0" }}
+              formatter={(value) => [currency(value as number), "Collected"]}
+            />
+            <Line
+              type="monotone"
+              dataKey="collected"
+              stroke="#10b981"
+              strokeWidth={3}
+              dot={{ fill: "#10b981", strokeWidth: 2, r: 4 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Fully Paid Students Table */}
+      <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-purple-300/20 p-6">
+        <h3 className="text-lg font-medium text-white mb-6 flex items-center gap-2">
+          <UserCheck className="w-5 h-5 text-emerald-400" />
+          Students with Full Payment ({fullyPaidStudents.length})
+        </h3>
+        <StudentTable students={fullyPaidStudents} />
+      </div>
+    </div>
+  );
+}
+
+// ======================
+// REMAINING VIEW
+// ======================
+function RemainingView({ students }: { students: PrePlacementStudent[] }) {
+  const studentsWithRemaining = useMemo(() => {
+    return students.filter((student) => student.remainingFee > 0);
+  }, [students]);
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-purple-300/20 p-6">
+        <h3 className="text-lg font-medium text-white mb-6 flex items-center gap-2">
+          <AlertTriangle className="w-5 h-5 text-amber-400" />
+          Students with Remaining Fees ({studentsWithRemaining.length})
+        </h3>
+        <StudentTable students={studentsWithRemaining} showRemaining />
+      </div>
+    </div>
+  );
+}
+
+// ======================
+// STUDENTS VIEW
+// ======================
+function StudentsView({
+  students,
+  onRefresh,
+}: {
+  students: PrePlacementStudent[];
+  onRefresh: () => void;
+}) {
+  const [filters, setFilters] = useState({
+    search: "",
+    status: "",
+    course: "",
+  });
+
+  const filteredStudents = useMemo(() => {
+    return students.filter((student) => {
+      const matchesSearch =
+        !filters.search ||
+        student.name.toLowerCase().includes(filters.search.toLowerCase()) ||
+        student.courseName
+          ?.toLowerCase()
+          .includes(filters.search.toLowerCase());
+
+      const matchesStatus =
+        !filters.status || student.status === filters.status;
+
+      const matchesCourse =
+        !filters.course ||
+        student.courseName
+          ?.toLowerCase()
+          .includes(filters.course.toLowerCase());
+
+      return matchesSearch && matchesStatus && matchesCourse;
+    });
+  }, [students, filters]);
+
+  const statusCounts = useMemo(() => {
+    return students.reduce((acc, student) => {
+      acc[student.status] = (acc[student.status] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+  }, [students]);
+
+  return (
+    <div className="space-y-6">
+      {/* Status Overview Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-emerald-500/20 rounded-xl border border-emerald-400/30 p-4">
+          <div className="flex items-center gap-3">
+            <UserCheck className="w-8 h-8 text-emerald-400" />
+            <div>
+              <p className="text-emerald-300 text-sm font-medium">
+                Active Students
+              </p>
+              <p className="text-emerald-200 text-2xl font-bold">
+                {statusCounts.ACTIVE || 0}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-red-500/20 rounded-xl border border-red-400/30 p-4">
+          <div className="flex items-center gap-3">
+            <UserX className="w-8 h-8 text-red-400" />
+            <div>
+              <p className="text-red-300 text-sm font-medium">
+                Dropped Students
+              </p>
+              <p className="text-red-200 text-2xl font-bold">
+                {statusCounts.DROPPED || 0}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-purple-300/20 p-6">
+        <div className="flex flex-wrap gap-4">
+          <div className="flex-1 min-w-64">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-purple-300" />
+              <input
+                type="text"
+                placeholder="Search by name or course..."
+                value={filters.search}
+                onChange={(e) =>
+                  setFilters({ ...filters, search: e.target.value })
+                }
+                className="w-full pl-10 pr-4 py-2 bg-white/10 border border-purple-300/20 rounded-xl text-white placeholder-purple-300/60 focus:outline-none focus:ring-2 focus:ring-purple-400"
+              />
+            </div>
+          </div>
+
+          <select
+            value={filters.status}
+            onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+            className="px-4 py-2 bg-white/10 border border-purple-300/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-400"
+          >
+            <option value="">All Status</option>
+            {STATUSES.map((status) => (
+              <option key={status} value={status} className="bg-gray-800">
+                {status}
+              </option>
+            ))}
+          </select>
+
+          <input
+            type="text"
+            placeholder="Filter by course..."
+            value={filters.course}
+            onChange={(e) => setFilters({ ...filters, course: e.target.value })}
+            className="px-4 py-2 bg-white/10 border border-purple-300/20 rounded-xl text-white placeholder-purple-300/60 focus:outline-none focus:ring-2 focus:ring-purple-400"
+          />
+        </div>
+      </div>
+
+      {/* Students Table */}
+      <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-purple-300/20 p-6">
+        <h3 className="text-lg font-medium text-white mb-6 flex items-center gap-2">
+          <Users className="w-5 h-5 text-purple-400" />
+          All Students ({filteredStudents.length})
+        </h3>
+        <StudentTable students={filteredStudents} onRefresh={onRefresh} />
+      </div>
+    </div>
+  );
+}
+
+// ======================
+// STUDENT TABLE
+// ======================
+function StudentTable({
+  students,
+  showRemaining = false,
+  onRefresh,
+}: {
+  students: PrePlacementStudent[];
+  showRemaining?: boolean;
+  onRefresh?: () => void;
+}) {
+  const [selectedStudent, setSelectedStudent] =
+    useState<PrePlacementStudent | null>(null);
+
+  if (students.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <Users className="w-12 h-12 text-purple-300/60 mx-auto mb-4" />
+        <p className="text-purple-200/80">No students found</p>
+      </div>
     );
   }
+
+  return (
+    <>
+      <div className="overflow-x-auto">
+        <table className="min-w-full">
+          <thead className="bg-purple-500/10 backdrop-blur-sm">
+            <tr>
+              <th className="px-4 py-3 text-left text-xs font-medium text-purple-200">
+                Student
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-purple-200">
+                Course
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-purple-200">
+                Total Fee
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-purple-200">
+                Collected
+              </th>
+              {showRemaining && (
+                <th className="px-4 py-3 text-left text-xs font-medium text-purple-200">
+                  Remaining
+                </th>
+              )}
+              <th className="px-4 py-3 text-left text-xs font-medium text-purple-200">
+                Status
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {students.map((student) => (
+              <tr
+                key={student._id}
+                onClick={() => setSelectedStudent(student)}
+                className="cursor-pointer hover:bg-white/10 transition-all duration-200 border-b border-purple-300/10"
+              >
+                <td className="px-4 py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-400 to-indigo-500 flex items-center justify-center text-white font-medium text-sm">
+                      {student.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-white font-medium text-sm">
+                        {student.name}
+                      </p>
+                      <p className="text-purple-200/60 text-xs">
+                        {student.terms || "—"}
+                      </p>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-4 py-4 text-purple-100 text-sm">
+                  {student.courseName || "—"}
+                </td>
+                <td className="px-4 py-4 text-blue-300 font-semibold text-sm">
+                  {currency(student.totalFee)}
+                </td>
+                <td className="px-4 py-4 text-emerald-300 font-semibold text-sm">
+                  {currency(student.totalReceived)}
+                </td>
+                {showRemaining && (
+                  <td className="px-4 py-4 text-amber-300 font-semibold text-sm">
+                    {currency(student.remainingFee)}
+                  </td>
+                )}
+                <td className="px-4 py-4">
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(
+                      student.status
+                    )}`}
+                  >
+                    {student.status}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Student Detail Modal */}
+      {selectedStudent && (
+        <StudentDetailModal
+          student={selectedStudent}
+          onClose={() => setSelectedStudent(null)}
+          onUpdate={onRefresh}
+        />
+      )}
+    </>
+  );
+}
+
+// ======================
+// STUDENT DETAIL MODAL
+// ======================
+function StudentDetailModal({
+  student,
+  onClose,
+  onUpdate,
+}: {
+  student: PrePlacementStudent;
+  onClose: () => void;
+  onUpdate?: () => void;
+}) {
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+  };
+
+  const handleStatusUpdate = async (newStatus: string) => {
+    try {
+      setIsUpdating(true);
+      await PrePlacementService.updateStudentStatus(student._id, newStatus);
+      onUpdate?.();
+      onClose();
+    } catch (error) {
+      console.error("Failed to update status:", error);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <div className="absolute inset-y-0 right-0 w-full max-w-xl bg-gradient-to-br from-purple-900/90 to-indigo-900/90 backdrop-blur-xl shadow-2xl overflow-y-auto border-l border-purple-300/20">
+        {/* Header */}
+        <div className="sticky top-0 bg-gradient-to-r from-purple-900/95 to-indigo-900/95 backdrop-blur-xl border-b border-purple-300/20 p-6 z-10">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-r from-purple-400 to-indigo-500 flex items-center justify-center text-white font-semibold">
+                {student.name.charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-white">
+                  {student.name}
+                </h2>
+                <p className="text-purple-200/80">
+                  {student.courseName} • {student.terms}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 rounded-full hover:bg-white/10 transition-all"
+            >
+              <X className="w-5 h-5 text-purple-200" />
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 space-y-6">
+          {/* Key Metrics */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="bg-blue-500/20 rounded-xl border border-blue-400/30 p-4">
+              <p className="text-blue-300 text-xs font-medium">Total Fee</p>
+              <p className="text-blue-200 text-lg font-semibold">
+                {currency(student.totalFee)}
+              </p>
+            </div>
+            <div className="bg-emerald-500/20 rounded-xl border border-emerald-400/30 p-4">
+              <p className="text-emerald-300 text-xs font-medium">Collected</p>
+              <p className="text-emerald-200 text-lg font-semibold">
+                {currency(student.totalReceived)}
+              </p>
+            </div>
+            <div className="bg-amber-500/20 rounded-xl border border-amber-400/30 p-4">
+              <p className="text-amber-300 text-xs font-medium">Remaining</p>
+              <p className="text-amber-200 text-lg font-semibold">
+                {currency(student.remainingFee)}
+              </p>
+            </div>
+          </div>
+
+          {/* Status Update */}
+          <div>
+            <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-purple-400" />
+              Status Management
+            </h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-purple-300/20">
+                <span className="text-purple-100">Current Status</span>
+                <span
+                  className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(
+                    student.status
+                  )}`}
+                >
+                  {student.status}
+                </span>
+              </div>
+              <div className="flex gap-2">
+                {STATUSES.filter((status) => status !== student.status).map(
+                  (status) => (
+                    <button
+                      key={status}
+                      onClick={() => handleStatusUpdate(status)}
+                      disabled={isUpdating}
+                      className={`flex-1 px-4 py-2 rounded-xl font-medium text-sm transition-all disabled:opacity-50 ${
+                        status === "ACTIVE"
+                          ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                          : "bg-red-600 hover:bg-red-700 text-white"
+                      }`}
+                    >
+                      {isUpdating ? "Updating..." : `Mark as ${status}`}
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Student Information */}
+          <div>
+            <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+              <GraduationCap className="w-5 h-5 text-purple-400" />
+              Student Details
+            </h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-purple-300/20">
+                <span className="text-purple-100">Course Name</span>
+                <span className="text-purple-200">
+                  {student.courseName || "—"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-purple-300/20">
+                <span className="text-purple-100">Terms</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-purple-200">
+                    {student.terms || "—"}
+                  </span>
+                  <button
+                    onClick={() => copyToClipboard(student.terms || "")}
+                    className="p-1 rounded hover:bg-white/10"
+                  >
+                    <Copy className="w-4 h-4 text-purple-300" />
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-purple-300/20">
+                <span className="text-purple-100">Due Date</span>
+                <span className="text-purple-200">
+                  {formatDate(student.dueDate)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-purple-300/20">
+                <span className="text-purple-100">Payments Count</span>
+                <span className="text-purple-200">{student.paymentsCount}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Payment History */}
+          {student.payments && student.payments.length > 0 && (
+            <div>
+              <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+                <IndianRupee className="w-5 h-5 text-purple-400" />
+                Payment History
+              </h3>
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {student.payments.map((payment, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-purple-300/20"
+                  >
+                    <div>
+                      <p className="text-white font-medium">
+                        {currency(payment.amount)}
+                      </p>
+                      <p className="text-purple-200/60 text-xs">
+                        {formatDate(payment.date)} • {payment.mode || "—"}
+                      </p>
+                      {payment.note && (
+                        <p className="text-purple-300/80 text-xs mt-1">
+                          {payment.note}
+                        </p>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      {payment.receiptNos && payment.receiptNos.length > 0 && (
+                        <p className="text-purple-200/60 text-xs">
+                          Receipt: {payment.receiptNos.join(", ")}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Timestamps */}
+          <div className="border-t border-purple-300/20 pt-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 rounded-xl bg-white/5 border border-purple-300/20">
+                <p className="text-xs text-purple-200/80 mb-1">Created</p>
+                <p className="text-purple-100 text-sm">
+                  {formatDate(student.createdAt)}
+                </p>
+              </div>
+              <div className="p-3 rounded-xl bg-white/5 border border-purple-300/20">
+                <p className="text-xs text-purple-200/80 mb-1">Updated</p>
+                <p className="text-purple-100 text-sm">
+                  {formatDate(student.updatedAt)}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ======================
+// MAIN COMPONENT
+// ======================
+export default function PrePlacementDashboard() {
+  const [summary, setSummary] = useState<SummaryData | null>(null);
+  const [students, setStudents] = useState<PrePlacementStudent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [currentView, setCurrentView] = useState<ViewState>("dashboard");
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const [summaryData, studentsData] = await Promise.all([
+        PrePlacementService.fetchSummary(),
+        PrePlacementService.fetchStudents(1, 1000), // Load all students for client-side filtering
+      ]);
+
+      setSummary(summaryData);
+      setStudents(studentsData.rows);
+    } catch (err) {
+      console.error("Failed to load data:", err);
+      setError(
+        "Failed to load data. Please check your connection and try again."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const refreshData = async () => {
+    await loadData();
+  };
+
+  const getViewTitle = () => {
+    switch (currentView) {
+      case "collected":
+        return "Fee Collections";
+      case "remaining":
+        return "Remaining Fees";
+      case "students":
+        return "All Students";
+      default:
+        return "Pre Placement Dashboard";
+    }
+  };
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center">
-        <div className="text-center text-white">
-          <p className="text-xl">Error loading data: {error}</p>
+      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-indigo-900 to-purple-800 flex items-center justify-center">
+        <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-purple-300/20 p-8 max-w-md mx-auto text-center">
+          <AlertTriangle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-white mb-2">
+            Error Loading Data
+          </h2>
+          <p className="text-purple-200/80 mb-4">{error}</p>
+          <button
+            onClick={refreshData}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors mx-auto"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Retry
+          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-      {/* Background Effects */}
-      <div className="fixed inset-0">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl animate-pulse delay-1000" />
-      </div>
-
-      <div className="relative z-10 p-6 lg:p-8">
-        <div className="mx-auto max-w-7xl">
-          {/* Header */}
-          <div className="mb-12 text-center">
-            <h1 className="mb-4 bg-gradient-to-r from-white via-purple-200 to-cyan-200 bg-clip-text text-5xl font-bold tracking-tight text-transparent">
-              Pre‑Placement Fee Dashboard
-            </h1>
-            <p className="text-white/60 text-lg">
-              Live insights from SheetDB • Real-time analytics • Student
-              management
-            </p>
+    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-indigo-900 to-purple-800">
+      <div className="p-6 max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() =>
+                currentView === "dashboard"
+                  ? (window.location.href = "/fee-dashboard")
+                  : setCurrentView("dashboard")
+              }
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all border border-purple-300/20 ${
+                currentView === "dashboard"
+                  ? "bg-purple-600/30 text-purple-100"
+                  : "bg-white/10 hover:bg-white/20 text-purple-200"
+              }`}
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span className="font-medium">
+                {currentView === "dashboard"
+                  ? "Dashboard"
+                  : "Back to Dashboard"}
+              </span>
+            </button>
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-200 to-indigo-200 bg-clip-text text-transparent">
+                {getViewTitle()}
+              </h1>
+              <p className="text-purple-200/80">
+                Pre-placement fee tracking and student management
+              </p>
+            </div>
           </div>
-
-          {/* Main Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
-            <StatCard
-              title="Total Received (All‑time)"
-              value={<AnimatedCounter value={totals.totalReceived} />}
-              icon={TrendingUp}
-              gradient="bg-gradient-to-br from-emerald-500/20 to-teal-600/20"
-              onClick={() => setShowMonthPicker(true)}
-              clickable
-              subtitle="Click to analyze by month & year"
+          <button
+            onClick={refreshData}
+            disabled={loading}
+            className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-all disabled:opacity-50"
+            title="Refresh data"
+          >
+            <RefreshCw
+              className={`w-5 h-5 text-purple-200 ${
+                loading ? "animate-spin" : ""
+              }`}
             />
-            <StatCard
-              title="Total Students (All-Time)"
-              value={filteredStudents.length}
-              icon={UserIcon}
-              gradient="bg-gradient-to-br from-blue-500/20 to-purple-600/20"
-            />
-          </div>
-
-          {/* Month Summary */}
-          {selectedYM && (
-            <div className="mb-12 rounded-3xl border border-white/10 bg-gradient-to-r from-purple-500/10 to-cyan-500/10 backdrop-blur-xl p-8">
-              <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-                <div className="text-center lg:text-left">
-                  <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-white/80 text-sm">
-                    <Calendar className="h-4 w-4" />
-                    Selected Period
-                  </div>
-                  <h2 className="text-3xl font-bold text-white">
-                    {new Date(selectedYM.y, selectedYM.m - 1, 1).toLocaleString(
-                      undefined,
-                      { month: "long", year: "numeric" }
-                    )}
-                  </h2>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full lg:w-auto">
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
-                    <div className="text-white/60 text-sm mb-1">
-                      Monthly Collection
-                    </div>
-                    <div className="text-2xl font-bold text-white">
-                      ₹ {(monthReceived ?? 0).toLocaleString()}
-                    </div>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
-                    <div className="text-white/60 text-sm mb-1">
-                      Remaining Fee
-                    </div>
-                    <div className="text-2xl font-bold text-white">
-                      ₹ {monthRemaining.toLocaleString()}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Students Panel */}
-          {showStudentsPanel && (
-            <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
-              {/* Students Table */}
-              <div className="xl:col-span-3 rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl overflow-hidden">
-                <div className="border-b border-white/10 bg-white/5 px-6 py-5">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <Users className="h-6 w-6 text-white/80" />
-                      <h2 className="text-xl font-bold text-white">
-                        Students ({filteredStudents.length})
-                      </h2>
-                    </div>
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-white/40" />
-                      <input
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                        placeholder="Search name or course..."
-                        className="rounded-2xl border border-white/20 bg-white/10 pl-10 pr-4 py-3 text-white placeholder-white/40 focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-purple-500/50 backdrop-blur-sm"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="max-h-[70vh] overflow-auto">
-                  <table className="w-full">
-                    <thead className="sticky top-0 bg-white/10 backdrop-blur-sm">
-                      <tr className="text-left text-white/60 text-sm">
-                        <th className="px-6 py-4 font-medium">Student</th>
-                        <th className="px-6 py-4 font-medium">Course</th>
-                        <th className="px-6 py-4 font-medium text-center">
-                          Total Received
-                        </th>
-                        <th className="px-6 py-4 font-medium text-center">
-                          Remaining fee
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredStudents.map((s, index) => {
-                        const remainingDisplay = selectedYM
-                          ? remainingAsOfMonth(s, selectedYM.y, selectedYM.m)
-                          : s.remaining;
-                        const totalReceivedAllTime = s.sumReceived;
-                        return (
-                          <tr
-                            key={s.id}
-                            className="group border-t border-white/5 hover:bg-white/5 transition-all duration-300"
-                            style={{ animationDelay: `${index * 50}ms` }}
-                          >
-                            <td className="px-6 py-5">
-                              <button
-                                className="text-left group-hover:text-purple-300 transition-colors"
-                                onClick={() => {
-                                  setSelectedId(s.id);
-                                  setShowStudentModal(true);
-                                }}
-                              >
-                                <div className="font-semibold text-white group-hover:underline">
-                                  {s.name}
-                                </div>
-                                {s.lastPaymentDate && (
-                                  <div className="text-white/50 text-sm mt-1">
-                                    Last payment: {s.lastPaymentDate}
-                                  </div>
-                                )}
-                              </button>
-                            </td>
-                            <td className="px-6 py-5">
-                              <span className="text-white/80">
-                                {s.courseName || "—"}
-                              </span>
-                            </td>
-                            {/* REPLACED CELL */}
-                            <td className="px-6 py-5 text-center">
-                              <div
-                                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium ${
-                                  totalReceivedAllTime > 0
-                                    ? "bg-emerald-500/20 text-emerald-300"
-                                    : "bg-gray-500/20 text-gray-400"
-                                }`}
-                                title="Total received (all-time)"
-                              >
-                                <IndianRupee className="h-4 w-4" />
-                                {totalReceivedAllTime
-                                  ? totalReceivedAllTime.toLocaleString()
-                                  : "—"}
-                              </div>
-                            </td>
-
-                            <td className="px-6 py-5 text-center">
-                              <div
-                                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium ${
-                                  (s.remaining || 0) > 0
-                                    ? "bg-orange-500/20 text-orange-300"
-                                    : "bg-emerald-500/20 text-emerald-300"
-                                }`}
-                              >
-                                <IndianRupee className="h-4 w-4" />
-                                {remainingDisplay != null
-                                  ? remainingDisplay.toLocaleString()
-                                  : "—"}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Info Panel */}
-              <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-6">
-                <h3 className="text-lg font-bold text-white mb-4">
-                  Dashboard Guide
-                </h3>
-                <div className="space-y-4 text-sm text-white/70">
-                  <div className="flex items-start gap-3">
-                    <div className="w-2 h-2 rounded-full bg-purple-400 mt-2 flex-shrink-0" />
-                    <div>
-                      <strong className="text-white">Student Details:</strong>{" "}
-                      Click any student name to view complete payment history
-                      and details
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="w-2 h-2 rounded-full bg-cyan-400 mt-2 flex-shrink-0" />
-                    <div>
-                      <strong className="text-white">Monthly View:</strong>{" "}
-                      Monthly Payment shows amount paid in selected period
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="w-2 h-2 rounded-full bg-emerald-400 mt-2 flex-shrink-0" />
-                    <div>
-                      <strong className="text-white">Search:</strong> Filter
-                      students by name or course using the search box
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Month Picker Modal */}
-          {showMonthPicker && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-              <div
-                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-                onClick={() => setShowMonthPicker(false)}
-              />
-              <div className="relative z-10 w-full max-w-md rounded-3xl border border-white/20 bg-slate-900/90 backdrop-blur-xl p-8 shadow-2xl">
-                <div className="mb-6 text-center">
-                  <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-purple-500/20 px-4 py-2 text-purple-300">
-                    <Calendar className="h-5 w-5" />
-                    Month Selector
-                  </div>
-                  <h3 className="text-2xl font-bold text-white">
-                    Select Analysis Period
-                  </h3>
-                  <p className="text-white/60 mt-2">
-                    Choose a month and year to analyze collection data
-                  </p>
-                </div>
-
-                <div className="mb-8">
-                  <input
-                    type="month"
-                    className="w-full rounded-2xl border border-white/20 bg-white/10 px-6 py-4 text-white focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 backdrop-blur-sm"
-                    value={selectedMonth || ""}
-                    onChange={(e) => setSelectedMonth(e.target.value)}
-                  />
-                </div>
-
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setShowMonthPicker(false)}
-                    className="flex-1 rounded-2xl border border-white/20 px-6 py-4 text-white hover:bg-white/5 transition-all duration-300"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowMonthPicker(false);
-                      setShowStudentsPanel(true);
-                    }}
-                    className="flex-1 rounded-2xl bg-gradient-to-r from-purple-500 to-cyan-500 px-6 py-4 text-white font-semibold hover:shadow-lg hover:shadow-purple-500/25 transition-all duration-300"
-                  >
-                    Analyze Period
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Student Modal */}
-          {showStudentModal && selectedStudent && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-              <div
-                className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-                onClick={() => setShowStudentModal(false)}
-              />
-              <div className="relative z-10 w-full max-w-5xl max-h-[90vh] rounded-3xl border border-white/20 bg-slate-900/95 backdrop-blur-xl overflow-hidden shadow-2xl">
-                {/* Modal Header */}
-                <div className="border-b border-white/10 bg-gradient-to-r from-purple-500/20 to-cyan-500/20 px-8 py-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-2xl font-bold text-white">
-                        {selectedStudent.name}
-                      </h3>
-                      <p className="text-white/60 mt-1">
-                        {selectedStudent.courseName || "Course not specified"}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => setShowStudentModal(false)}
-                      className="rounded-full bg-white/10 p-3 text-white/60 hover:bg-white/20 hover:text-white transition-all duration-300"
-                    >
-                      <X className="h-6 w-6" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="p-8 overflow-auto max-h-[calc(90vh-120px)]">
-                  {/* Student Stats */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-blue-500/10 to-purple-500/10 p-6">
-                      <div className="flex items-center gap-3 mb-3">
-                        <IndianRupee className="h-6 w-6 text-blue-400" />
-                        <div className="text-white/60 text-sm">Total Fees</div>
-                      </div>
-                      <div className="text-2xl font-bold text-white">
-                        {selectedStudent.remaining != null
-                          ? `₹ ${selectedStudent.remaining.toLocaleString()}`
-                          : "Calculating..."}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Payment History */}
-                  <div className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
-                    <div className="border-b border-white/10 bg-white/5 px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <Receipt className="h-6 w-6 text-white/80" />
-                        <h4 className="text-lg font-bold text-white">
-                          Payment History
-                        </h4>
-                        <div className="ml-auto text-white/60 text-sm">
-                          {selectedStudent.payments.length} transactions
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="max-h-96 overflow-auto">
-                      <table className="w-full">
-                        <thead className="sticky top-0 bg-white/10 backdrop-blur-sm">
-                          <tr className="text-left text-white/60 text-sm">
-                            <th className="px-6 py-4 font-medium">Date</th>
-                            <th className="px-6 py-4 font-medium text-right">
-                              Amount
-                            </th>
-                            <th className="px-6 py-4 font-medium">
-                              Payment Mode
-                            </th>
-                            <th className="px-6 py-4 font-medium">
-                              Receipt No.
-                            </th>
-                            <th className="px-6 py-4 font-medium">Remarks</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {selectedStudent.payments.length === 0 ? (
-                            <tr>
-                              <td
-                                className="px-6 py-12 text-center text-white/60"
-                                colSpan={5}
-                              >
-                                <div className="flex flex-col items-center gap-3">
-                                  <Receipt className="h-12 w-12 text-white/30" />
-                                  <div>No payment records found</div>
-                                </div>
-                              </td>
-                            </tr>
-                          ) : (
-                            selectedStudent.payments.map((payment, index) => (
-                              <tr
-                                key={index}
-                                className="border-t border-white/5 hover:bg-white/5 transition-colors"
-                              >
-                                <td className="px-6 py-4">
-                                  <div className="text-white font-medium">
-                                    {payment.date || "—"}
-                                  </div>
-                                </td>
-                                <td className="px-6 py-4 text-right">
-                                  <div className="inline-flex items-center gap-2 rounded-full bg-emerald-500/20 text-emerald-300 px-3 py-1 text-sm font-semibold">
-                                    <IndianRupee className="h-4 w-4" />
-                                    {payment.amount.toLocaleString()}
-                                  </div>
-                                </td>
-                                <td className="px-6 py-4">
-                                  <div className="text-white/80">
-                                    {payment.mode || "—"}
-                                  </div>
-                                </td>
-                                <td className="px-6 py-4">
-                                  <div className="text-white/80 font-mono text-sm">
-                                    {payment.receiptNo || "—"}
-                                  </div>
-                                </td>
-                                <td className="px-6 py-4">
-                                  <div
-                                    className="text-white/70 text-sm max-w-xs truncate"
-                                    title={payment.remarks || undefined}
-                                  >
-                                    {payment.remarks || "—"}
-                                  </div>
-                                </td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          </button>
         </div>
+
+        {/* Loading State */}
+        {loading && (
+          <div className="flex items-center justify-center py-12">
+            <div className="flex items-center gap-3 text-purple-200">
+              <RefreshCw className="w-5 h-5 animate-spin" />
+              <span>Loading student data...</span>
+            </div>
+          </div>
+        )}
+
+        {/* Content */}
+        {!loading && summary && (
+          <div>
+            {currentView === "dashboard" && (
+              <DashboardView summary={summary} onNavigate={setCurrentView} />
+            )}
+            {currentView === "collected" && (
+              <CollectedView students={students} />
+            )}
+            {currentView === "remaining" && (
+              <RemainingView students={students} />
+            )}
+            {currentView === "students" && (
+              <StudentsView students={students} onRefresh={refreshData} />
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

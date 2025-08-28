@@ -2,13 +2,22 @@
 
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { ChevronRight, FileText, CheckCircle, ArrowLeft } from "lucide-react";
+import { ChevronRight, CheckCircle, ArrowLeft } from "lucide-react";
 import type { Variants } from "framer-motion";
 import Link from "next/link";
 export default function ITJobsFactoryDashboard() {
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
 
   const reportCards = [
+    {
+      id: "preplacement-data",
+      title: "Pre-Placement Records",
+      description:
+        "Monitor remaining fee records, completion fees, and pre-placement performance metrics",
+      icon: CheckCircle,
+      gradient: "from-yellow-400 to-amber-500",
+      path: "/post-placement-student-creation/pre-placement-reports",
+    },
     {
       id: "postplacement-data",
       title: "Post-Placement Records",
@@ -136,7 +145,7 @@ export default function ITJobsFactoryDashboard() {
 
         {/* Report Cards Grid */}
         <motion.div
-          className="grid grid-cols-1 md:grid-cols-1 gap-8 max-w-4xl mx-auto"
+          className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto"
           variants={containerVariants}
         >
           {reportCards.map((card) => {
