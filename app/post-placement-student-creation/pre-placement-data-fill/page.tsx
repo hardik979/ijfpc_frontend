@@ -1,5 +1,6 @@
 "use client";
 
+import { API_BASE_URL } from "@/lib/api";
 import React, { useState } from "react";
 
 // =====================
@@ -101,7 +102,7 @@ export default function PrePlacementStudentCreatePage() {
         })),
       };
 
-      const res = await fetch("/api/preplacement/students", {
+      const res = await fetch(`${API_BASE_URL}/api/preplacement/students`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

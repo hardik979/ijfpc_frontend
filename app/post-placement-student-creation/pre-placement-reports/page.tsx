@@ -490,14 +490,43 @@ export default function PrePlacementStudentManagerPage() {
                   <label className="mb-1 block text-xs text-purple-200/80">
                     Status
                   </label>
+
                   <select
                     value={editData.status}
-                    onChange={(e) =>
-                      setEditData({
-                        ...editData,
-                        status: e.target.value as Status,
-                      })
-                    }
+                    onChange={async (e) => {
+                      const next = e.target.value as Status;
+                      setEditData({ ...editData, status: next });
+                      try {
+                        const r = await fetch(
+                          `${API_BASE_URL}/api/preplacement/students/${editingId}/status`,
+                          {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ status: next }),
+                          }
+                        );
+                        if (!r.ok) throw new Error("Status update failed");
+
+                        // refresh list after status change
+                        const params = new URLSearchParams({
+                          page: String(page),
+                          limit: String(limit),
+                        });
+                        if (debouncedSearch.trim())
+                          params.set("search", debouncedSearch.trim());
+                        if (month) params.set("month", month);
+                        if (status !== "ALL") params.set("status", status);
+
+                        const listRes = await fetch(
+                          `${API_BASE_URL}/api/preplacement/students?${params.toString()}`
+                        );
+                        const listJson: ListResponse = await listRes.json();
+                        setList(listJson);
+                      } catch (err) {
+                        console.error(err);
+                        alert("Failed to update status");
+                      }
+                    }}
                     className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 outline-none"
                   >
                     <option value="ACTIVE" className="bg-[#0f0b24]">

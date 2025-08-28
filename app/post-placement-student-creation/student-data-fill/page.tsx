@@ -211,7 +211,9 @@ export default function NewPostPlacementOfferPage() {
 
       // Navigate to list (adjust if you have a detail page)
       setTimeout(() => {
-        router.push("/post-placement-student-creation/post-placement-records");
+        router.push(
+          `${API_BASE_URL}/post-placement-student-creation/post-placement-records`
+        );
       }, 600);
     } catch (err: any) {
       const msg = String(err?.message || err || "Failed to create");
