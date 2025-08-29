@@ -14,6 +14,7 @@ import {
   CheckCircle,
   ArrowLeft,
 } from "lucide-react";
+import Link from "next/link";
 
 // TypeScript interfaces
 interface ExcelSheet {
@@ -132,9 +133,13 @@ const ITJobsDatabase: React.FC = () => {
           </div>
 
           <div className="max-w-7xl mx-auto text-center">
-            <h1 className="text-4xl md:text-6xl font-bold text-white mb-6">
-              <span className="text-yellow-300">IT</span> Jobs Factory
-            </h1>
+            <Link href="/">
+              {" "}
+              <h1 className="text-4xl md:text-6xl font-bold text-white mb-6">
+                <span className="text-yellow-300">IT</span> Jobs Factory
+              </h1>
+            </Link>
+
             <h2 className="text-xl md:text-2xl text-purple-100 mb-4">
               Excel Sheet Database
             </h2>

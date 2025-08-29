@@ -11,7 +11,6 @@ import {
   AlertTriangle,
   Building2,
   Clock,
-  Package,
   Copy,
   X,
   BarChart3,
@@ -20,6 +19,7 @@ import {
   UserCheck,
   UserX,
   GraduationCap,
+  ChevronDown,
 } from "lucide-react";
 import {
   LineChart,
@@ -78,7 +78,12 @@ type SummaryData = {
   filters: { status: string | null; course: string | null };
 };
 
-type ViewState = "dashboard" | "collected" | "remaining" | "students";
+type ViewState =
+  | "dashboard"
+  | "collected"
+  | "remaining"
+  | "students"
+  | "monthly";
 
 const STATUSES = ["ACTIVE", "DROPPED"];
 
@@ -110,6 +115,11 @@ const getStatusColor = (status: string) => {
     default:
       return "text-purple-300 bg-purple-500/20 border-purple-400/30";
   }
+};
+
+const monthKey = (iso: string | null): string => {
+  if (!iso || iso.length < 7) return "";
+  return `${iso.slice(0, 4)}-${iso.slice(5, 7)}`;
 };
 
 // ======================
@@ -174,14 +184,219 @@ class PrePlacementService {
 }
 
 // ======================
+// CUSTOM DATE PICKER
+// ======================
+function CustomDatePicker({
+  value,
+  onChange,
+  placeholder = "Select month",
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+
+  const months = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
+
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
+
+  const formatDisplayValue = (value: string) => {
+    if (!value) return placeholder;
+    const [year, month] = value.split("-");
+    const monthName = months[parseInt(month) - 1];
+    return `${monthName} ${year}`;
+  };
+
+  const handleMonthSelect = (monthIndex: number) => {
+    const monthStr = (monthIndex + 1).toString().padStart(2, "0");
+    onChange(`${selectedYear}-${monthStr}`);
+    setIsOpen(false);
+  };
+
+  return (
+    <div className="relative">
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsOpen((v) => !v);
+        }}
+        className="flex items-center justify-between w-full px-4 py-2 rounded-xl border border-purple-300/20 bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 transition-all min-w-48"
+      >
+        <span className="text-sm">{formatDisplayValue(value)}</span>
+        <ChevronDown
+          className={`w-4 h-4 transition-transform ${
+            isOpen ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+
+      {isOpen && (
+        <div
+          className="absolute top-full left-0 right-0 mt-2 bg-purple-900/95 backdrop-blur-xl border border-purple-300/20 rounded-xl shadow-2xl z-[60] p-4 max-h-64 overflow-auto"
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          {/* Year Selector */}
+          <div className="mb-4">
+            <label className="block text-xs text-purple-200 mb-2">Year</label>
+            <div className="flex gap-2 flex-wrap">
+              {years.map((year) => (
+                <button
+                  key={year}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedYear(year);
+                  }}
+                  className={`px-3 py-1 rounded-lg text-sm transition-all ${
+                    selectedYear === year
+                      ? "bg-purple-600 text-white"
+                      : "bg-white/10 text-purple-200 hover:bg-white/20"
+                  }`}
+                >
+                  {year}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Month Selector */}
+          <div>
+            <label className="block text-xs text-purple-200 mb-2">Month</label>
+            <div className="grid grid-cols-3 gap-2">
+              {months.map((month, index) => (
+                <button
+                  key={month}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleMonthSelect(index);
+                  }}
+                  className="px-3 py-2 rounded-lg text-sm bg-white/10 text-purple-200 hover:bg-purple-600 hover:text-white transition-all"
+                >
+                  {month.slice(0, 3)}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ======================
+// MONTHLY COLLECTION CARD
+// ======================
+function MonthlyCollectionCard({
+  students,
+  onNavigate,
+}: {
+  students: PrePlacementStudent[];
+  onNavigate: (view: ViewState, data?: any) => void;
+}) {
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+
+  const monthlyData = useMemo(() => {
+    const collections = students.reduce((acc, student) => {
+      student.payments?.forEach((payment) => {
+        if (payment.date) {
+          const month = monthKey(payment.date);
+          if (month === selectedMonth) {
+            if (!acc[month])
+              acc[month] = { month, collected: 0, students: new Set() };
+            acc[month].collected += payment.amount;
+            acc[month].students.add(student._id);
+          }
+        }
+      });
+      return acc;
+    }, {} as Record<string, { month: string; collected: number; students: Set<string> }>);
+
+    const data = collections[selectedMonth];
+    return {
+      collected: data?.collected || 0,
+      studentCount: data?.students.size || 0,
+    };
+  }, [students, selectedMonth]);
+
+  const formatDisplayMonth = (monthStr: string) => {
+    if (!monthStr) return "";
+    const [year, month] = monthStr.split("-");
+    return new Date(parseInt(year), parseInt(month) - 1).toLocaleDateString(
+      "en-IN",
+      {
+        month: "long",
+        year: "numeric",
+      }
+    );
+  };
+
+  return (
+    <div
+      onClick={() => onNavigate("monthly", { selectedMonth })}
+      className="group relative z-30 overflow-visible rounded-2xl border border-blue-300/20 bg-blue-500/10 backdrop-blur-sm p-6 cursor-pointer shadow-lg hover:shadow-xl hover:bg-blue-500/20 transition-all duration-300"
+    >
+      <div className="flex items-center justify-between mb-4">
+        <div className="w-12 h-12 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center">
+          <Calendar className="w-6 h-6 text-blue-400" />
+        </div>
+        <div
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          <CustomDatePicker
+            value={selectedMonth}
+            onChange={setSelectedMonth}
+            placeholder="Select month"
+          />
+        </div>
+      </div>
+
+      <h3 className="text-blue-300 text-sm font-medium mb-2">
+        Monthly Collection - {formatDisplayMonth(selectedMonth)}
+      </h3>
+      <p className="text-2xl font-bold text-white mb-2">
+        {currency(monthlyData.collected)}
+      </p>
+      <p className="text-blue-200/60 text-sm">
+        {monthlyData.studentCount} students made payments
+      </p>
+      <p className="text-blue-200/40 text-xs mt-2">
+        Click to view detailed breakdown
+      </p>
+    </div>
+  );
+}
+
+// ======================
 // DASHBOARD VIEW
 // ======================
 function DashboardView({
   summary,
+  students,
   onNavigate,
 }: {
   summary: SummaryData;
-  onNavigate: (view: ViewState) => void;
+  students: PrePlacementStudent[];
+  onNavigate: (view: ViewState, data?: any) => void;
 }) {
   const chartData = useMemo(() => {
     return [
@@ -205,13 +420,6 @@ function DashboardView({
     }));
   }, [summary.monthly]);
 
-  const collectionRate = useMemo(() => {
-    const rate =
-      summary.totalFee > 0
-        ? (summary.totalReceived / summary.totalFee) * 100
-        : 0;
-    return Math.round(rate);
-  }, [summary]);
   const formatINRShort = (n: number) => {
     const sign = n < 0 ? "-" : "";
     const v = Math.abs(n);
@@ -227,7 +435,7 @@ function DashboardView({
   return (
     <div className="space-y-8">
       {/* Main KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <button
           onClick={() => onNavigate("collected")}
           className="group relative overflow-hidden rounded-2xl border border-emerald-300/20 bg-emerald-500/10 backdrop-blur-sm p-6 text-left shadow-lg hover:shadow-xl hover:bg-emerald-500/20 transition-all duration-300"
@@ -239,13 +447,13 @@ function DashboardView({
             <TrendingUp className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform" />
           </div>
           <h3 className="text-emerald-300 text-sm font-medium mb-2">
-            Total Collected
+            Total Fee Collected
           </h3>
           <p className="text-2xl font-bold text-white">
             {currency(summary.totalReceived)}
           </p>
           <p className="text-emerald-200/60 text-sm mt-2">
-            Click to view collections
+            Click to view all students
           </p>
         </button>
 
@@ -266,9 +474,10 @@ function DashboardView({
             {currency(summary.remainingFee)}
           </p>
           <p className="text-amber-200/60 text-sm mt-2">
-            Click to view pending
+            Click to view pending payments
           </p>
         </button>
+
         <button
           onClick={() => onNavigate("students")}
           className="group relative overflow-hidden rounded-2xl border border-purple-300/20 bg-purple-500/10 backdrop-blur-sm p-6 text-left shadow-lg hover:shadow-xl hover:bg-purple-500/20 transition-all duration-300"
@@ -291,6 +500,9 @@ function DashboardView({
         </button>
       </div>
 
+      {/* Monthly Collection Card */}
+      <MonthlyCollectionCard students={students} onNavigate={onNavigate} />
+
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Fee Collection Overview */}
@@ -300,30 +512,30 @@ function DashboardView({
             Fee Collection Overview
           </h3>
           <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={chartData}
-                cx="50%"
-                cy="50%"
-                innerRadius={60}
-                outerRadius={120}
-                paddingAngle={5}
-                dataKey="value"
-              >
-                {chartData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
+            <ComposedChart data={chartData}>
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="#6b46c1"
+                opacity={0.3}
+              />
+              <XAxis dataKey="name" stroke="#c4b5fd" fontSize={12} />
+              <YAxis
+                stroke="#c4b5fd"
+                fontSize={12}
+                tickFormatter={(value) => formatINRShort(value as number)}
+              />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: "#55bcc2",
+                  backgroundColor: "#1e1b3a",
                   border: "1px solid #6b46c1",
                   borderRadius: "12px",
                   backdropFilter: "blur(10px)",
                 }}
+                labelStyle={{ color: "#e2e8f0" }}
                 formatter={(value) => [currency(value as number), "Amount"]}
               />
-            </PieChart>
+              <Bar dataKey="value" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
 
@@ -346,26 +558,6 @@ function DashboardView({
                 fontSize={12}
                 tickFormatter={(value) => formatINRShort(value as number)}
               />
-
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "#1e1b3a",
-                  border: "1px solid #6b46c1",
-                  borderRadius: "12px",
-                  backdropFilter: "blur(10px)",
-                }}
-                labelStyle={{ color: "#e2e8f0" }}
-                // For tooltip value, show full INR with Indian commas:
-                formatter={(value) => [
-                  new Intl.NumberFormat("en-IN", {
-                    style: "currency",
-                    currency: "INR",
-                    maximumFractionDigits: 0,
-                  }).format(value as number),
-                  "Collected",
-                ]}
-              />
-
               <Tooltip
                 contentStyle={{
                   backgroundColor: "#1e1b3a",
@@ -392,13 +584,75 @@ function DashboardView({
 }
 
 // ======================
+// MONTHLY VIEW
+// ======================
+function MonthlyView({
+  students,
+  selectedMonth,
+}: {
+  students: PrePlacementStudent[];
+  selectedMonth: string;
+}) {
+  const studentsForMonth = useMemo(() => {
+    return students.filter((student) => {
+      return student.payments?.some(
+        (payment) => payment.date && monthKey(payment.date) === selectedMonth
+      );
+    });
+  }, [students, selectedMonth]);
+
+  const monthlyTotal = useMemo(() => {
+    return students.reduce((total, student) => {
+      const monthlyPayments = (student.payments || [])
+        .filter(
+          (payment) => payment.date && monthKey(payment.date) === selectedMonth
+        )
+        .reduce((sum, payment) => sum + payment.amount, 0);
+      return total + monthlyPayments;
+    }, 0);
+  }, [students, selectedMonth]);
+
+  const formatDisplayMonth = (monthStr: string) => {
+    if (!monthStr) return "";
+    const [year, month] = monthStr.split("-");
+    return new Date(parseInt(year), parseInt(month) - 1).toLocaleDateString(
+      "en-IN",
+      {
+        month: "long",
+        year: "numeric",
+      }
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="mb-6 p-4 rounded-xl bg-emerald-500/20 border border-emerald-400/30">
+        <h4 className="text-emerald-300 font-medium mb-2">
+          Total Collection for {formatDisplayMonth(selectedMonth)}
+        </h4>
+        <p className="text-2xl font-bold text-emerald-200">
+          {currency(monthlyTotal)}
+        </p>
+        <p className="text-emerald-200/60 text-sm">
+          {studentsForMonth.length} students made payments
+        </p>
+      </div>
+
+      <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-purple-300/20 p-6">
+        <h3 className="text-lg font-medium text-white mb-6 flex items-center gap-2">
+          <Calendar className="w-5 h-5 text-purple-400" />
+          Students who made payments in {formatDisplayMonth(selectedMonth)}
+        </h3>
+        <StudentTable students={studentsForMonth} />
+      </div>
+    </div>
+  );
+}
+
+// ======================
 // COLLECTED VIEW
 // ======================
 function CollectedView({ students }: { students: PrePlacementStudent[] }) {
-  const fullyPaidStudents = useMemo(() => {
-    return students.filter((student) => student.remainingFee === 0);
-  }, [students]);
-
   const monthlyCollections = useMemo(() => {
     const collections: Record<string, { month: string; collected: number }> =
       {};
@@ -425,6 +679,15 @@ function CollectedView({ students }: { students: PrePlacementStudent[] }) {
 
   return (
     <div className="space-y-8">
+      {/* All Students Table */}
+      <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-purple-300/20 p-6">
+        <h3 className="text-lg font-medium text-white mb-6 flex items-center gap-2">
+          <UserCheck className="w-5 h-5 text-emerald-400" />
+          All Students - Fee Collection Details ({students.length})
+        </h3>
+        <StudentTable students={students} />
+      </div>
+
       {/* Monthly Collections Graph */}
       <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-purple-300/20 p-6">
         <h3 className="text-lg font-medium text-white mb-6 flex items-center gap-2">
@@ -464,15 +727,6 @@ function CollectedView({ students }: { students: PrePlacementStudent[] }) {
           </LineChart>
         </ResponsiveContainer>
       </div>
-
-      {/* Fully Paid Students Table */}
-      <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-purple-300/20 p-6">
-        <h3 className="text-lg font-medium text-white mb-6 flex items-center gap-2">
-          <UserCheck className="w-5 h-5 text-emerald-400" />
-          Students with Full Payment ({fullyPaidStudents.length})
-        </h3>
-        <StudentTable students={fullyPaidStudents} />
-      </div>
     </div>
   );
 }
@@ -482,7 +736,7 @@ function CollectedView({ students }: { students: PrePlacementStudent[] }) {
 // ======================
 function RemainingView({ students }: { students: PrePlacementStudent[] }) {
   const studentsWithRemaining = useMemo(() => {
-    return students.filter((student) => student.remainingFee > 0);
+    return students.filter((s) => s.status !== "DROPPED" && s.remainingFee > 0);
   }, [students]);
 
   return (
@@ -513,9 +767,10 @@ function StudentsView({
     status: "",
     course: "",
   });
+  const [selectedMonth, setSelectedMonth] = useState("");
 
   const filteredStudents = useMemo(() => {
-    return students.filter((student) => {
+    let filtered = students.filter((student) => {
       const matchesSearch =
         !filters.search ||
         student.name.toLowerCase().includes(filters.search.toLowerCase()) ||
@@ -534,7 +789,18 @@ function StudentsView({
 
       return matchesSearch && matchesStatus && matchesCourse;
     });
-  }, [students, filters]);
+
+    // Apply month filter if selected
+    if (selectedMonth) {
+      filtered = filtered.filter((student) =>
+        student.payments?.some(
+          (payment) => payment.date && monthKey(payment.date) === selectedMonth
+        )
+      );
+    }
+
+    return filtered;
+  }, [students, filters, selectedMonth]);
 
   const statusCounts = useMemo(() => {
     return students.reduce((acc, student) => {
@@ -543,8 +809,20 @@ function StudentsView({
     }, {} as Record<string, number>);
   }, [students]);
 
+  const monthlyTotal = useMemo(() => {
+    if (!selectedMonth) return 0;
+    return students.reduce((total, student) => {
+      const monthlyPayments = (student.payments || [])
+        .filter(
+          (payment) => payment.date && monthKey(payment.date) === selectedMonth
+        )
+        .reduce((sum, payment) => sum + payment.amount, 0);
+      return total + monthlyPayments;
+    }, 0);
+  }, [students, selectedMonth]);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Status Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-emerald-500/20 rounded-xl border border-emerald-400/30 p-4">
@@ -576,9 +854,48 @@ function StudentsView({
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Month Selector and Results */}
       <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-purple-300/20 p-6">
-        <div className="flex flex-wrap gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-4 mb-6">
+          <h3 className="text-lg font-medium text-white flex items-center gap-2">
+            <Calendar className="w-5 h-5 text-purple-400" />
+            Students by Payment Month
+          </h3>
+          <div className="flex items-center gap-2">
+            <div
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              <CustomDatePicker
+                value={selectedMonth}
+                onChange={setSelectedMonth}
+                placeholder="Select month to filter"
+              />
+            </div>
+          </div>
+        </div>
+
+        {selectedMonth && (
+          <div className="mb-6 p-4 rounded-xl bg-emerald-500/20 border border-emerald-400/30">
+            <h4 className="text-emerald-300 font-medium mb-2">
+              Total Collection for{" "}
+              {new Date(selectedMonth + "-01").toLocaleDateString("en-IN", {
+                month: "long",
+                year: "numeric",
+              })}
+            </h4>
+            <p className="text-2xl font-bold text-emerald-200">
+              {currency(monthlyTotal)}
+            </p>
+            <p className="text-emerald-200/60 text-sm">
+              {filteredStudents.length} students made payments
+            </p>
+          </div>
+        )}
+
+        {/* Filters */}
+        <div className="flex flex-wrap gap-4 mb-6">
           <div className="flex-1 min-w-64">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-purple-300" />
@@ -615,14 +932,7 @@ function StudentsView({
             className="px-4 py-2 bg-white/10 border border-purple-300/20 rounded-xl text-white placeholder-purple-300/60 focus:outline-none focus:ring-2 focus:ring-purple-400"
           />
         </div>
-      </div>
 
-      {/* Students Table */}
-      <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-purple-300/20 p-6">
-        <h3 className="text-lg font-medium text-white mb-6 flex items-center gap-2">
-          <Users className="w-5 h-5 text-purple-400" />
-          All Students ({filteredStudents.length})
-        </h3>
         <StudentTable students={filteredStudents} onRefresh={onRefresh} />
       </div>
     </div>
@@ -714,7 +1024,9 @@ function StudentTable({
                 </td>
                 {showRemaining && (
                   <td className="px-4 py-4 text-amber-300 font-semibold text-sm">
-                    {currency(student.remainingFee)}
+                    {student.status === "DROPPED"
+                      ? "—"
+                      : currency(student.remainingFee)}
                   </td>
                 )}
                 <td className="px-4 py-4">
@@ -826,7 +1138,9 @@ function StudentDetailModal({
             <div className="bg-amber-500/20 rounded-xl border border-amber-400/30 p-4">
               <p className="text-amber-300 text-xs font-medium">Remaining</p>
               <p className="text-amber-200 text-lg font-semibold">
-                {currency(student.remainingFee)}
+                {student.status === "DROPPED"
+                  ? "—"
+                  : currency(student.remainingFee)}
               </p>
             </div>
           </div>
@@ -980,6 +1294,7 @@ export default function PrePlacementDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentView, setCurrentView] = useState<ViewState>("dashboard");
+  const [viewData, setViewData] = useState<any>(null);
 
   const loadData = async () => {
     try {
@@ -1011,6 +1326,11 @@ export default function PrePlacementDashboard() {
     await loadData();
   };
 
+  const handleNavigation = (view: ViewState, data?: any) => {
+    setCurrentView(view);
+    setViewData(data);
+  };
+
   const getViewTitle = () => {
     switch (currentView) {
       case "collected":
@@ -1019,6 +1339,8 @@ export default function PrePlacementDashboard() {
         return "Remaining Fees";
       case "students":
         return "All Students";
+      case "monthly":
+        return "Monthly Collection";
       default:
         return "Pre Placement Dashboard";
     }
@@ -1107,7 +1429,11 @@ export default function PrePlacementDashboard() {
         {!loading && summary && (
           <div>
             {currentView === "dashboard" && (
-              <DashboardView summary={summary} onNavigate={setCurrentView} />
+              <DashboardView
+                summary={summary}
+                students={students}
+                onNavigate={handleNavigation}
+              />
             )}
             {currentView === "collected" && (
               <CollectedView students={students} />
@@ -1117,6 +1443,12 @@ export default function PrePlacementDashboard() {
             )}
             {currentView === "students" && (
               <StudentsView students={students} onRefresh={refreshData} />
+            )}
+            {currentView === "monthly" && viewData && (
+              <MonthlyView
+                students={students}
+                selectedMonth={viewData.selectedMonth}
+              />
             )}
           </div>
         )}

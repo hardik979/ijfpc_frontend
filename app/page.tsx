@@ -143,7 +143,7 @@ export default function AdminDashboard() {
           <h1 className="text-5xl md:text-5xl font-bold text-sky-400 mb-4 font-[Righteous]">
             <span className="text-yellow-400">IT</span> Jobs Factory Dashboards
           </h1>
-          <p className="text-xl text-gray-300 max-w-2xl mx-auto leading-relaxed">
+          <p className="text-lg text-gray-300 max-w-2xl mx-auto leading-relaxed">
             Comprehensive analytics and management tools for your business
             operations
           </p>

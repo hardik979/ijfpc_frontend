@@ -139,9 +139,13 @@ export default function ITJobsFactoryDashboard() {
 
         {/* Header Section */}
         <motion.div className="text-center mb-16" variants={titleVariants}>
-          <h1 className="text-5xl md:text-6xl font-bold text-sky-400 mb-4 font-[Righteous]">
-            <span className="text-yellow-400">IT</span> Jobs Factory
-          </h1>
+          <Link href="/">
+            {" "}
+            <h1 className="text-5xl md:text-6xl font-bold text-sky-400 mb-4 font-[Righteous]">
+              <span className="text-yellow-400">IT</span> Jobs Factory
+            </h1>
+          </Link>
+
           <h2 className="text-2xl md:text-3xl font-semibold text-gray-200 mb-4">
             Fee Dashboard
           </h2>
