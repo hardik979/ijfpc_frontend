@@ -588,15 +588,16 @@ function MonthlyView({
   rows: RecordRow[];
   selectedMonth: string;
 }) {
+  // rows having at least one payment in the month
   const studentsForMonth = useMemo(() => {
-    return rows.filter((row) => {
-      return row.installments.some(
+    return rows.filter((row) =>
+      row.installments.some(
         (inst) =>
           inst.status === "paid" &&
           inst.paidDate &&
           monthKey(inst.paidDate) === selectedMonth
-      );
-    });
+      )
+    );
   }, [rows, selectedMonth]);
 
   const monthlyTotal = useMemo(() => {
@@ -612,19 +613,34 @@ function MonthlyView({
       return total + monthlyPayments;
     }, 0);
   }, [rows, selectedMonth]);
+  const monthScopedRows = useMemo(() => {
+    return studentsForMonth
+      .map((row) => {
+        const collectedThisMonth = row.installments
+          .filter(
+            (inst) =>
+              inst.status === "paid" &&
+              inst.paidDate &&
+              monthKey(inst.paidDate) === selectedMonth
+          )
+          .reduce((sum, inst) => sum + inst.amount, 0);
+
+        return {
+          ...row,
+          collected: collectedThisMonth, // override to month-only amount
+        };
+      })
+      .filter((r) => r.collected > 0);
+  }, [studentsForMonth, selectedMonth]);
 
   const formatDisplayMonth = (monthStr: string) => {
     if (!monthStr) return "";
     const [year, month] = monthStr.split("-");
     return new Date(parseInt(year), parseInt(month) - 1).toLocaleDateString(
       "en-IN",
-      {
-        month: "long",
-        year: "numeric",
-      }
+      { month: "long", year: "numeric" }
     );
   };
-
   return (
     <div className="space-y-6">
       <div className="mb-6 p-4 rounded-xl bg-emerald-500/20 border border-emerald-400/30">
@@ -635,16 +651,16 @@ function MonthlyView({
           {currency(monthlyTotal)}
         </p>
         <p className="text-emerald-200/60 text-sm">
-          {studentsForMonth.length} students made payments
+          {monthScopedRows.length} students made payments
         </p>
       </div>
-
       <div className="bg-white/5 backdrop-blur-sm rounded-2xl border border-purple-300/20 p-6">
         <h3 className="text-lg font-medium text-white mb-6 flex items-center gap-2">
           <Calendar className="w-5 h-5 text-purple-400" />
           Students who made payments in {formatDisplayMonth(selectedMonth)}
         </h3>
-        <StudentTable rows={studentsForMonth} showPackagePercentage />
+
+        <MonthlyStudentTable rows={rows} selectedMonth={selectedMonth} />
       </div>
     </div>
   );
@@ -840,10 +856,12 @@ function StudentTable({
   rows,
   showRemaining = false,
   showPackagePercentage = false,
+  collectedLabel = "Collected",
 }: {
   rows: RecordRow[];
   showRemaining?: boolean;
   showPackagePercentage?: boolean;
+  collectedLabel?: string;
 }) {
   const [selectedStudent, setSelectedStudent] = useState<RecordRow | null>(
     null
@@ -957,6 +975,159 @@ function StudentTable({
       </div>
 
       {/* Student Detail Modal */}
+      {selectedStudent && (
+        <StudentDetailModal
+          student={selectedStudent}
+          onClose={() => setSelectedStudent(null)}
+        />
+      )}
+    </>
+  );
+}
+function MonthlyStudentTable({
+  rows,
+  selectedMonth,
+}: {
+  rows: RecordRow[];
+  selectedMonth: string;
+}) {
+  const [selectedStudent, setSelectedStudent] = useState<RecordRow | null>(
+    null
+  );
+
+  const monthRows = useMemo(() => {
+    return rows
+      .map((row) => {
+        const monthInst = row.installments.filter(
+          (inst) =>
+            inst.status === "paid" &&
+            inst.paidDate &&
+            monthKey(inst.paidDate) === selectedMonth
+        );
+
+        const monthCollected = monthInst.reduce((sum, i) => sum + i.amount, 0);
+
+        return {
+          row,
+          monthInst,
+          monthCollected,
+        };
+      })
+      .filter((x) => x.monthCollected > 0);
+  }, [rows, selectedMonth]);
+
+  if (monthRows.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <Users className="w-12 h-12 text-purple-300/60 mx-auto mb-4" />
+        <p className="text-purple-200/80">No payments in this month</p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="overflow-x-auto">
+        <table className="min-w-full">
+          <thead className="bg-purple-500/10 backdrop-blur-sm">
+            <tr>
+              <th className="px-4 py-3 text-left text-xs font-medium text-purple-200">
+                Student
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-purple-200">
+                Company
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-purple-200">
+                Package
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-purple-200">
+                Collected (this month)
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-purple-200">
+                Installments (this month)
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-purple-200">
+                Status
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {monthRows.map(({ row, monthInst }, idx) => (
+              <tr
+                key={`${row._id}-${idx}`}
+                onClick={() => setSelectedStudent(row)}
+                className="cursor-pointer hover:bg-white/10 transition-all duration-200 border-b border-purple-300/10"
+              >
+                <td className="px-4 py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-400 to-indigo-500 flex items-center justify-center text-white font-medium text-sm">
+                      {row.studentName.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-white font-medium text-sm">
+                        {row.studentName}
+                      </p>
+                      <p className="text-purple-200/60 text-xs">
+                        {row.location}
+                      </p>
+                    </div>
+                  </div>
+                </td>
+
+                <td className="px-4 py-4 text-purple-100 text-sm">
+                  {row.company || "—"}
+                </td>
+                <td className="px-4 py-4 text-purple-100 text-sm">
+                  {row.package || "—"}
+                </td>
+
+                <td className="px-4 py-4 text-emerald-300 font-semibold text-sm">
+                  {currency(
+                    monthInst.reduce((sum, inst) => sum + inst.amount, 0)
+                  )}
+                </td>
+
+                <td className="px-4 py-4 text-purple-100 text-sm">
+                  <div className="flex flex-wrap gap-2">
+                    {monthInst.map((inst, i) => (
+                      <span
+                        key={i}
+                        className="inline-flex items-center gap-2 px-2 py-1 rounded-lg bg-white/10 border border-purple-300/20 text-xs"
+                      >
+                        <span className="font-semibold">
+                          {currency(inst.amount)}
+                        </span>
+                        <span className="text-purple-200/70">•</span>
+                        <span className="text-purple-200/80">
+                          {formatDate(inst.paidDate)}
+                        </span>
+                        {inst.status === "paid" ? (
+                          <span className="ml-1 px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-[10px]">
+                            Paid
+                          </span>
+                        ) : null}
+                      </span>
+                    ))}
+                  </div>
+                </td>
+
+                <td className="px-4 py-4">
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-medium border ${
+                      row.remaining === 0
+                        ? "text-emerald-300 bg-emerald-500/20 border-emerald-400/30"
+                        : "text-amber-300 bg-amber-500/20 border-amber-400/30"
+                    }`}
+                  >
+                    {row.remaining === 0 ? "Paid" : "Partial"}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
       {selectedStudent && (
         <StudentDetailModal
           student={selectedStudent}
