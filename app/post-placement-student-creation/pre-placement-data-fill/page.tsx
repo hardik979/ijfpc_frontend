@@ -4,10 +4,10 @@ import { API_BASE_URL } from "@/lib/api";
 import React, { useState } from "react";
 
 // =====================
-// Types
+// Types`
 // =====================
 
-type Status = "ACTIVE" | "DROPPED";
+type Status = "ACTIVE" | "DROPPED" | "PAUSED" | "PLACED";
 
 type PaymentInput = {
   amount?: number | string;
@@ -32,6 +32,7 @@ const toNumber = (v: any, fallback = 0) => {
   const n = Number(String(v).replace(/[\s,₹]/g, ""));
   return Number.isFinite(n) ? n : fallback;
 };
+const STATUS_OPTIONS = ["ACTIVE", "PAUSED", "PLACED", "DROPPED"] as const;
 
 // =====================
 // Page
@@ -208,12 +209,11 @@ export default function PrePlacementStudentCreatePage() {
                 onChange={(e) => setStatus(e.target.value as Status)}
                 className="field"
               >
-                <option value="ACTIVE" className="bg-[#120f2f]">
-                  ACTIVE
-                </option>
-                <option value="DROPPED" className="bg-[#120f2f]">
-                  DROPPED
-                </option>
+                {STATUS_OPTIONS.map((s) => (
+                  <option key={s} value={s} className="bg-[#120f2f]">
+                    {s}
+                  </option>
+                ))}
               </select>
             </Field>
           </div>

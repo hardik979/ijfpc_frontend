@@ -7,7 +7,7 @@ import { Plus } from "lucide-react";
 // Types
 // =====================
 
-type Status = "ACTIVE" | "DROPPED";
+type Status = "ACTIVE" | "DROPPED" | "PAUSED" | "PLACED";
 
 type Payment = {
   amount: number;
@@ -57,7 +57,7 @@ type SummaryResponse = {
 // =====================
 // Utils
 // =====================
-
+const STATUS_OPTIONS: Status[] = ["ACTIVE", "PAUSED", "PLACED", "DROPPED"];
 const cn = (...classes: Array<string | false | undefined>) =>
   classes.filter(Boolean).join(" ");
 
@@ -299,8 +299,11 @@ export default function PrePlacementStudentManagerPage() {
               className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 outline-none focus:ring-2 focus:ring-purple-400/40"
             >
               <option value="ALL">All</option>
-              <option value="ACTIVE">Active</option>
-              <option value="DROPPED">Dropped</option>
+              {STATUS_OPTIONS.map((s) => (
+                <option key={s} value={s} className="bg-[#120f2f]">
+                  {s}
+                </option>
+              ))}
             </select>
           </div>
         </div>
@@ -361,17 +364,30 @@ export default function PrePlacementStudentManagerPage() {
                       {formatINR(s.remainingFee || 0)}
                     </Td>
                     <Td>
-                      <span
-                        className={cn(
-                          "rounded-full px-2 py-1 text-xs",
-                          s.status === "ACTIVE"
-                            ? "bg-emerald-400/10 text-emerald-300 border border-emerald-300/30"
-                            : "bg-rose-400/10 text-rose-300 border border-rose-300/30"
-                        )}
-                      >
-                        {s.status}
-                      </span>
+                      {(() => {
+                        const cls: Record<Status, string> = {
+                          ACTIVE:
+                            "bg-emerald-400/10 text-emerald-300 border border-emerald-300/30",
+                          PAUSED:
+                            "bg-amber-400/10  text-amber-300  border border-amber-300/30",
+                          PLACED:
+                            "bg-sky-400/10    text-sky-300    border border-sky-300/30",
+                          DROPPED:
+                            "bg-rose-400/10   text-rose-300   border border-rose-300/30",
+                        };
+                        return (
+                          <span
+                            className={cn(
+                              "rounded-full px-2 py-1 text-xs",
+                              cls[s.status]
+                            )}
+                          >
+                            {s.status}
+                          </span>
+                        );
+                      })()}
                     </Td>
+
                     <Td className="text-purple-200/80">
                       {s.dueDate
                         ? new Date(s.dueDate).toLocaleDateString("en-IN")
@@ -529,12 +545,11 @@ export default function PrePlacementStudentManagerPage() {
                     }}
                     className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 outline-none"
                   >
-                    <option value="ACTIVE" className="bg-[#0f0b24]">
-                      ACTIVE
-                    </option>
-                    <option value="DROPPED" className="bg-[#0f0b24]">
-                      DROPPED
-                    </option>
+                    {STATUS_OPTIONS.map((s) => (
+                      <option key={s} value={s} className="bg-[#0f0b24]">
+                        {s}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
