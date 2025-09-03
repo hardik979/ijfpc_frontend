@@ -28,6 +28,14 @@ const PAYMENT_MODES = [
 
 type PaymentMode = (typeof PAYMENT_MODES)[number];
 
+interface CompanyExperience {
+  companyName?: string;
+  yearsOfExperience?: number | null;
+  pf?: boolean | null; // tri-state
+  doj?: string | null; // yyyy-mm-dd
+  doe?: string | null; // yyyy-mm-dd
+}
+
 interface HRContact {
   name?: string;
   contactNumber?: string;
@@ -62,6 +70,7 @@ interface PostPlacementOffer {
   source?: string;
   createdAt: string;
   updatedAt?: string;
+  companyExperience?: CompanyExperience;
 }
 
 interface NewInstallment {
@@ -84,8 +93,16 @@ interface CreateStudentFormData {
   remainingPrePlacementFee: string;
   discount: string;
   remainingFeeNote: string;
-}
 
+  // NEW
+  companyExperience: {
+    companyName?: string;
+    yearsOfExperience?: number | null;
+    pf?: boolean | null;
+    doj?: string | null; // yyyy-mm-dd
+    doe?: string | null; // yyyy-mm-dd
+  };
+}
 interface StudentDetailPanelProps {
   student: PostPlacementOffer;
   isEditing: boolean;
@@ -735,6 +752,63 @@ const StudentDetailPanel: React.FC<StudentDetailPanelProps> = ({
               </div>
             </div>
           )}
+        {/* Company Experience */}
+        <div>
+          <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+            <Building className="h-5 w-5 mr-2 text-purple-600" />
+            Company Experience
+          </h3>
+          {(() => {
+            const ce = student.companyExperience || {};
+            const pfLabel =
+              ce.pf === true ? "Yes" : ce.pf === false ? "No" : "Unknown";
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-500">
+                    Company
+                  </label>
+                  <p className="text-gray-900">{ce.companyName || "—"}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">
+                    Experience
+                  </label>
+                  <p className="text-gray-900">
+                    {ce.yearsOfExperience ?? "—"}
+                    {ce.yearsOfExperience != null ? " yrs" : ""}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">
+                    PF
+                  </label>
+                  <p className="text-gray-900">{pfLabel}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">
+                    DOJ
+                  </label>
+                  <p className="text-gray-900">
+                    {ce.doj
+                      ? new Date(ce.doj).toLocaleDateString("en-IN")
+                      : "—"}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">
+                    DOE
+                  </label>
+                  <p className="text-gray-900">
+                    {ce.doe
+                      ? new Date(ce.doe).toLocaleDateString("en-IN")
+                      : "—"}
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
 
         {/* Financial Details */}
         <div>
@@ -1091,13 +1165,20 @@ const EditForm: React.FC<EditFormProps> = ({ formData, setFormData }) => {
       setFormData((prev) => ({
         ...prev,
         [parent]: {
-          ...(prev[parent as keyof PostPlacementOffer] as any),
+          ...((prev as any)[parent] ?? {}), // 👈 fallback so we can edit nested fields
           [child]: value,
         },
       }));
     } else {
       setFormData((prev) => ({ ...prev, [field]: value }));
     }
+  };
+  const toYMD = (d?: string | null) => {
+    if (!d) return "";
+    const dt = new Date(d);
+    if (Number.isNaN(dt.getTime())) return "";
+    const local = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 10);
   };
 
   return (
@@ -1230,6 +1311,101 @@ const EditForm: React.FC<EditFormProps> = ({ formData, setFormData }) => {
           </div>
         </div>
       </div>
+      {/* Company Experience */}
+      <div>
+        <h4 className="text-lg font-medium text-gray-900 mb-4">
+          Company Experience
+        </h4>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Company Name
+            </label>
+            <input
+              type="text"
+              value={formData.companyExperience?.companyName || ""}
+              onChange={(e) =>
+                updateField("companyExperience.companyName", e.target.value)
+              }
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Years of Experience
+            </label>
+            <input
+              type="number"
+              min={0}
+              step="0.5"
+              value={formData.companyExperience?.yearsOfExperience ?? ""}
+              onChange={(e) =>
+                updateField(
+                  "companyExperience.yearsOfExperience",
+                  e.target.value === "" ? null : Number(e.target.value)
+                )
+              }
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              PF
+            </label>
+            <select
+              value={
+                formData.companyExperience?.pf === true
+                  ? "true"
+                  : formData.companyExperience?.pf === false
+                  ? "false"
+                  : ""
+              }
+              onChange={(e) =>
+                updateField(
+                  "companyExperience.pf",
+                  e.target.value === "" ? null : e.target.value === "true"
+                )
+              }
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            >
+              <option value="">Unknown</option>
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              DOJ
+            </label>
+            <input
+              type="date"
+              value={toYMD(formData.companyExperience?.doj ?? null)}
+              onChange={(e) =>
+                updateField("companyExperience.doj", e.target.value || null)
+              }
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              DOE
+            </label>
+            <input
+              type="date"
+              value={toYMD(formData.companyExperience?.doe ?? null)}
+              onChange={(e) =>
+                updateField("companyExperience.doe", e.target.value || null)
+              }
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            />
+          </div>
+        </div>
+      </div>
 
       {/* Financial Details */}
       <div>
@@ -1324,6 +1500,13 @@ const CreateStudentForm: React.FC<CreateStudentFormProps> = ({
     remainingPrePlacementFee: "",
     discount: "",
     remainingFeeNote: "",
+    companyExperience: {
+      companyName: "",
+      yearsOfExperience: null,
+      pf: null,
+      doj: null,
+      doe: null,
+    },
   });
 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -1465,6 +1648,113 @@ const CreateStudentForm: React.FC<CreateStudentFormProps> = ({
                 onChange={(e) => updateField("joiningDate", e.target.value)}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               />
+            </div>
+          </div>
+          {/* Company Experience */}
+          <div>
+            <h4 className="text-lg font-medium text-gray-900 mb-4">
+              Company Experience
+            </h4>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Company Name
+                </label>
+                <input
+                  type="text"
+                  value={formData.companyExperience?.companyName || ""}
+                  onChange={(e) =>
+                    updateField("companyExperience.companyName", e.target.value)
+                  }
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Years of Experience
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.5"
+                  value={formData.companyExperience?.yearsOfExperience ?? ""}
+                  onChange={(e) =>
+                    updateField(
+                      "companyExperience.yearsOfExperience",
+                      e.target.value === "" ? null : Number(e.target.value)
+                    )
+                  }
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  PF
+                </label>
+                <select
+                  value={
+                    formData.companyExperience?.pf === true
+                      ? "true"
+                      : formData.companyExperience?.pf === false
+                      ? "false"
+                      : ""
+                  }
+                  onChange={(e) =>
+                    updateField(
+                      "companyExperience.pf",
+                      e.target.value === "" ? null : e.target.value === "true"
+                    )
+                  }
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                >
+                  <option value="">Unknown</option>
+                  <option value="true">Yes</option>
+                  <option value="false">No</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  DOJ
+                </label>
+                <input
+                  type="date"
+                  value={
+                    formData.companyExperience?.doj
+                      ? new Date(formData.companyExperience.doj)
+                          .toISOString()
+                          .slice(0, 10)
+                      : ""
+                  }
+                  onChange={(e) =>
+                    updateField("companyExperience.doj", e.target.value || null)
+                  }
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  DOE
+                </label>
+                <input
+                  type="date"
+                  value={
+                    formData.companyExperience?.doe
+                      ? new Date(formData.companyExperience.doe)
+                          .toISOString()
+                          .slice(0, 10)
+                      : ""
+                  }
+                  onChange={(e) =>
+                    updateField("companyExperience.doe", e.target.value || null)
+                  }
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
             </div>
           </div>
 

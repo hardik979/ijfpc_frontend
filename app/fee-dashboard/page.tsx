@@ -2,15 +2,7 @@
 
 import { motion } from "framer-motion";
 import { useState } from "react";
-import {
-  ChevronRight,
-  FileText,
-  CheckCircle,
-  ArrowLeft,
-  Briefcase,
-  BuildingIcon,
-  Building2,
-} from "lucide-react";
+import { ChevronRight, FileText, CheckCircle, ArrowLeft } from "lucide-react";
 import type { Variants } from "framer-motion";
 import Link from "next/link";
 export default function ITJobsFactoryDashboard() {

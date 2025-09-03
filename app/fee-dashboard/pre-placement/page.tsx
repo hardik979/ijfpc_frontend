@@ -35,45 +35,60 @@ import {
 // ======================
 // TYPES & CONFIG
 // ======================
+export type Payment = {
+  amount: number;
+  date: string | null;
+  mode: string;
+  receiptNos: string[];
+  note: string;
+};
+
+export type Refund = {
+  amount: number;
+  date: string | null;
+  mode?: string;
+  note?: string;
+};
+
 import { API_BASE_URL } from "@/lib/api";
 export type PrePlacementStudent = {
   _id: string;
   name: string;
   courseName: string;
   terms: string;
+
   totalFee: number;
-  totalReceived: number;
+  totalReceived: number; // gross in (keep it since backend returns it)
+  totalRefunded: number; // total out
+  netCollected: number; // totalReceived - totalRefunded
+
+  paymentsCount: number;
+  payments: Payment[];
+  refunds?: Refund[]; // <-- ARRAY (optional)
+
   remainingFee: number;
   status: "ACTIVE" | "DROPPED";
   dueDate: string | null;
   createdAt: string;
   updatedAt: string;
-  paymentsCount: number;
-  payments: {
-    amount: number;
-    date: string | null;
-    mode: string;
-    receiptNos: string[];
-    note: string;
-  }[];
+
   collectedInRange?: number;
-  paymentsInRange?: any[];
+  paymentsInRange?: Payment[];
+  refundsInRange?: Refund[];
 };
 
-type SummaryData = {
+export type SummaryData = {
   totalStudents: number;
   totalFee: number;
-  totalReceived: number;
+  totalReceived: number; // gross
+  totalRefunded: number;
+  netCollected: number; // <-- add this
   remainingFee: number;
   collectedInRange?: number;
-  monthly: {
-    _id: { y: number; m: number };
-    collected: number;
-  }[];
-  range?: { from: Date; to: Date } | null;
+  monthly: { _id: { y: number; m: number }; collected: number }[]; // NET by month
+  range?: { from: string; to: string } | null; // API returns strings
   filters: { status: string | null; course: string | null };
 };
-
 type ViewState =
   | "dashboard"
   | "collected"
@@ -150,7 +165,7 @@ class PrePlacementService {
     params.append("page", String(page));
     params.append("limit", String(limit));
     params.append("includePayments", "true");
-
+    params.append("includeRefunds", "true");
     Object.entries(filters).forEach(([key, value]) => {
       if (value) params.append(key, String(value));
     });
@@ -309,27 +324,26 @@ function MonthlyCollectionCard({
   const currentMonth = new Date().toISOString().slice(0, 7);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
 
+  // MonthlyCollectionCard → monthlyData
   const monthlyData = useMemo(() => {
-    const collections = students.reduce((acc, student) => {
-      student.payments?.forEach((payment) => {
-        if (payment.date) {
-          const month = monthKey(payment.date);
-          if (month === selectedMonth) {
-            if (!acc[month])
-              acc[month] = { month, collected: 0, students: new Set() };
-            acc[month].collected += payment.amount;
-            acc[month].students.add(student._id);
-          }
-        }
-      });
-      return acc;
-    }, {} as Record<string, { month: string; collected: number; students: Set<string> }>);
+    let collected = 0;
+    const studentsPaid = new Set<string>();
 
-    const data = collections[selectedMonth];
-    return {
-      collected: data?.collected || 0,
-      studentCount: data?.students.size || 0,
-    };
+    students.forEach((s) => {
+      const paid = (s.payments || [])
+        .filter((p) => p.date && monthKey(p.date) === selectedMonth)
+        .reduce((a, p) => a + p.amount, 0);
+
+      const refunded = (s.refunds || [])
+        .filter((r) => r.date && monthKey(r.date) === selectedMonth)
+        .reduce((a, r) => a + r.amount, 0);
+
+      const net = paid - refunded;
+      collected += net;
+      if (net > 0) studentsPaid.add(s._id); // count only students with net-in
+    });
+
+    return { collected, studentCount: studentsPaid.size };
   }, [students, selectedMonth]);
 
   const formatDisplayMonth = (monthStr: string) => {
@@ -446,7 +460,7 @@ function DashboardView({
             Total Fee Collected
           </h3>
           <p className="text-2xl font-bold text-white">
-            {currency(summary.totalReceived)}
+            {currency(summary.netCollected)}
           </p>
           <p className="text-emerald-200/60 text-sm mt-2">
             Click to view all students
@@ -590,21 +604,26 @@ function MonthlyView({
   selectedMonth: string;
 }) {
   const studentsForMonth = useMemo(() => {
-    return students.filter((student) => {
-      return student.payments?.some(
-        (payment) => payment.date && monthKey(payment.date) === selectedMonth
-      );
+    return students.filter((s) => {
+      const paid = (s.payments || [])
+        .filter((p) => p.date && monthKey(p.date) === selectedMonth)
+        .reduce((a, p) => a + p.amount, 0);
+      const refunded = (s.refunds || [])
+        .filter((r) => r.date && monthKey(r.date) === selectedMonth)
+        .reduce((a, r) => a + r.amount, 0);
+      return paid - refunded > 0; // only net-positive contributors
     });
   }, [students, selectedMonth]);
 
   const monthlyTotal = useMemo(() => {
-    return students.reduce((total, student) => {
-      const monthlyPayments = (student.payments || [])
-        .filter(
-          (payment) => payment.date && monthKey(payment.date) === selectedMonth
-        )
-        .reduce((sum, payment) => sum + payment.amount, 0);
-      return total + monthlyPayments;
+    return students.reduce((sum, s) => {
+      const paid = (s.payments || [])
+        .filter((p) => p.date && monthKey(p.date) === selectedMonth)
+        .reduce((a, p) => a + p.amount, 0);
+      const refunded = (s.refunds || [])
+        .filter((r) => r.date && monthKey(r.date) === selectedMonth)
+        .reduce((a, r) => a + r.amount, 0);
+      return sum + (paid - refunded);
     }, 0);
   }, [students, selectedMonth]);
 
@@ -650,29 +669,25 @@ function MonthlyView({
 // ======================
 function CollectedView({ students }: { students: PrePlacementStudent[] }) {
   const monthlyCollections = useMemo(() => {
-    const collections: Record<string, { month: string; collected: number }> =
-      {};
-
-    students.forEach((student) => {
-      student.payments?.forEach((payment) => {
-        if (payment.date) {
-          const date = new Date(payment.date);
-          const month = `${date.getFullYear()}-${String(
-            date.getMonth() + 1
-          ).padStart(2, "0")}`;
-          if (!collections[month]) {
-            collections[month] = { month, collected: 0 };
-          }
-          collections[month].collected += payment.amount;
-        }
+    const map: Record<string, { month: string; collected: number }> = {};
+    students.forEach((s) => {
+      (s.payments || []).forEach((p) => {
+        if (!p.date) return;
+        const m = monthKey(p.date);
+        map[m] ??= { month: m, collected: 0 };
+        map[m].collected += p.amount; // +
+      });
+      (s.refunds || []).forEach((r) => {
+        if (!r.date) return;
+        const m = monthKey(r.date);
+        map[m] ??= { month: m, collected: 0 };
+        map[m].collected -= r.amount; // subtract refunds
       });
     });
-
-    return Object.values(collections)
+    return Object.values(map)
       .sort((a, b) => a.month.localeCompare(b.month))
       .slice(-12);
   }, [students]);
-
   return (
     <div className="space-y-8">
       {/* All Students Table */}
@@ -1128,7 +1143,7 @@ function StudentDetailModal({
             <div className="bg-emerald-500/20 rounded-xl border border-emerald-400/30 p-4">
               <p className="text-emerald-300 text-xs font-medium">Collected</p>
               <p className="text-emerald-200 text-lg font-semibold">
-                {currency(student.totalReceived)}
+                {currency(student.netCollected)}
               </p>
             </div>
             <div className="bg-amber-500/20 rounded-xl border border-amber-400/30 p-4">
