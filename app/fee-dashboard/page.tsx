@@ -1,9 +1,9 @@
+//Take inspiration from this page
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Users,
-  ChevronRight,
   X,
   Loader2,
   Wallet,
@@ -12,7 +12,7 @@ import {
   BarChart3,
   Clock,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+
 import { API_BASE_URL } from "@/lib/api";
 import Link from "next/link";
 import HRCallReport from "@/components/HRcallReport";
@@ -154,8 +154,10 @@ export default function OverviewPage() {
       countsByStatus: { ACTIVE: 0, PAUSED: 0, PLACED: 0, DROPPED: 0 },
     });
   const [loadingSummary, setLoadingSummary] = useState(true);
-
-  const [studentsOpen, setStudentsOpen] = useState(false);
+  const [studentsModal, setStudentsModal] = useState<{
+    open: boolean;
+    status: StatusFilter;
+  }>({ open: false, status: "ALL" });
 
   // Revenue state
   const [revMonth, setRevMonth] = useState("");
@@ -295,10 +297,14 @@ export default function OverviewPage() {
       <div className="relative z-10 mx-auto w-full max-w-7xl px-6 py-12 space-y-8">
         {/* Header Section */}
         <div className="text-center space-y-3">
-          <h1 className="text-5xl font-[Righteous] font-bold text-sky-400">
-            <span className="text-yellow-500">IT</span> Jobs Factory
-            Fees-Summary
-          </h1>
+          <Link href={"/"}>
+            {" "}
+            <h1 className="text-5xl font-[Righteous] font-bold text-sky-400">
+              <span className="text-yellow-500">IT</span> Jobs Factory
+              Fees-Summary
+            </h1>
+          </Link>
+
           <p className="text-lg text-purple-200/80">
             Comprehensive analytics and insights across your students
           </p>
@@ -307,9 +313,18 @@ export default function OverviewPage() {
         {/* Main Dashboard Grid */}
         <div className="grid gap-8 lg:grid-cols-2">
           {/* Students Tile */}
-          <button
-            onClick={() => setStudentsOpen(true)}
-            className="group relative overflow-hidden rounded-3xl border border-purple-400/20 bg-white/5 backdrop-blur-xl p-8 text-left transition-all duration-300 hover:scale-[1.02] hover:bg-white/10 hover:border-purple-400/40 hover:shadow-2xl hover:shadow-purple-500/20"
+          <div
+            role="button"
+            tabIndex={0}
+            aria-label="Open all students"
+            onClick={() => setStudentsModal({ open: true, status: "ALL" })}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setStudentsModal({ open: true, status: "ALL" });
+              }
+            }}
+            className="group relative overflow-hidden rounded-3xl border border-purple-400/20 bg-white/5 backdrop-blur-xl p-8 text-left transition-all duration-300 hover:scale-[1.02] hover:bg-white/10 hover:border-purple-400/40 hover:shadow-2xl hover:shadow-purple-500/20 cursor-pointer"
           >
             <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
@@ -338,19 +353,25 @@ export default function OverviewPage() {
                 {/* Status chips 2×2 */}
                 <div className="mt-4 grid grid-cols-2 gap-3 max-w-md">
                   {chips.map(({ status, count }) => (
-                    <span
+                    <button
                       key={status}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation(); // prevent parent tile click (ALL) from firing
+                        setStudentsModal({ open: true, status });
+                      }}
                       className={cn(
-                        "w-full inline-flex items-center justify-between rounded-xl px-4 py-2 text-sm font-medium border shadow-sm",
+                        "w-full inline-flex items-center justify-between rounded-xl px-4 py-2 text-sm font-medium border shadow-sm cursor-pointer hover:shadow-2xl hover:scale-[1.05] hover:shadow-purple-500/20 transition-all duration-300",
                         STATUS_COLORS[status]
                       )}
+                      title={`View ${status} students`}
                     >
                       <span className="inline-flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-current opacity-80" />
                         <span>{status}</span>
                       </span>
                       <span className="font-bold">{count}</span>
-                    </span>
+                    </button>
                   ))}
                 </div>
 
@@ -360,7 +381,7 @@ export default function OverviewPage() {
                 </div>
               </div>
             </div>
-          </button>
+          </div>
 
           {/* Total Revenue Tile */}
           <div className="group relative overflow-hidden rounded-3xl border border-purple-400/20 bg-white/5 backdrop-blur-xl ">
@@ -454,14 +475,25 @@ export default function OverviewPage() {
         <HRCallReport />
       </div>
 
-      {studentsOpen && <StudentsModal onClose={() => setStudentsOpen(false)} />}
+      {studentsModal.open && (
+        <StudentsModal
+          initialStatus={studentsModal.status}
+          onClose={() => setStudentsModal({ open: false, status: "ALL" })}
+        />
+      )}
     </div>
   );
 }
 
 /* ============================ Students Modal ============================ */
 
-function StudentsModal({ onClose }: { onClose: () => void }) {
+function StudentsModal({
+  onClose,
+  initialStatus = "ALL",
+}: {
+  onClose: () => void;
+  initialStatus?: StatusFilter;
+}) {
   // ---------- NEW: safe unique key helper ----------
   const safeKey = (
     idx: number,
@@ -474,7 +506,7 @@ function StudentsModal({ onClose }: { onClose: () => void }) {
   };
 
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState<StatusFilter>("ALL");
+  const [status, setStatus] = useState<StatusFilter>(initialStatus);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<StudentsListResponse | null>(null);
 
@@ -504,7 +536,9 @@ function StudentsModal({ onClose }: { onClose: () => void }) {
       setLoading(false);
     }
   };
-
+  useEffect(() => {
+    setStatus(initialStatus);
+  }, [initialStatus]);
   useEffect(() => {
     fetchList();
     // eslint-disable-next-line react-hooks/exhaustive-deps

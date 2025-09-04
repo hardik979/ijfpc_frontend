@@ -7,6 +7,9 @@ function HRCallReport() {
     "NO OF CALLS"?: string;
     MAILS?: string;
     INTERVIEW?: string;
+    // NEW:
+    INCOMING?: string | number;
+    REMARK?: string;
   };
 
   const [rows, setRows] = useState<Row[]>([]);
@@ -70,13 +73,19 @@ function HRCallReport() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {items.map((r, i) => {
             const name = (r["STUDENT NAME"] || "—").trim();
-            const calls = (r["NO OF CALLS"] || "").trim();
-            const mails = (r.MAILS || "").trim();
+            const calls = (r["NO OF CALLS"] ?? "").toString().trim();
+            const mails = (r.MAILS ?? "").toString().trim();
+            const incoming = (r.INCOMING ?? "").toString().trim(); // NEW
+            const remark = (r.REMARK ?? "").toString().trim(); // NEW
             const hasInterview =
               (r.INTERVIEW || "").toUpperCase() === "INTERVIEW";
-            const showStats = calls !== "" || mails !== "";
+
+            // consider any non-empty numeric-ish value as a stat
+            const hasIncoming = incoming !== "" && incoming !== "0";
+            const showStats = calls !== "" || mails !== "" || hasIncoming; // UPDATED
 
             return hasInterview && !showStats ? (
+              // Interview-only card
               <div
                 key={name + i}
                 className="rounded-2xl bg-fuchsia-600 text-white p-6 shadow-lg"
@@ -85,8 +94,14 @@ function HRCallReport() {
                   {name}
                 </div>
                 <div className="mt-4 text-lg font-semibold">INTERVIEW</div>
+                {remark && (
+                  <p className="mt-3 text-sm/6 bg-white/15 rounded-lg px-3 py-2">
+                    {remark}
+                  </p>
+                )}
               </div>
             ) : (
+              // Stats card
               <div
                 key={name + i}
                 className="rounded-2xl border border-white/15 bg-white/5 backdrop-blur p-6 text-white shadow-lg"
@@ -94,11 +109,18 @@ function HRCallReport() {
                 <div className="text-xl font-extrabold tracking-wide">
                   {name}
                 </div>
+
                 <div className="mt-4 space-y-2">
                   {calls !== "" && (
                     <div className="flex items-center gap-2">
                       <span className="text-lg">📞</span>
                       <span className="text-lg">{calls} Calls</span>
+                    </div>
+                  )}
+                  {hasIncoming && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">⬅️</span>
+                      <span className="text-lg">{incoming} Incoming</span>
                     </div>
                   )}
                   {mails !== "" && (
@@ -111,6 +133,11 @@ function HRCallReport() {
                     <span className="mt-2 inline-flex rounded-lg bg-fuchsia-600/90 px-3 py-1 text-sm font-bold">
                       INTERVIEW
                     </span>
+                  )}
+                  {remark && (
+                    <p className="mt-3 text-sm/6 text-white/90 bg-white/10 rounded-lg px-3 py-2">
+                      {remark}
+                    </p>
                   )}
                 </div>
               </div>
