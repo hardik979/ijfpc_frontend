@@ -10,9 +10,29 @@ function HRCallReport() {
     "NO OF CALLS"?: string;
     MAILS?: string;
     INTERVIEW?: string;
+    ABSENT?: string;
+    ASSESMENT?: string; // note: sheet may use "ASSESMENT" (misspelling)
     // NEW:
     INCOMING?: string | number;
     REMARK?: string;
+  };
+
+  type Status = "INTERVIEW" | "ABSENT" | "ASSESSMENT";
+
+  // Centralized styles per status (card + badge)
+  const STATUS_STYLES: Record<Status, { card: string; badge: string }> = {
+    INTERVIEW: {
+      card: "bg-fuchsia-600 text-white",
+      badge: "bg-fuchsia-600/90 text-white",
+    },
+    ABSENT: {
+      card: "bg-rose-600 text-white",
+      badge: "bg-rose-600/90 text-white",
+    },
+    ASSESSMENT: {
+      card: "bg-amber-400 text-black",
+      badge: "bg-amber-400/90 text-black",
+    },
   };
 
   // ======================
@@ -132,13 +152,6 @@ function HRCallReport() {
     const next = new Date(cur);
     next.setDate(cur.getDate() + offset);
     const target = formatDMY(next);
-
-    // allow any date; if you'd like to clamp to known dates, uncomment below
-    // if (
-    //   next < allValidDates[0].dt ||
-    //   next > allValidDates[allValidDates.length - 1].dt
-    // ) return;
-
     setSelectedDate(target);
   };
 
@@ -240,24 +253,45 @@ function HRCallReport() {
             const name = (r["STUDENT NAME"] || "—").trim();
             const calls = (r["NO OF CALLS"] ?? "").toString().trim();
             const mails = (r.MAILS ?? "").toString().trim();
-            const incoming = (r.INCOMING ?? "").toString().trim(); // NEW
-            const remark = (r.REMARK ?? "").toString().trim(); // NEW
-            const hasInterview =
-              (r.INTERVIEW || "").toUpperCase() === "INTERVIEW";
+            const incoming = (r.INCOMING ?? "").toString().trim();
+            const remark = (r.REMARK ?? "").toString().trim();
 
+            // Normalize status flags coming from the sheet
+            const flags = [r.INTERVIEW, r.ABSENT, r.ASSESMENT].map((v) =>
+              String(v ?? "")
+                .trim()
+                .toUpperCase()
+            );
+
+            // Choose the first non-empty flag
+            const rawFlag = flags.find((v) => v.length > 0) || "";
+
+            // Canonical status label
+            let status: Status | null = null;
+            if (rawFlag === "INTERVIEW") status = "INTERVIEW";
+            else if (rawFlag === "ABSENT") status = "ABSENT";
+            else if (rawFlag === "ASSESMENT" || rawFlag === "ASSESSMENT")
+              status = "ASSESSMENT";
+
+            const hasStatus = !!status;
             const hasIncoming = incoming !== "" && incoming !== "0";
             const showStats = calls !== "" || mails !== "" || hasIncoming;
 
-            return hasInterview && !showStats ? (
-              // Interview-only card
+            // Style for current status (if any)
+            const style = status ? STATUS_STYLES[status] : undefined;
+
+            return hasStatus && !showStats ? (
+              // Status-only card (INTERVIEW / ABSENT / ASSESSMENT)
               <div
                 key={name + i}
-                className="rounded-2xl bg-fuchsia-600 text-white p-6 shadow-lg"
+                className={`rounded-2xl p-6 shadow-lg ${
+                  style?.card ?? "bg-fuchsia-600 text-white"
+                }`}
               >
                 <div className="text-xl font-extrabold tracking-wide">
                   {name}
                 </div>
-                <div className="mt-4 text-lg font-semibold">INTERVIEW</div>
+                <div className="mt-4 text-lg font-semibold">{status}</div>
                 {remark && (
                   <p className="mt-3 text-sm/6 bg-white/15 rounded-lg px-3 py-2">
                     {remark}
@@ -293,11 +327,17 @@ function HRCallReport() {
                       <span className="text-lg">{mails} Mails</span>
                     </div>
                   )}
-                  {hasInterview && showStats && (
-                    <span className="mt-2 inline-flex rounded-lg bg-fuchsia-600/90 px-3 py-1 text-sm font-bold">
-                      INTERVIEW
+
+                  {hasStatus && showStats && (
+                    <span
+                      className={`mt-2 inline-flex rounded-lg px-3 py-1 text-sm font-bold ${
+                        style?.badge ?? "bg-fuchsia-600/90 text-white"
+                      }`}
+                    >
+                      {status}
                     </span>
                   )}
+
                   {remark && (
                     <p className="mt-3 text-sm/6 text-white/90 bg-white/10 rounded-lg px-3 py-2">
                       {remark}

@@ -19,6 +19,7 @@ import {
   UserX,
   GraduationCap,
   ChevronDown,
+  Bell,
 } from "lucide-react";
 import {
   LineChart,
@@ -52,6 +53,7 @@ export type Refund = {
 
 import { API_BASE_URL } from "@/lib/api";
 import Portal from "@/components/Portal";
+import Link from "next/link";
 export type PrePlacementStudent = {
   _id: string;
   name: string;
@@ -1428,6 +1430,20 @@ export default function PrePlacementDashboard() {
               </p>
             </div>
           </div>
+          <Link href={"/remaining-notification"}>
+            <div>
+              <div className="relative flex items-center gap-2 px-4 py-2 rounded-xl border border-purple-300/20 text-white overflow-hidden">
+                {/* animated background */}
+                <div className="absolute inset-0 bg-red-500 animate-pulse" />
+
+                {/* content sits above bg */}
+                <div className="relative flex items-center gap-2">
+                  <Bell className="w-4 h-4" />
+                  <span className="font-medium">Notifications</span>
+                </div>
+              </div>
+            </div>
+          </Link>
           <button
             onClick={refreshData}
             disabled={loading}
