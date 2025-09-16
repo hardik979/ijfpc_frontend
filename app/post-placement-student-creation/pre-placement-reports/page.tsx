@@ -6,7 +6,8 @@ import { Plus } from "lucide-react";
 // =====================
 // Types
 // =====================
-
+type Zone = "BLUE" | "YELLOW" | "GREEN";
+const ZONE_OPTIONS = ["BLUE", "YELLOW", "GREEN"] as const;
 type Status = "ACTIVE" | "DROPPED" | "PAUSED" | "PLACED";
 
 type Payment = {
@@ -31,6 +32,7 @@ type StudentRow = {
   updatedAt?: string;
   paymentsCount?: number;
   collectedInRange?: number;
+  zone?: Zone;
 };
 
 type StudentDetail = StudentRow & { payments: Payment[] };
@@ -107,6 +109,7 @@ export default function PrePlacementStudentManagerPage() {
   const [list, setList] = useState<ListResponse | null>(null);
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [zoneFilter, setZoneFilter] = useState<Zone | "ALL">("ALL");
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editData, setEditData] = useState<StudentDetail | null>(null);
@@ -125,6 +128,7 @@ export default function PrePlacementStudentManagerPage() {
           params.set("search", debouncedSearch.trim());
         if (month) params.set("month", month);
         if (status !== "ALL") params.set("status", status);
+        if (zoneFilter !== "ALL") params.set("zone", zoneFilter);
 
         const [listRes, summaryRes] = await Promise.all([
           fetch(
@@ -257,7 +261,7 @@ export default function PrePlacementStudentManagerPage() {
         </div>
 
         {/* Filters */}
-        <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-4">
+        <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-5">
           <div className="col-span-2">
             <label className="mb-1 block text-xs text-purple-200/80">
               Search
@@ -306,6 +310,28 @@ export default function PrePlacementStudentManagerPage() {
               ))}
             </select>
           </div>
+          <div>
+            <label className="mb-1 block text-xs text-purple-200/80">
+              Zone
+            </label>
+            <select
+              value={zoneFilter}
+              onChange={(e) => {
+                setZoneFilter(e.target.value as any);
+                setPage(1);
+              }}
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 outline-none focus:ring-2 focus:ring-purple-400/40"
+            >
+              <option value="ALL" className="bg-[#120f2f]">
+                All
+              </option>
+              {ZONE_OPTIONS.map((z) => (
+                <option key={z} value={z} className="bg-[#120f2f]">
+                  {z}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Summary Cards */}
@@ -336,6 +362,7 @@ export default function PrePlacementStudentManagerPage() {
                   <Th className="text-right">Total Fee</Th>
                   <Th className="text-right">Received</Th>
                   <Th className="text-right">Remaining</Th>
+                  <Th>Zone</Th>
                   <Th>Status</Th>
                   <Th>Due</Th>
                   <Th></Th>
@@ -363,6 +390,30 @@ export default function PrePlacementStudentManagerPage() {
                     <Td className="text-right text-amber-300">
                       {formatINR(s.remainingFee || 0)}
                     </Td>
+                    <Td>
+                      {(() => {
+                        const z = s.zone as Zone | undefined;
+                        if (!z) return "—";
+                        const zCls: Record<Zone, string> = {
+                          BLUE: "bg-sky-400/10    text-sky-300    border border-sky-300/30",
+                          YELLOW:
+                            "bg-amber-400/10  text-amber-300  border border-amber-300/30",
+                          GREEN:
+                            "bg-emerald-400/10 text-emerald-300 border border-emerald-300/30",
+                        };
+                        return (
+                          <span
+                            className={cn(
+                              "rounded-full px-2 py-1 text-xs",
+                              zCls[z]
+                            )}
+                          >
+                            {z}
+                          </span>
+                        );
+                      })()}
+                    </Td>
+
                     <Td>
                       {(() => {
                         const cls: Record<Status, string> = {
@@ -551,6 +602,75 @@ export default function PrePlacementStudentManagerPage() {
                       </option>
                     ))}
                   </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-purple-200/80">
+                    Zone
+                  </label>
+                  <select
+                    value={editData.zone || "BLUE"}
+                    onChange={async (e) => {
+                      const next = e.target.value as Zone;
+                      // disallow changing zone for PLACED (UI guard; backend also enforces)
+                      if (editData.status === "PLACED") return;
+
+                      const prev = editData.zone;
+                      setEditData({ ...editData, zone: next });
+
+                      try {
+                        const r = await fetch(
+                          `${API_BASE_URL}/api/preplacement/students/${editingId}/zone`,
+                          {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ zone: next }),
+                          }
+                        );
+                        if (!r.ok) throw new Error("Zone update failed");
+
+                        // refresh list (same snippet you already use elsewhere)
+                        const params = new URLSearchParams({
+                          page: String(page),
+                          limit: String(limit),
+                        });
+                        if (debouncedSearch.trim())
+                          params.set("search", debouncedSearch.trim());
+                        if (month) params.set("month", month);
+                        if (status !== "ALL") params.set("status", status);
+                        if (zoneFilter !== "ALL")
+                          params.set("zone", zoneFilter);
+
+                        const listRes = await fetch(
+                          `${API_BASE_URL}/api/preplacement/students?${params.toString()}`
+                        );
+                        const listJson: ListResponse = await listRes.json();
+                        setList(listJson);
+                      } catch (err) {
+                        console.error(err);
+                        // revert UI on failure
+                        setEditData({ ...editData, zone: prev });
+                        alert("Failed to update zone");
+                      }
+                    }}
+                    disabled={editData.status === "PLACED"}
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 outline-none"
+                    title={
+                      editData.status === "PLACED"
+                        ? "Zones do not apply to PLACED students"
+                        : ""
+                    }
+                  >
+                    {ZONE_OPTIONS.map((z) => (
+                      <option key={z} value={z} className="bg-[#0f0b24]">
+                        {z}
+                      </option>
+                    ))}
+                  </select>
+                  {editData.status === "PLACED" && (
+                    <div className="mt-1 text-xs text-purple-200/70">
+                      Zones don’t apply to PLACED students.
+                    </div>
+                  )}
                 </div>
               </div>
 

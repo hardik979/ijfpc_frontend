@@ -8,6 +8,8 @@ import React, { useState } from "react";
 // =====================
 
 type Status = "ACTIVE" | "DROPPED" | "PAUSED" | "PLACED";
+type Zone = "BLUE" | "YELLOW" | "GREEN";
+const ZONE_OPTIONS = ["BLUE", "YELLOW", "GREEN"] as const;
 
 type PaymentInput = {
   amount?: number | string;
@@ -46,6 +48,7 @@ export default function PrePlacementStudentCreatePage() {
   const [totalFee, setTotalFee] = useState<string | number>("");
   const [dueDate, setDueDate] = useState<string>(""); // YYYY-MM-DD
   const [status, setStatus] = useState<Status>("ACTIVE");
+  const [zone, setZone] = useState<Zone>("BLUE");
 
   const [payments, setPayments] = useState<PaymentInput[]>([]);
 
@@ -88,9 +91,10 @@ export default function PrePlacementStudentCreatePage() {
         name: (name || "").trim(),
         courseName: (courseName || "").trim(),
         terms: (terms || "").trim(),
-        totalFee: toNumber(totalFee, 0), // send 0 if blank
+        totalFee: toNumber(totalFee, 0),
         dueDate: toISOorNull(dueDate || null),
         status,
+        ...(status !== "PLACED" ? { zone } : {}), // ← add this
         payments: (payments || []).map((p) => ({
           amount: toNumber(p.amount, 0),
           date: toISOorNull(p.date || null),
@@ -215,6 +219,30 @@ export default function PrePlacementStudentCreatePage() {
                   </option>
                 ))}
               </select>
+            </Field>
+            <Field label="Zone">
+              <select
+                value={zone}
+                onChange={(e) => setZone(e.target.value as Zone)}
+                disabled={status === "PLACED"}
+                className="field"
+                title={
+                  status === "PLACED"
+                    ? "Zones do not apply to PLACED students"
+                    : ""
+                }
+              >
+                {ZONE_OPTIONS.map((z) => (
+                  <option key={z} value={z} className="bg-[#120f2f]">
+                    {z}
+                  </option>
+                ))}
+              </select>
+              {status === "PLACED" && (
+                <div className="mt-1 text-xs text-purple-200/70">
+                  Zones don’t apply to PLACED students.
+                </div>
+              )}
             </Field>
           </div>
 

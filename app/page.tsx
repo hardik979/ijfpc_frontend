@@ -8,6 +8,7 @@ import {
   SheetIcon,
   Database,
   GraduationCap,
+  ComputerIcon,
 } from "lucide-react";
 import type { Variants } from "framer-motion";
 import Link from "next/link";
@@ -51,6 +52,15 @@ export default function AdminDashboard() {
       icon: GraduationCap,
       gradient: "from-red-400 to-red-500",
       path: "/post-placement-student-creation", // You can update this path as needed
+    },
+    {
+      id: "it-jobs-factory-IR",
+      title: "IT Jobs Factory Interview Reporting",
+      description:
+        "This dashboard is for the teachers to fill interview reports of students right after the interview.",
+      icon: ComputerIcon,
+      gradient: "from-amber-300 to-orange-400",
+      path: "/fee-dashboard/interview-reporting", // You can update this path as needed
     },
   ];
 
