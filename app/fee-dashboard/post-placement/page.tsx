@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Calendar,
   Users,
@@ -128,6 +128,29 @@ const packagePercent = (collected: number, packageStr: string): number => {
   if (!pkg) return 0;
   return Math.min(100, (collected / pkg) * 100);
 };
+// ===== DISCOUNT-AWARE REMAINING =====
+const getNumeric = (x: any) => {
+  if (typeof x === "number") return x;
+  if (x == null) return 0;
+  const n = parseFloat(String(x).replace(/[^0-9.\-]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+};
+
+/** Prefer row.raw.discount if present; fall back to row.discount / 0 */
+const extractDiscount = (row: RecordRow) => {
+  // your API mapper already includes `discount` as a string in `raw` (and sometimes as a top-level string too)
+  const rawDiscount = row?.raw?.discount ?? (row as any).discount ?? 0;
+  return getNumeric(rawDiscount);
+};
+
+/** Remaining = totalPPFee - discount - collected (floored at 0) */
+const remainingDue = (row: RecordRow) => {
+  const fee = getNumeric(row.totalPPFee);
+  const disc = extractDiscount(row);
+  const coll = getNumeric(row.collected);
+  return Math.max(fee - disc - coll, 0);
+};
+
 // ======================
 // API SERVICE
 // ======================
@@ -378,14 +401,10 @@ function DashboardView({
 }) {
   const metrics = useMemo(() => {
     const totalCollected = rows.reduce((sum, r) => sum + r.collected, 0);
-    const totalRemaining = rows.reduce((sum, r) => sum + r.remaining, 0);
+    const totalRemaining = rows.reduce((sum, r) => sum + remainingDue(r), 0); // ← discount-aware
     const totalStudents = rows.length;
 
-    return {
-      totalCollected,
-      totalRemaining,
-      totalStudents,
-    };
+    return { totalCollected, totalRemaining, totalStudents };
   }, [rows]);
 
   // Chart data for overview graph
@@ -748,7 +767,7 @@ function CollectedView({ rows }: { rows: RecordRow[] }) {
 // ======================
 function RemainingView({ rows }: { rows: RecordRow[] }) {
   const studentsWithRemaining = useMemo(() => {
-    return rows.filter((row) => row.remaining > 0);
+    return rows.filter((row) => remainingDue(row) > 0);
   }, [rows]);
 
   return (
@@ -954,18 +973,19 @@ function StudentTable({
 
                 {showRemaining && (
                   <td className="px-4 py-4 text-amber-300 font-semibold text-sm">
-                    {currency(row.remaining)}
+                    {currency(remainingDue(row))}
                   </td>
                 )}
+
                 <td className="px-4 py-4">
                   <span
                     className={`px-3 py-1 rounded-full text-xs font-medium border ${
-                      row.remaining === 0
+                      remainingDue(row) === 0
                         ? "text-emerald-300 bg-emerald-500/20 border-emerald-400/30"
                         : "text-amber-300 bg-amber-500/20 border-amber-400/30"
                     }`}
                   >
-                    {row.remaining === 0 ? "Paid" : "Partial"}
+                    {remainingDue(row) === 0 ? "Paid" : "Partial"}
                   </span>
                 </td>
               </tr>
@@ -1203,7 +1223,7 @@ function StudentDetailModal({
             <div className="bg-amber-500/20 rounded-xl border border-amber-400/30 p-4">
               <p className="text-amber-300 text-xs font-medium">Remaining</p>
               <p className="text-amber-200 text-lg font-semibold">
-                {currency(student.remaining)}
+                {currency(remainingDue(student))}
               </p>
             </div>
           </div>
