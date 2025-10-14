@@ -472,7 +472,57 @@ export default function OverviewPage() {
             </div>
           </div>
         </div>
-        <HRCallReport />
+        {/* Reports Section */}
+        <div className="mt-10">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-white/90">Reports</h2>
+          </div>
+
+          {/* Report cards grid (add more later) */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Link href="/fee-dashboard/Timesheet-reports">
+              <div
+                role="button"
+                aria-label="Open Timesheet Report"
+                className="group relative rounded-2xl border border-purple-400/20 bg-white/5 p-4 backdrop-blur-xl
+                   hover:bg-white/10 hover:border-purple-400/40 hover:shadow-2xl hover:shadow-purple-500/20
+                   transition-all duration-300 cursor-pointer"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="relative flex items-start gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/20 to-fuchsia-500/20 border border-purple-400/30">
+                    <BarChart3 className="h-5 w-5 text-indigo-200" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-sm font-semibold text-white">
+                      Timesheet Report
+                    </div>
+                    <p className="mt-1 text-xs text-purple-200/80">
+                      Daily/Monthly hours & productivity overview
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </Link>
+
+            {/* Example placeholders for future reports (keep or remove) */}
+            {/* 
+    <Link href="/reports/fee-collections">
+      <div className="group relative rounded-2xl border border-purple-400/20 bg-white/5 p-4 backdrop-blur-xl hover:bg-white/10 hover:border-purple-400/40 hover:shadow-2xl hover:shadow-purple-500/20 transition-all duration-300 cursor-pointer">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 border border-emerald-400/30">
+            <Wallet className="h-5 w-5 text-emerald-200" />
+          </div>
+          <div className="flex-1">
+            <div className="text-sm font-semibold text-white">Fee Collections</div>
+            <p className="mt-1 text-xs text-purple-200/80">Pre & Post placement breakdown</p>
+          </div>
+        </div>
+      </div>
+    </Link>
+    */}
+          </div>
+        </div>
       </div>
 
       {studentsModal.open && (

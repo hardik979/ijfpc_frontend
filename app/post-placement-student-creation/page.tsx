@@ -2,7 +2,12 @@
 
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { ChevronRight, CheckCircle, ArrowLeft } from "lucide-react";
+import {
+  ChevronRight,
+  CheckCircle,
+  ArrowLeft,
+  ScrollTextIcon,
+} from "lucide-react";
 import type { Variants } from "framer-motion";
 import Link from "next/link";
 export default function ITJobsFactoryDashboard() {
@@ -26,6 +31,14 @@ export default function ITJobsFactoryDashboard() {
       icon: CheckCircle,
       gradient: "from-blue-500 to-sky-400",
       path: "/post-placement-student-creation/post-placement-records",
+    },
+    {
+      id: "Daily HR Call Report",
+      title: "Daily HR Call Report",
+      description: "Daily Hr calls report",
+      icon: ScrollTextIcon,
+      gradient: "from-pink-400 to-red-500",
+      path: "/post-placement-student-creation/HR-call-report",
     },
   ];
 
@@ -149,7 +162,7 @@ export default function ITJobsFactoryDashboard() {
 
         {/* Report Cards Grid */}
         <motion.div
-          className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto"
+          className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto"
           variants={containerVariants}
         >
           {reportCards.map((card) => {
