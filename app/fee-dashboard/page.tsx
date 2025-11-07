@@ -506,21 +506,24 @@ export default function OverviewPage() {
             </Link>
 
             {/* Example placeholders for future reports (keep or remove) */}
-            {/* 
-    <Link href="/reports/fee-collections">
-      <div className="group relative rounded-2xl border border-purple-400/20 bg-white/5 p-4 backdrop-blur-xl hover:bg-white/10 hover:border-purple-400/40 hover:shadow-2xl hover:shadow-purple-500/20 transition-all duration-300 cursor-pointer">
-        <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 border border-emerald-400/30">
-            <Wallet className="h-5 w-5 text-emerald-200" />
-          </div>
-          <div className="flex-1">
-            <div className="text-sm font-semibold text-white">Fee Collections</div>
-            <p className="mt-1 text-xs text-purple-200/80">Pre & Post placement breakdown</p>
-          </div>
-        </div>
-      </div>
-    </Link>
-    */}
+
+            <Link href="/fee-dashboard/registration-details">
+              <div className="group relative rounded-2xl border border-purple-400/20 bg-white/5 p-4 backdrop-blur-xl hover:bg-white/10 hover:border-purple-400/40 hover:shadow-2xl hover:shadow-purple-500/20 transition-all duration-300 cursor-pointer">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 border border-emerald-400/30">
+                    <Wallet className="h-5 w-5 text-emerald-200" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-sm font-semibold text-white">
+                      Registration Records
+                    </div>
+                    <p className="mt-1 text-xs text-purple-200/80">
+                      Detailed records of student registrations
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </Link>
           </div>
         </div>
       </div>
