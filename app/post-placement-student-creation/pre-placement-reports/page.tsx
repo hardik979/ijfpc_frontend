@@ -44,7 +44,7 @@ type ListResponse = {
   rows: StudentRow[];
   range?: { from: string; to: string } | null;
 };
-const API_BASE_URL = "https://ijfpc-backend.onrender.com";
+const API_BASE_URL = "https://lms-backend-tgrh.onrender.com";
 type SummaryResponse = {
   totalStudents: number;
   totalFee: number;
