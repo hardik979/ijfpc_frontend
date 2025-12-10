@@ -1,4 +1,3 @@
-//Take inspiration from this page
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -14,8 +13,8 @@ import {
 } from "lucide-react";
 
 import { API_BASE_URL } from "@/lib/api";
+const LMS_ROUTES = "https://lms-backend-tgrh.onrender.com";
 import Link from "next/link";
-import HRCallReport from "@/components/HRcallReport";
 
 /* ----------------------------- Types ----------------------------- */
 
@@ -170,7 +169,7 @@ export default function OverviewPage() {
       try {
         setLoadingSummary(true);
         const data = await getJSON<any>(
-          `${API_BASE_URL}/api/preplacement/summary`
+          `${LMS_ROUTES}/api/preplacement/summary`
         );
         const counts = (data?.countsByStatus || {}) as Partial<
           Record<Status, number>
@@ -201,7 +200,7 @@ export default function OverviewPage() {
         setRevLoading(true);
 
         // Fetch pre-placement revenue
-        let preUrl = `${API_BASE_URL}/api/preplacement/summary`;
+        let preUrl = `${LMS_ROUTES}/api/preplacement/summary`;
         if (revMonth) {
           preUrl += `?month=${revMonth}`;
         }
@@ -579,7 +578,7 @@ function StudentsModal({
       if (search.trim()) qs.set("search", search.trim());
       if (status !== "ALL") qs.set("status", status);
       const res = await getJSON<StudentsListResponse>(
-        `${API_BASE_URL}/api/preplacement/students?${qs.toString()}`
+        `${LMS_ROUTES}/api/preplacement/students?${qs.toString()}`
       );
       setData(res);
     } catch (e) {
