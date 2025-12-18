@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 
 import { API_BASE_URL } from "@/lib/api";
-const LMS_ROUTES = "https://lms-backend-tgrh.onrender.com";
+const LMS_ROUTES = "http://localhost:5000";
 import Link from "next/link";
 
 /* ----------------------------- Types ----------------------------- */
