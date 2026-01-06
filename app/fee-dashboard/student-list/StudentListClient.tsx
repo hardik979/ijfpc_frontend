@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 
-const LMS_ROUTES = "http://localhost:5000";
+const LMS_ROUTES = "https://lms-backend-tgrh.onrender.com";
 
 type Student = {
   _id?: string;
