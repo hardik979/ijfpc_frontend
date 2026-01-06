@@ -9,6 +9,8 @@ import {
   Database,
   GraduationCap,
   ComputerIcon,
+  Plus,
+  Vault,
 } from "lucide-react";
 import type { Variants } from "framer-motion";
 import Link from "next/link";
@@ -62,6 +64,25 @@ export default function AdminDashboard() {
       gradient: "from-amber-300 to-orange-400",
       path: "/fee-dashboard/interview-reporting", // You can update this path as needed
     },
+    {
+      id: "it-jobs-factory-Bs",
+      title: "IT Jobs Factory Batch Section",
+      description:
+        "Design, launch, and manage training batches with full control over course structure, trainers, schedules, and batch status.",
+      icon: Plus,
+      gradient: "from-slate-700 to-indigo-600",
+      path: "/batch-section", // You can update this path as needed
+    },
+    // {
+    //   id: "it-jobs-factory-BA",
+    //   title: "IT Jobs Factory Batch Assignment",
+    //   description:
+    //     "Assign students to the right batch and update batch changes anytime with a few clicks.",
+    //   icon: Vault,
+    //   gradient: "from-teal-500 to-cyan-600",//gradient: "from-indigo-600 to-violet-700"
+    //   path: "/batch-section/student-list", // You can update this path as needed
+    // },
+
   ];
 
   const containerVariants = {
