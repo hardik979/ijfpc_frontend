@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-const LMS_ROUTES = "http://localhost:5000";
+const LMS_ROUTES = "https://lms-backend-tgrh.onrender.com";
 
 // -------------------- Types --------------------
 type ZoneKey = "blue" | "yellow" | "green";
