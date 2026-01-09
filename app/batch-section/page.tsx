@@ -1,18 +1,28 @@
 "use client";
 
-import { motion } from "framer-motion"; 
+import { motion, type Variants } from "framer-motion";
 import { useMemo, useState } from "react";
-import { ChevronRight, Plus, Vault } from "lucide-react";
+import {
+  ChevronRight,
+  Plus,
+  Vault,
+  type LucideIcon,
+} from "lucide-react";
 import Link from "next/link";
 
-/** Dashboard card shape:
- * { id, title, description, icon, gradient, path }
- */
+type DashboardCard = {
+  id: string;
+  title: string;
+  description: string;
+  icon: LucideIcon;
+  gradient: string;
+  path: string;
+};
 
-export default function BatchSectionPage() {
-  const [hoveredCard, setHoveredCard] = useState(null);
+export default function BatchSectionPage(): JSX.Element {
+  const [hoveredCard, setHoveredCard] = useState<string | null>(null);
 
-  const dashboardCards = useMemo(
+  const dashboardCards = useMemo<DashboardCard[]>(
     () => [
       {
         id: "it-jobs-factory-BC",
@@ -45,15 +55,15 @@ export default function BatchSectionPage() {
     []
   );
 
-  const containerVariants = {
+  const containerVariants: Variants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
       transition: { duration: 0.6, staggerChildren: 0.12 },
     },
-  }; 
+  };
 
-  const cardVariants = {
+  const cardVariants: Variants = {
     hidden: { opacity: 0, y: 16, scale: 0.98 },
     visible: {
       opacity: 1,
@@ -66,9 +76,9 @@ export default function BatchSectionPage() {
       scale: 1.01,
       transition: { duration: 0.25, ease: "easeInOut" },
     },
-  }; 
+  };
 
-  const titleVariants = {
+  const titleVariants: Variants = {
     hidden: { opacity: 0, y: -18 },
     visible: {
       opacity: 1,
@@ -105,7 +115,8 @@ export default function BatchSectionPage() {
             <span className="text-slate-200">Dashboards</span>
           </h1>
           <p className="mt-3 text-sm sm:text-base text-slate-400 max-w-2xl mx-auto leading-relaxed">
-            Centralized tools for batch creation and student assignment—built for speed, clarity, and control.
+            Centralized tools for batch creation and student assignment—built for
+            speed, clarity, and control.
           </p>
         </motion.div>
 
@@ -130,7 +141,9 @@ export default function BatchSectionPage() {
                   <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] shadow-sm backdrop-blur">
                     {/* top gradient strip */}
                     <div className="relative h-1.5 w-full bg-gradient-to-r from-white/10 to-white/0">
-                      <div className={`absolute inset-0 bg-gradient-to-r ${card.gradient} opacity-70`} />
+                      <div
+                        className={`absolute inset-0 bg-gradient-to-r ${card.gradient} opacity-70`}
+                      />
                     </div>
 
                     <div className="p-6 sm:p-7">
@@ -167,9 +180,7 @@ export default function BatchSectionPage() {
                       </p>
 
                       {/* subtle hover wash */}
-                      <div
-                        className={`pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-200 group-hover:opacity-100`}
-                      >
+                      <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
                         <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent" />
                       </div>
                     </div>
