@@ -69,7 +69,6 @@ const StudentZoneUpdate: React.FC = () => {
     const [students, setStudents] = useState<Student[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [zone, setZone] = useState<string>('')
-    console.log('selected zone', zone);
 
 
     // server-side filters
@@ -185,9 +184,6 @@ const StudentZoneUpdate: React.FC = () => {
     });
 
     const json = await resp.json().catch(() => null);
-
-    console.log("API RESP:", resp.status, json);
-
     if (!resp.ok) {
       setStudents(snapshot); // rollback
       throw new Error(json?.message || "Failed to update eligibility");
