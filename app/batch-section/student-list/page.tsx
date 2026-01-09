@@ -6,8 +6,7 @@ import ConfirmationModal from "@/healper/conformationTab";
 import {  FilePenLine, Trash2 } from "lucide-react";
 import Pagination from "@/components/shared/Pagination";
 import FilterBar from "@/components/shared/FilterBar";
-
-const API_BASE_URL = "http://localhost:5000";
+import {API_LMS_URL} from '@/lib/api'
 
 // -------------------- Types --------------------
 interface BatchHistoryItem {
@@ -99,7 +98,7 @@ const StudentsListPage: React.FC = () => {
       params.set("limit", String(limit));
       if (appliedSearch.trim()) params.set("search", appliedSearch.trim());
 
-      const response = await fetch(`${API_BASE_URL}/api/users/get-student-list?${params.toString()}`, {
+      const response = await fetch(`${API_LMS_URL}/api/users/get-student-list?${params.toString()}`, {
         method: "GET",
         headers: { "Content-Type": "application/json" },
       });
@@ -126,7 +125,7 @@ const StudentsListPage: React.FC = () => {
 
   const deleteUser = async (clerkId: string): Promise<ApiResponse> => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/users/delete-user`, {
+      const res = await fetch(`${API_LMS_URL}/api/users/delete-user`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

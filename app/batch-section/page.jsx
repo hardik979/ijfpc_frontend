@@ -32,6 +32,15 @@ export default function BatchSectionPage() {
         gradient: "from-teal-500 to-cyan-600",
         path: "/batch-section/student-list",
       },
+      {
+        id: "it-jobs-factory-SM",
+        title: "IT Jobs Factory Permission",
+        description:
+          "Grant Permission for students to the getting Leads for calling.",
+        icon: Vault,
+        gradient: "from-teal-500 to-cyan-600",
+        path: "/batch-section/update-zone",
+      },
     ],
     []
   );
