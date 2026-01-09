@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
 
-const API_BASE_URL = "http://localhost:5000";
+import {API_LMS_URL} from '@/lib/api'
 
 type BatchItem = {
   _id: string;
@@ -45,7 +45,7 @@ export default function AssignBatch() {
   async function fetchBatches() {
     try {
       setLoadingBatches(true);
-      const res = await fetch(`${API_BASE_URL}/api/batches/get-batches`, {
+      const res = await fetch(`${API_LMS_URL}/api/batches/get-batches`, {
         method: "GET",
         headers: { "Content-Type": "application/json" },
       });
@@ -79,7 +79,7 @@ export default function AssignBatch() {
 
       setSaving(true);
 
-      const result = await fetch(`${API_BASE_URL}/api/users/update-user-batch`, {
+      const result = await fetch(`${API_LMS_URL}/api/users/update-user-batch`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

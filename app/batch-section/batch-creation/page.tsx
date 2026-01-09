@@ -4,8 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "react-toastify";
-
-const API_BASE_URL = "http://localhost:5000";
+import {API_LMS_URL} from '@/lib/api'
 
 type BatchFormData = {
   course: string;
@@ -51,7 +50,7 @@ export default function BatchCreatePage() {
 
   const createBatchFun = async () => {
     try {
-      let result = await fetch(`${API_BASE_URL}/api/batches/create-batch`, {
+      let result = await fetch(`${API_LMS_URL}/api/batches/create-batch`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

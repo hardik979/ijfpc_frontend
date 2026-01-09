@@ -18,9 +18,7 @@ import {
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import dayjs from "dayjs";
-
-
-const API_BASE_URL = "http://localhost:5000";
+import {API_LMS_URL} from '@/lib/api'
 
 type BatchStatus = "Active" | "Completed" | string;
 type CourseFilter = "All" | "SQL" | "Linux" | "Monitoring";
@@ -101,7 +99,7 @@ export default function BatchListPage() {
       if (filterStatus !== "All") params.set("status", filterStatus);
 
       const res = await fetch(
-        `${API_BASE_URL}/api/batches/get-batches?${params.toString()}`,
+        `${API_LMS_URL}/api/batches/get-batches?${params.toString()}`,
         {
           method: "GET",
           headers: { "Content-Type": "application/json" },
@@ -142,7 +140,7 @@ export default function BatchListPage() {
 
     try {
       const res = await fetch(
-        `${API_BASE_URL}/api/batches/delete-batch?batchId=${encodeURIComponent(batchId)}`,
+        `${API_LMS_URL}/api/batches/delete-batch?batchId=${encodeURIComponent(batchId)}`,
         {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
@@ -168,7 +166,7 @@ export default function BatchListPage() {
 
     try {
       const res = await fetch(
-        `${API_BASE_URL}/api/batches/update-batch-details?batchId=${encodeURIComponent(batchId)}`,
+        `${API_LMS_URL}/api/batches/update-batch-details?batchId=${encodeURIComponent(batchId)}`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
