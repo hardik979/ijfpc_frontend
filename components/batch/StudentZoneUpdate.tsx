@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Pagination from "@/components/shared/Pagination";
 import FilterBar from "@/components/shared/FilterBar";
 import { toast } from "react-toastify";
-import {API_LMS_URL} from '@/lib/api'
+import { API_LMS_URL } from '@/lib/api'
 
 
 // -------------------- Types --------------------
@@ -30,7 +30,10 @@ interface Student {
     eligible_today: boolean;
 }
 
-
+type BulkEligibilityPayload = {
+    userIdArray: string[];
+    setvalue: true | false;
+};
 
 type ApiResponse = {
     status: "success" | "error";
@@ -92,6 +95,7 @@ const StudentZoneUpdate: React.FC = () => {
             const params = new URLSearchParams();
             params.set("page", String(page));
             params.set("limit", String(limit));
+            params.set('zone', String('green'))
             if (appliedSearch.trim()) params.set("search", appliedSearch.trim());
 
             const response = await fetch(`${API_LMS_URL}/api/users/get-student-list?${params.toString()}`, {
@@ -119,92 +123,98 @@ const StudentZoneUpdate: React.FC = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [page, limit, appliedSearch, filterStatus]);
 
+    const HandleEligibilityChange = async (id: string) => {
 
-    const HandleZoneChange = async (id: string, newZone: string) => {
-        // Keep previous state for rollback
-        const prevStudents = students;
+        const current = students.find((s) => s._id === id);
+        if (!current) return;
 
-        // Optimistic UI update
+        const nextEligible = !current.eligible_today;
+        const snapshot = students; // stable snapshot
+
+        // optimistic update
         setStudents((prev) =>
-            prev.map((s) => (s._id === id ? { ...s, zone: newZone } : s))
+            prev.map((s) => (s._id === id ? { ...s, eligible_today: nextEligible } : s))
         );
 
         try {
-            const qs = new URLSearchParams({
-                userId: id,
-                zone: newZone,
-            }).toString();
-
-            const resp = await fetch(`${API_LMS_URL}/api/users/change-student-zone?${qs}`, {
+            const resp = await fetch(`${API_LMS_URL}/api/users/update-user-eligibility`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                // no body because backend is reading req.query
+                body: JSON.stringify({
+                    userId: id,
+                    eligibile: nextEligible,
+                }),
             });
 
             const json = await resp.json().catch(() => null);
-
             if (!resp.ok) {
-                // rollback if API fails
-                setStudents(prevStudents);
-                throw new Error(json?.message || "Failed to update zone");
-            };
+                setStudents(snapshot); // rollback
+                throw new Error(json?.message || "Failed to update eligibility");
+            }
 
-            toast.success("✅ zone updated successfully");
-            //getStudentList();
-
-
+            toast.success("Eligibility updated");
         } catch (error) {
-            console.error("HandleZoneChange error:", error);
-            // rollback on error (network / server)
-            setStudents(prevStudents);
+            console.error("Eligibility toggle failed:", error);
+            setStudents(snapshot); // rollback
+            toast.error("Eligibility update failed");
         }
     };
 
-  const HandleEligibilityChange = async (id: string) => {
+    const bulkEligibilityUpdate = async (payload: BulkEligibilityPayload) => {
+        const snapshot = [...students];       
+        const setValue = payload.setvalue;       
 
-  const current = students.find((s) => s._id === id);
-  if (!current) return;
+        // optimistic update
+        setStudents((prev) => prev.map((s) => ({ ...s, eligible_today: setValue })));
 
-  const nextEligible = !current.eligible_today;
-  const snapshot = students; // stable snapshot
+        try {
+            const resp = await fetch(
+                `${API_LMS_URL}/api/users/update-many-users-eligibility`,
+                {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                }
+            );
 
-  // optimistic update
-  setStudents((prev) =>
-    prev.map((s) => (s._id === id ? { ...s, eligible_today: nextEligible } : s))
-  );
+            const json = await resp.json().catch(() => null);
+            if (!resp.ok) {
+                setStudents(snapshot); // rollback
+                throw new Error(json?.message || "Failed to bulk update eligibility");
+            }
 
-  try {
-    const resp = await fetch(`${API_LMS_URL}/api/users/update-user-eligibility`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userId: id,
-        eligibile: nextEligible,
-      }),
-    });
+            toast.success(`Eligibility ${setValue ? "set for all" : "reset for all"}`);
+        } catch (error) {
+            console.error("Bulk eligibility update failed:", error);
+            setStudents(snapshot); // rollback
+            toast.error("Eligibility update failed");
+        }
+    };
 
-    const json = await resp.json().catch(() => null);
-    if (!resp.ok) {
-      setStudents(snapshot); // rollback
-      throw new Error(json?.message || "Failed to update eligibility");
-    }
+    const handleResetStudent = () => {
+        const ids = students.map((s) => s._id).filter(Boolean);       
+        if (ids.length === 0) return toast.error("No students found");
 
-    toast.success("Eligibility updated");
-  } catch (error) {
-    console.error("Eligibility toggle failed:", error);
-    setStudents(snapshot); // rollback
-    toast.error("Eligibility update failed");
-  }
-};
+        bulkEligibilityUpdate({
+            userIdArray: ids,
+            setvalue: false,
+        });
+    };
 
+    const handleSetStudent = () => {
+        const ids = students.map((s) => s._id).filter(Boolean);
+        if (ids.length === 0) return toast.error("No students found");
 
+        bulkEligibilityUpdate({
+            userIdArray: ids,
+            setvalue: true,
+        });
+    };
 
     const handlePageChange = (p: number) => {
         if (p < 1 || p > totalPages) return;
         setPage(p);
     };
-
-
 
     if (loading) {
         return (
@@ -247,6 +257,39 @@ const StudentZoneUpdate: React.FC = () => {
 
                     {/* Students Table */}
                     <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-2xl overflow-hidden">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-6 py-4 border-b border-white/10 bg-white/5">
+                            <div>
+                                <h3 className="text-sm font-semibold text-white">Eligibility Controls</h3>
+                                <p className="text-xs text-slate-300">
+                                    Apply today eligibility to all students in this list.
+                                </p>
+                            </div>
+
+                            <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={handleSetStudent}
+                                    className="inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold
+                 bg-emerald-500/15 text-emerald-200 ring-1 ring-emerald-500/30
+                 hover:bg-emerald-500/25 hover:ring-emerald-500/40
+                 active:scale-[0.99] transition"
+                                >
+                                    Set all
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={handleResetStudent}
+                                    className="inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold
+                 bg-rose-500/15 text-rose-200 ring-1 ring-rose-500/30
+                 hover:bg-rose-500/25 hover:ring-rose-500/40
+                 active:scale-[0.99] transition"
+                                >
+                                    Reset all
+                                </button>
+                            </div>
+                        </div>
+
                         <div className="overflow-x-auto">
                             <table className="w-full">
                                 <thead className="bg-white/5 border-b border-white/10">

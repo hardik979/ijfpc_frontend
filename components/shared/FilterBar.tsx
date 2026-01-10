@@ -20,6 +20,12 @@ export default function FilterBar({ value, onChange, onApply, onReset, placehold
             placeholder={placeholder}
             value={value}
             onChange={(e) => onChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                onApply(); // 👈 filter when Enter is pressed
+              }
+            }}
             className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-slate-100 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-transparent"
           />
         </div>
