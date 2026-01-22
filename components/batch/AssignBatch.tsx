@@ -15,7 +15,8 @@ type BatchItem = {
   code?: string;
   batchCode?: string;
   status?: string;
-};
+  trainerName? : string;
+  };
 
 export default function AssignBatch() {
   const searchParams = useSearchParams();
@@ -189,21 +190,11 @@ export default function AssignBatch() {
                     <option value="" className="bg-slate-900">
                       {loadingBatches ? "Loading batches..." : "Select a batch"}
                     </option>
-
-                    {availableBatches.map((itm) => {
-                      const code =
-                        itm.batchCode ||
-                        itm.code ||
-                        (itm.course && itm.mode
-                          ? `${itm.course}-${itm.mode}`
-                          : itm._id);
-
-                      return (
-                        <option key={itm._id} value={code} className="bg-slate-900">
-                          {code}
-                        </option>
-                      );
-                    })}
+                    {availableBatches.map((itm) => (                      
+                        <option key={itm._id} value={itm?.code} className="bg-slate-900">
+                          {`${itm?.code} - ${itm?.trainerName?.toUpperCase()} - ${itm?.course}`}
+                        </option>                    
+                    ))}
                   </select>
                 </div>
               </div>

@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-
-const LMS_ROUTES = "https://lms-backend-tgrh.onrender.com";
+import {API_LMS_URL} from '@/lib/api'
 
 type ZoneKey = "blue" | "yellow" | "green";
 
@@ -84,7 +83,7 @@ export default function BatchListClient({ zone: zoneProp }: { zone?: string }) {
         setLoading(true);
 
         const res = await fetch(
-          `${LMS_ROUTES}/api/preplacement/batch-according-Zone?zone=${encodeURIComponent(zone)}`,
+          `${API_LMS_URL}/api/preplacement/batch-according-Zone?zone=${encodeURIComponent(zone)}`,
           { signal: controller.signal, cache: "no-store" }
         );
 

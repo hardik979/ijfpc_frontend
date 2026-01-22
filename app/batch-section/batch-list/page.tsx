@@ -32,6 +32,7 @@ type Batch = {
   startDate?: string;
   status: BatchStatus;
   code?: string;
+  batch? : string;
 };
 
 type BatchesResponse = {
@@ -44,6 +45,10 @@ type BatchesResponse = {
     count?: number;
   };
 };
+
+// type groupByBatch = {
+//   batch? : string;
+// }
 
 function getErrorMessage(err: unknown, fallback = "Something went wrong") {
   if (err instanceof Error) return err.message;
@@ -113,6 +118,13 @@ export default function BatchListPage() {
       }
 
       setBatches(json.data ?? []);
+//console.log('✌️json.data --->', json.data);
+
+    //   let finalData = json?.data?.filter((b)=>{
+    //   let groupByBatch : groupByBatch = b.batch 
+    //   groupByBatch ? b.batch === groupByBatch?.batch : b
+    // })
+      
       setTotal(json?.pagination?.totalCount ?? 0);
     } catch (err) {
       setError(getErrorMessage(err, "Failed to load batches"));
@@ -404,6 +416,9 @@ export default function BatchListPage() {
                     Course Details
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                    Batch
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
                     Mode
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">
@@ -456,6 +471,12 @@ export default function BatchListPage() {
                             )}
                           </div>
                         </div>
+                      </td>
+
+                      <td className="px-6 py-4">
+                        <span className="px-3 py-1 bg-blue-500/20 text-blue-400 text-sm font-medium rounded-lg border border-blue-500/30">
+                          {batch.batch}
+                        </span>
                       </td>
 
                       <td className="px-6 py-4">

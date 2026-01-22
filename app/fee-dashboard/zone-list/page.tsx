@@ -2,8 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-
-const LMS_ROUTES = "https://lms-backend-tgrh.onrender.com";
+import {API_LMS_URL} from '@/lib/api'
 
 // -------------------- Types --------------------
 type ZoneKey = "blue" | "yellow" | "green";
@@ -53,7 +52,7 @@ export default function ZoneListPage(): JSX.Element {
       setLoading(true);
       setError(null);
 
-      const res = await fetch(`${LMS_ROUTES}/api/preplacement/batch-count-by-zone`, {
+      const res = await fetch(`${API_LMS_URL}/api/preplacement/batch-count-by-zone`, {
         cache: "no-store",
       });
 
