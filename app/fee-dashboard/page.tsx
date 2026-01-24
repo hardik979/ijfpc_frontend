@@ -674,9 +674,9 @@ function StudentsModal({
           </div>
 
           {/* Controls */}
-          <div className="p-6 bg-gradient-to-r from-purple-800/30 to-purple-900/30 border-b border-purple-400/20">
-            <div className="flex flex-wrap items-end gap-4">
-              <form
+          {/* <div className="p-6 bg-gradient-to-r from-purple-800/30 to-purple-900/30 border-b border-purple-400/20">
+            <div className="flex flex-wrap items-end gap-4"> */}
+              {/* <form
                 onSubmit={(e) => {
                   e.preventDefault();
                   handleSearch(e);
@@ -700,9 +700,9 @@ function StudentsModal({
                     Search
                   </button>
                 </div>
-              </form>
+              </form> */}
 
-              <div>
+              {/* <div>
                 <label className="mb-2 block text-sm font-medium text-purple-200/80">
                   Filter by Status
                 </label>
@@ -722,16 +722,16 @@ function StudentsModal({
                     )
                   )}
                 </select>
-              </div>
+              </div> */}
 
-              <button
+              {/*<button
                 onClick={fetchList}
                 className="h-[48px] rounded-xl border border-purple-400/30 bg-white/10 backdrop-blur-sm px-6 text-sm font-medium text-white hover:bg-white/20 transition-all duration-200"
               >
                 Refresh
-              </button>
-            </div>
-          </div>
+              </button>*/}
+            {/* </div>
+          </div> */}
 
           <div className="flex-1 min-h-0 overflow-y-auto px-4 py-5 sm:px-6 sm:py-8">
             <div className="mx-auto w-full max-w-6xl">

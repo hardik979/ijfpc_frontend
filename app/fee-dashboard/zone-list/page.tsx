@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {API_LMS_URL} from '@/lib/api'
 
 // -------------------- Types --------------------
-type ZoneKey = "blue" | "yellow" | "green";
+type ZoneKey = "blueEnrolled" | "yellow" | "green";
 
 type ZoneCounts = Record<ZoneKey, number> & {
   totalBatches: number;
@@ -34,14 +34,14 @@ export default function ZoneListPage(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
 
   const [batches, setBatches] = useState<ZoneCounts>({
-    blue: 0,
+    blueEnrolled: 0,
     yellow: 0,
     green: 0,
     totalBatches: 0,
   });
 
   const [students, setStudents] = useState<StudentZoneCounts>({
-    blue: 0,
+    blueEnrolled: 0,
     yellow: 0,
     green: 0,
     totalStudents: 0,
@@ -80,10 +80,10 @@ export default function ZoneListPage(): JSX.Element {
     getZoneData();
   }, []);
 
-  const zones = useMemo<ZoneKey[]>(() => ["blue", "yellow", "green"], []);
+  const zones = useMemo<ZoneKey[]>(() => ["blueEnrolled", "yellow", "green"], []);
 
   const colorMap: Record<ZoneKey | "total", string> = {
-    blue: "from-blue-600/90 to-blue-500/70",
+    blueEnrolled : "from-blue-600/90 to-blue-500/70",
     yellow: "from-yellow-500/90 to-amber-400/70",
     green: "from-emerald-600/90 to-emerald-500/70",
     total: "from-purple-600/90 to-fuchsia-500/70",
@@ -126,7 +126,7 @@ export default function ZoneListPage(): JSX.Element {
               onClick={() => goToZone(z)}
               className={`text-left rounded-2xl p-6 shadow-sm border border-white/20 bg-gradient-to-br ${colorMap[z]} text-white hover:scale-[1.01] active:scale-[0.99] transition`}
             >
-              <p className="text-sm uppercase tracking-wide opacity-90">{z} zone</p>
+              <p className="text-sm uppercase tracking-wide opacity-90">{z  === 'blueEnrolled' ? 'blue' : z} zone</p>
 
               <div className="mt-4 grid grid-cols-2 gap-4">
                 <div className="rounded-xl bg-white/10 border border-white/15 p-3">
