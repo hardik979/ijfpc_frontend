@@ -189,7 +189,7 @@ export default function BatchUpdationPage() {
         if (!batchId) return false;
 
         
-        const res = await fetch(`${API_LMS_URL}/api/batches/update-batch-details${batchId}`, {
+        const res = await fetch(`${API_LMS_URL}/api/batches/update-batch-details/${batchId}`, {
             method: "PUT", // or PATCH (match your backend)
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(formData),
