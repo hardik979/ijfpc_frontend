@@ -1,20 +1,106 @@
 "use client";
 
+<<<<<<< HEAD
 import { useUser } from "@clerk/nextjs";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ShieldCheck, ArrowRight } from "lucide-react";
+=======
+import { motion } from "framer-motion";
+import { useState } from "react";
+import {
+  ChevronRight,
+  BarChart3,
+  SheetIcon,
+  Database,
+  GraduationCap,
+  ComputerIcon,
+  Plus,
+  Vault,
+} from "lucide-react";
+import type { Variants } from "framer-motion";
+import Link from "next/link";
+>>>>>>> 2cb5d26144738e057d4e93814d0714dc695ef606
 
 export default function Home() {
   const { isLoaded, isSignedIn } = useUser();
   const router = useRouter();
 
+<<<<<<< HEAD
   useEffect(() => {
     if (!isLoaded) return;
     if (isSignedIn) {
       router.replace("/redirect");
     }
   }, [isLoaded, isSignedIn, router]);
+=======
+  const dashboardCards = [
+    {
+      id: "it-jobs-factory",
+      title: "IT Jobs Factory Fees",
+      description:
+        "Monitor and manage job posting fees, payment tracking, and revenue analytics",
+      icon: BarChart3,
+      gradient: "from-purple-500 to-indigo-600",
+      path: "/fee-dashboard", // You can update this path as needed
+    },
+    {
+      id: "it-jobs-factory-sheets",
+      title: "Excel Sheets",
+      description:
+        "Track and get access to all the Excel sheets of all the data at one place",
+      icon: SheetIcon,
+      gradient: "from-blue-500 to-sky-400",
+      path: "/fee-dashboard/excel-sheets", // You can update this path as needed
+    },
+    {
+      id: "it-jobs-factory-hrdb",
+      title: "HR Database",
+      description:
+        "Get access to the database of all hr contacts from different company in one place",
+      icon: Database,
+      gradient: "from-emerald-500 to-green-400",
+      path: "/fee-dashboard/hr-database", // You can update this path as needed
+    },
+    {
+      id: "it-jobs-factory-pc",
+      title: "IT Jobs Factory Placement Cell",
+      description:
+        "This dashboard is for the it jobs factory placement cell to manage and update placement data",
+      icon: GraduationCap,
+      gradient: "from-red-400 to-red-500",
+      path: "/post-placement-student-creation", // You can update this path as needed
+    },
+    {
+      id: "it-jobs-factory-IR",
+      title: "IT Jobs Factory Interview Reporting",
+      description:
+        "This dashboard is for the teachers to fill interview reports of students right after the interview.",
+      icon: ComputerIcon,
+      gradient: "from-amber-300 to-orange-400",
+      path: "/fee-dashboard/interview-reporting", // You can update this path as needed
+    },
+    {
+      id: "it-jobs-factory-Bs",
+      title: "IT Jobs Factory Batch Section",
+      description:
+        "Design, launch, and manage training batches with full control over course structure, trainers, schedules, and batch status.",
+      icon: Plus,
+      gradient: "from-slate-700 to-indigo-600",
+      path: "/batch-section", // You can update this path as needed
+    },
+    // {
+    //   id: "it-jobs-factory-BA",
+    //   title: "IT Jobs Factory Batch Assignment",
+    //   description:
+    //     "Assign students to the right batch and update batch changes anytime with a few clicks.",
+    //   icon: Vault,
+    //   gradient: "from-teal-500 to-cyan-600",//gradient: "from-indigo-600 to-violet-700"
+    //   path: "/batch-section/student-list", // You can update this path as needed
+    // },
+
+  ];
+>>>>>>> 2cb5d26144738e057d4e93814d0714dc695ef606
 
   // While Clerk is loading, avoid UI flicker
   if (!isLoaded) {
