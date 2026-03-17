@@ -1,13 +1,11 @@
 "use client";
 
-<<<<<<< HEAD
 import { useUser } from "@clerk/nextjs";
-import { useEffect } from "react";
+
 import { useRouter } from "next/navigation";
-import { ShieldCheck, ArrowRight } from "lucide-react";
-=======
+
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   ChevronRight,
   BarChart3,
@@ -17,23 +15,23 @@ import {
   ComputerIcon,
   Plus,
   Vault,
+  ShieldCheck,
+  ArrowRight,
 } from "lucide-react";
 import type { Variants } from "framer-motion";
 import Link from "next/link";
->>>>>>> 2cb5d26144738e057d4e93814d0714dc695ef606
 
 export default function Home() {
   const { isLoaded, isSignedIn } = useUser();
   const router = useRouter();
 
-<<<<<<< HEAD
   useEffect(() => {
     if (!isLoaded) return;
     if (isSignedIn) {
       router.replace("/redirect");
     }
   }, [isLoaded, isSignedIn, router]);
-=======
+
   const dashboardCards = [
     {
       id: "it-jobs-factory",
@@ -98,9 +96,7 @@ export default function Home() {
     //   gradient: "from-teal-500 to-cyan-600",//gradient: "from-indigo-600 to-violet-700"
     //   path: "/batch-section/student-list", // You can update this path as needed
     // },
-
   ];
->>>>>>> 2cb5d26144738e057d4e93814d0714dc695ef606
 
   // While Clerk is loading, avoid UI flicker
   if (!isLoaded) {
