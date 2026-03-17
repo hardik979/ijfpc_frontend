@@ -11,10 +11,9 @@ import {
   BarChart3,
   Clock,
 } from "lucide-react";
-import {API_LMS_URL} from '@/lib/api'
+import { API_LMS_URL } from "@/lib/api";
 import { API_BASE_URL } from "@/lib/api";
 import Link from "next/link";
-import ZoneListPage from "./zone-list/page";
 
 /* ----------------------------- Types ----------------------------- */
 
@@ -169,7 +168,7 @@ export default function OverviewPage() {
       try {
         setLoadingSummary(true);
         const data = await getJSON<any>(
-          `${API_LMS_URL}/api/preplacement/summary`
+          `${API_LMS_URL}/api/preplacement/summary`,
         );
         const counts = (data?.countsByStatus || {}) as Partial<
           Record<Status, number>
@@ -212,7 +211,7 @@ export default function OverviewPage() {
 
         // Fetch post-placement revenue
         const postData = await getJSON<{ items: any[] }>(
-          `${API_BASE_URL}/api/post-placement/offers?limit=2000`
+          `${API_BASE_URL}/api/post-placement/offers?limit=2000`,
         );
 
         let postRev = 0;
@@ -361,7 +360,7 @@ export default function OverviewPage() {
                       }}
                       className={cn(
                         "w-full inline-flex items-center justify-between rounded-xl px-4 py-2 text-sm font-medium border shadow-sm cursor-pointer hover:shadow-2xl hover:scale-[1.05] hover:shadow-purple-500/20 transition-all duration-300",
-                        STATUS_COLORS[status]
+                        STATUS_COLORS[status],
                       )}
                       title={`View ${status} students`}
                     >
@@ -579,7 +578,7 @@ function StudentsModal({
       if (search.trim()) qs.set("search", search.trim());
       if (status !== "ALL") qs.set("status", status);
       const res = await getJSON<StudentsListResponse>(
-        `${API_LMS_URL}/api/preplacement/students?${qs.toString()}`
+        `${API_LMS_URL}/api/preplacement/students?${qs.toString()}`,
       );
       setData(res);
     } catch (e) {
@@ -617,18 +616,18 @@ function StudentsModal({
       setPost([]);
 
       const preData = await getJSON<PreplacementDetail>(
-        `${API_BASE_URL}/api/preplacement/students/${row._id}`
+        `${API_BASE_URL}/api/preplacement/students/${row._id}`,
       );
       setPre(preData);
 
       const all = await getJSON<{ items: any[] }>(
         `${API_BASE_URL}/api/post-placement/offers?search=${encodeURIComponent(
-          row.name
-        )}&limit=100`
+          row.name,
+        )}&limit=100`,
       );
       const exact = (all.items || []).filter(
         (o) =>
-          String(o?.studentName || "").toLowerCase() === row.name.toLowerCase()
+          String(o?.studentName || "").toLowerCase() === row.name.toLowerCase(),
       );
       setPost(exact as PostOffer[]);
     } catch (e) {
@@ -676,7 +675,7 @@ function StudentsModal({
           {/* Controls */}
           {/* <div className="p-6 bg-gradient-to-r from-purple-800/30 to-purple-900/30 border-b border-purple-400/20">
             <div className="flex flex-wrap items-end gap-4"> */}
-              {/* <form
+          {/* <form
                 onSubmit={(e) => {
                   e.preventDefault();
                   handleSearch(e);
@@ -702,7 +701,7 @@ function StudentsModal({
                 </div>
               </form> */}
 
-              {/* <div>
+          {/* <div>
                 <label className="mb-2 block text-sm font-medium text-purple-200/80">
                   Filter by Status
                 </label>
@@ -724,13 +723,13 @@ function StudentsModal({
                 </select>
               </div> */}
 
-              {/*<button
+          {/*<button
                 onClick={fetchList}
                 className="h-[48px] rounded-xl border border-purple-400/30 bg-white/10 backdrop-blur-sm px-6 text-sm font-medium text-white hover:bg-white/20 transition-all duration-200"
               >
                 Refresh
               </button>*/}
-            {/* </div>
+          {/* </div>
           </div> */}
 
           <div className="flex-1 min-h-0 overflow-y-auto px-4 py-5 sm:px-6 sm:py-8">
@@ -808,7 +807,6 @@ function StudentsModal({
                 )}
               </tbody>
             </table>   */}
-                <ZoneListPage />
               </div>
             </div>
           </div>
@@ -931,8 +929,8 @@ function StudentsModal({
                                       <td className="px-4 py-3 text-white">
                                         {p.date
                                           ? new Date(p.date).toLocaleDateString(
-                                            "en-IN"
-                                          )
+                                              "en-IN",
+                                            )
                                           : "—"}
                                       </td>
                                       <td className="px-4 py-3 text-purple-200">
@@ -997,29 +995,29 @@ function StudentsModal({
                             const postInst = (o as any)?.raw?.installments
                               ?.length
                               ? (o as any).raw.installments.map((i: any) => ({
-                                label: i.label || "—",
-                                amount: Number(i.amount || 0),
-                                date: i.date || null,
-                                mode: i.mode || "—",
-                                note: i.note || "—",
-                                _id: i._id,
-                              }))
+                                  label: i.label || "—",
+                                  amount: Number(i.amount || 0),
+                                  date: i.date || null,
+                                  mode: i.mode || "—",
+                                  note: i.note || "—",
+                                  _id: i._id,
+                                }))
                               : (o.installments || []).map((i: any) => ({
-                                label: "—",
-                                amount: Number(i.amount || 0),
-                                date: i.paidDate || i.dueDate || null,
-                                mode: "—",
-                                note: "—",
-                                _id: i._id,
-                              }));
+                                  label: "—",
+                                  amount: Number(i.amount || 0),
+                                  date: i.paidDate || i.dueDate || null,
+                                  mode: "—",
+                                  note: "—",
+                                  _id: i._id,
+                                }));
 
                             const collected = postInst.reduce(
                               (s: number, i: any) => s + (i.amount || 0),
-                              0
+                              0,
                             );
                             const remaining = Math.max(
                               Number(totalPP || 0) - collected,
-                              0
+                              0,
                             );
 
                             return (
@@ -1030,7 +1028,7 @@ function StudentsModal({
                                     oi,
                                     o.studentName,
                                     companyName,
-                                    o.offerDate
+                                    o.offerDate,
                                   )
                                 }
                                 className="rounded-2xl border border-purple-400/20 bg-white/5 backdrop-blur-sm overflow-hidden"
@@ -1085,7 +1083,7 @@ function StudentsModal({
                                                       ii,
                                                       inst.date,
                                                       inst.amount,
-                                                      inst.label
+                                                      inst.label,
                                                     )
                                                   }
                                                   className="border-b border-purple-400/10 hover:bg-white/5 transition-colors duration-200"
@@ -1095,16 +1093,16 @@ function StudentsModal({
                                                   </td>
                                                   <td className="px-4 py-2 text-emerald-300 font-semibold">
                                                     {formatINR(
-                                                      Number(inst.amount || 0)
+                                                      Number(inst.amount || 0),
                                                     )}
                                                   </td>
                                                   <td className="px-4 py-2 text-white">
                                                     {inst.date
                                                       ? new Date(
-                                                        inst.date
-                                                      ).toLocaleDateString(
-                                                        "en-IN"
-                                                      )
+                                                          inst.date,
+                                                        ).toLocaleDateString(
+                                                          "en-IN",
+                                                        )
                                                       : "—"}
                                                   </td>
                                                   <td className="px-4 py-2 text-purple-200">
@@ -1114,7 +1112,7 @@ function StudentsModal({
                                                     {inst.note || "—"}
                                                   </td>
                                                 </tr>
-                                              )
+                                              ),
                                             )
                                           ) : (
                                             <tr>
@@ -1164,7 +1162,6 @@ function StudentsModal({
           </div>
         </>
       )}
-
     </>
   );
 }
