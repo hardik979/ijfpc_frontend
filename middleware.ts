@@ -1,52 +1,28 @@
-// middleware.ts
+import { clerkMiddleware } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
 
-const PUBLIC_PATHS = [
-  "/enter", // site gate form
-  "/api/auth/enter", // site gate submit
-  "/fee-dashboard/enter", // fee gate form
-  "/api/auth/fee-enter", // fee gate submit
-  "/_next",
-  "/favicon.ico",
-  "/robots.txt",
-  "/sitemap.xml",
-];
+export default clerkMiddleware(async (auth, req) => {
+  const { userId } = await auth();
+  const pathname = req.nextUrl.pathname;
 
-export function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl;
-
-  // allow public assets & gate pages
-  if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
+  // Public routes
+  if (
+    pathname === "/" ||
+    pathname.startsWith("/sign-in") ||
+    pathname.startsWith("/enter") ||
+    pathname.startsWith("/unauthorized")
+  ) {
     return NextResponse.next();
   }
 
-  const siteCookie = req.cookies.get("site_authed")?.value === "true";
-
-  // Gate #1: whole site
-  if (!siteCookie) {
-    const url = req.nextUrl.clone();
-    url.pathname = "/enter";
-    url.searchParams.set("next", pathname); // to return after login
-    return NextResponse.redirect(url);
-  }
-
-  // Gate #2: fee-dashboard subtree
-  if (pathname.startsWith("/fee-dashboard")) {
-    const feeCookie = req.cookies.get("fee_authed")?.value === "true";
-    if (!feeCookie) {
-      const url = req.nextUrl.clone();
-      url.pathname = "/fee-dashboard/enter";
-      url.searchParams.set("next", pathname);
-      return NextResponse.redirect(url);
-    }
+  // Require login for everything else
+  if (!userId) {
+    return NextResponse.redirect(new URL("/sign-in", req.url));
   }
 
   return NextResponse.next();
-}
+});
 
 export const config = {
-  matcher: [
-    "/((?!api/health).*)", // protect everything except what you explicitly exclude
-  ],
+  matcher: ["/((?!_next|.*\\..*).*)"],
 };

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import type { Variants } from "framer-motion";
 import Link from "next/link";
+
 export default function ITJobsFactoryDashboard() {
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
 

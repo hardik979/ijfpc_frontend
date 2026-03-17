@@ -9,14 +9,15 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@clerk/nextjs": "^6.36.5",
     "@hookform/resolvers": "^5.2.1",
     "axios": "^1.11.0",
     "dayjs": "^1.11.13",
     "framer-motion": "^12.23.12",
     "lucide-react": "^0.540.0",
     "next": "15.5.7",
-    "react": "19.1.0",
-    "react-dom": "19.1.0",
+    "react": "^19.1.4",
+    "react-dom": "^19.1.4",
     "react-hook-form": "^7.62.0",
     "react-toastify": "^11.0.5",
     "recharts": "^3.1.2",
