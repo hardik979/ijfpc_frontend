@@ -1,6 +1,6 @@
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL; // Port 5000
-export const API_HR_URL = process.env.NEXT_PUBLIC_HR_URL;     // Port 4000
-const BASE = process.env.NEXT_PUBLIC_API_BASE_URL!; 
+export const API_HR_URL = process.env.NEXT_PUBLIC_HR_URL; // Port 4000
+const BASE = process.env.NEXT_PUBLIC_HR_URL!;
 
 export async function apiGet<T>(path: string, token?: string): Promise<T> {
   const headers: HeadersInit = {};
@@ -32,3 +32,4 @@ export async function apiPost<T>(
   if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
   return res.json();
 }
+export const API_LMS_URL = process.env.NEXT_PUBLIC_LMS_URL;

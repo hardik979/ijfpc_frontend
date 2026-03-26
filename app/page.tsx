@@ -1,8 +1,10 @@
 "use client";
 
 import { useUser } from "@clerk/nextjs";
-import { useEffect } from "react";
+
 import { useRouter } from "next/navigation";
+
+import { useEffect } from "react";
 import { ShieldCheck, ArrowRight } from "lucide-react";
 
 export default function Home() {
