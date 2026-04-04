@@ -2,16 +2,17 @@
 
 import React, { useMemo } from "react";
 import {
+  ResponsiveContainer,
   PieChart,
   Pie,
   Cell,
-  ResponsiveContainer,
+  Tooltip,
+  Legend,
   BarChart,
   Bar,
   XAxis,
   YAxis,
-  Tooltip,
-  Legend,
+  CartesianGrid,
 } from "recharts";
 import {
   Download,
@@ -19,6 +20,9 @@ import {
   PhoneCall,
   TrendingUp,
   TrendingDown,
+  MinusCircle,
+  RefreshCw,
+  PhoneForwarded,
 } from "lucide-react";
 
 interface RecordingReport {
@@ -26,7 +30,21 @@ interface RecordingReport {
   leadId: string;
   originalFileName: string;
   status: string;
-  analysis?: any;
+  analysis?: {
+    outcome?: string;
+    outcomeCode?: string;
+    confidence?: string;
+    summary?: string;
+    followUpRequired?: boolean;
+    followUpAction?: string | null;
+    keyDetails?: {
+      studentName?: string | null;
+      hrName?: string | null;
+      callDuration?: string | null;
+      languageUsed?: string | null;
+    };
+    flags?: string[];
+  };
   type?: "recording" | "manual";
   manualStatus?: string;
   studentName: string;
@@ -40,16 +58,36 @@ interface DailyCallReportProps {
   selectedDate: string;
 }
 
+type Sentiment = "pos" | "neg" | "neutral";
+
 export default function DailyCallReport({
   reports,
   selectedDate,
 }: DailyCallReportProps) {
-  // 1. Process Data for Charts and Table
   const analytics = useMemo(() => {
     let totalCalls = reports.length;
     let positive = 0;
     let negative = 0;
-    let studentStats: Record<string, any> = {};
+    let neutral = 0;
+    let manualLogs = 0;
+    let followUps = 0;
+
+    const studentStats: Record<
+      string,
+      {
+        leadId: string;
+        name: string;
+        phone: string;
+        email: string;
+        total: number;
+        manual: number;
+        pos: number;
+        neg: number;
+        neutral: number;
+        followUps: number;
+        numbers: Set<string>;
+      }
+    > = {};
 
     reports.forEach((r) => {
       const outcome = (r.analysis?.outcome || "").toUpperCase();
@@ -60,296 +98,676 @@ export default function DailyCallReport({
         "DISCONNECTED",
         "WRONG_NUMBER",
         "REJECTED",
+        "NO_OPENING",
+        "INVALID_NUMBER",
+        "DNP",
       ].some((s) => outcome.includes(s) || code.includes(s));
 
       const hasPositive = [
         "INTERESTED",
         "SUCCESS",
         "CALLBACK",
+        "CALLBACK_REQUESTED",
         "INFO_SHARED",
+        "RESUME_REQUESTED",
       ].some((s) => outcome.includes(s) || code.includes(s));
 
-      // Exclusive Sentiment Logic (Priority to manual/negative if both exist)
-      let sentiment: "pos" | "neg" | "neutral" = "neutral";
-      
+      let sentiment: Sentiment = "neutral";
+
       if (r.type === "manual") {
-        sentiment = "neg"; // Manual reports (DNP, Invalid, Out of Service) are considered negative hits
+        sentiment = "neg";
+        manualLogs++;
       } else if (hasNegative) {
         sentiment = "neg";
       } else if (hasPositive) {
-        sentiment = "pos";
+        if (
+          outcome.includes("INFO_SHARED") ||
+          code.includes("INFO_SHARED") ||
+          outcome.includes("CALLBACK_REQUESTED") ||
+          code.includes("CALLBACK_REQUESTED")
+        ) {
+          sentiment = "neutral";
+        } else {
+          sentiment = "pos";
+        }
       }
 
       if (sentiment === "pos") positive++;
       else if (sentiment === "neg") negative++;
+      else neutral++;
+
+      if (r.analysis?.followUpRequired) followUps++;
 
       if (!studentStats[r.leadId]) {
         studentStats[r.leadId] = {
-          name: r.studentName || "Unknown",
-          phone: r.phone,
-          email: r.email,
+          leadId: r.leadId,
+          name: r.studentName || "Unknown Student",
+          phone: r.phone || "N/A",
+          email: r.email || "N/A",
           total: 0,
           manual: 0,
           pos: 0,
           neg: 0,
+          neutral: 0,
+          followUps: 0,
           numbers: new Set(),
         };
       }
 
-      studentStats[r.leadId].total++;
-      if (r.type === "manual") {
-        studentStats[r.leadId].manual++;
-      }
-      if (sentiment === "pos") studentStats[r.leadId].pos++;
-      if (sentiment === "neg") studentStats[r.leadId].neg++;
+      const current = studentStats[r.leadId];
+      current.total++;
 
-      // Extract unique dialed number from filename (assuming filename contains it)
-      const numberMatch = r.originalFileName.match(/\d{10,}/);
-      if (numberMatch) {
-        studentStats[r.leadId].numbers.add(numberMatch[0]);
-      }
+      if (r.type === "manual") current.manual++;
+      if (sentiment === "pos") current.pos++;
+      if (sentiment === "neg") current.neg++;
+      if (sentiment === "neutral") current.neutral++;
+      if (r.analysis?.followUpRequired) current.followUps++;
+
+      const numberMatch =
+        r.originalFileName?.match(/\d{10,}/)?.[0] ||
+        r.phone?.match(/\d{10,}/)?.[0];
+
+      if (numberMatch) current.numbers.add(numberMatch);
     });
+
+    const students = Object.values(studentStats)
+      .map((s) => ({
+        ...s,
+        uniqueNumbers: s.numbers.size,
+        conversionRate:
+          s.total > 0 ? Math.round((s.pos / s.total) * 100) : 0,
+      }))
+      .sort((a, b) => b.total - a.total);
+
+    const totalStudents = students.length;
+    const conversionRate =
+      totalCalls > 0 ? Math.round((positive / totalCalls) * 100) : 0;
+    const negativeRate =
+      totalCalls > 0 ? Math.round((negative / totalCalls) * 100) : 0;
+    const neutralRate =
+      totalCalls > 0 ? Math.round((neutral / totalCalls) * 100) : 0;
+
+    const sentimentData = [
+      { name: "Positive", value: positive, color: "#16a34a" },
+      { name: "Negative", value: negative, color: "#dc2626" },
+      { name: "Neutral", value: neutral, color: "#d97706" },
+    ].filter((item) => item.value > 0);
+
+    const performanceData = students.slice(0, 8).map((s) => ({
+      name: s.name.split(" ")[0],
+      Positive: s.pos,
+      Negative: s.neg,
+      Neutral: s.neutral,
+    }));
 
     return {
       totalCalls,
+      totalStudents,
       positive,
       negative,
-      other: totalCalls - positive - negative,
-      students: Object.values(studentStats).sort((a, b) => b.total - a.total),
+      neutral,
+      manualLogs,
+      followUps,
+      conversionRate,
+      negativeRate,
+      neutralRate,
+      students,
+      sentimentData,
+      performanceData,
     };
   }, [reports]);
 
-  // Chart Data
-  const pieData = [
-    { name: "Positive Response", value: analytics.positive, color: "#8B4513" }, // Brown
-    { name: "Negative Response", value: analytics.negative, color: "#D2B48C" }, // Tan
-    { name: "Neutral/Processing", value: analytics.other, color: "#F5F5DC" }, // Beige
-  ].filter((d) => d.value > 0);
-
-  // CSV Export
   const downloadCSV = () => {
     const headers = [
       "Student Name",
-      "Total Logs",
+      "Email",
+      "Total Calls",
       "Manual Logs",
       "Unique Numbers",
       "Positive",
       "Negative",
-      "Email",
+      "Neutral",
+      "Follow Ups",
+      "Conversion Rate %",
     ];
+
     const rows = analytics.students.map((s) => [
       s.name,
+      s.email,
       s.total,
       s.manual,
-      s.numbers.size,
+      s.uniqueNumbers,
       s.pos,
       s.neg,
-      s.email,
+      s.neutral,
+      s.followUps,
+      s.conversionRate,
     ]);
 
-    const csvContent = [headers, ...rows].map((e) => e.join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
+    const csvContent = [headers, ...rows]
+      .map((row) => row.map((cell) => `"${cell}"`).join(","))
+      .join("\n");
+
+    const blob = new Blob([csvContent], {
+      type: "text/csv;charset=utf-8;",
+    });
     const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", `Call_Report_${selectedDate}.csv`);
-    link.style.visibility = "hidden";
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `Daily_Call_Report_${selectedDate}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
+  const cardBase =
+    "rounded-[1.5rem] sm:rounded-[2rem] border border-[#E9E2D6] bg-white shadow-sm p-4 sm:p-5 lg:p-6";
+  const labelClass =
+    "text-[10px] sm:text-[11px] uppercase tracking-[0.18em] sm:tracking-[0.22em] text-[#9A7B5A] font-medium";
+  const valueClass = "text-2xl sm:text-3xl font-semibold text-[#2D1F16]";
+
   return (
-    <div className="flex-1 flex flex-col pt-4 space-y-10 pb-20 overflow-y-auto custom-scrollbar pr-2">
-      {/* Cards Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white p-8 rounded-[2.5rem] border border-[#F5F5DC] shadow-sm flex items-center gap-6">
-          <div className="w-16 h-16 bg-[#FFF9F0] rounded-2xl flex items-center justify-center">
-            <PhoneCall className="w-8 h-8 text-[#8B4513]" />
-          </div>
-          <div>
-            <p className="text-[10px] font-medium text-[#A1887F] uppercase tracking-widest">
-              Calls Logged
-            </p>
-            <p className="text-3xl font-medium text-[#3E2723]">
-              {analytics.totalCalls}
-            </p>
-          </div>
-        </div>
-        <div className="bg-white p-8 rounded-[2.5rem] border border-[#F5F5DC] shadow-sm flex items-center gap-6">
-          <div className="w-16 h-16 bg-[#FDF5E6] rounded-2xl flex items-center justify-center">
-            <Users className="w-8 h-8 text-[#8B4513]" />
-          </div>
-          <div>
-            <p className="text-[10px] font-medium text-[#A1887F] uppercase tracking-widest">
-              Total Students{" "}
-            </p>
-            <p className="text-3xl font-medium text-[#3E2723]">
-              {analytics.students.length}
-            </p>
-          </div>
-        </div>
-        <div className="bg-white p-8 rounded-[2.5rem] border border-[#F5F5DC] shadow-sm flex items-center gap-6">
-          <div className="w-16 h-16 bg-green-50 rounded-2xl flex items-center justify-center">
-            <TrendingUp className="w-8 h-8 text-green-700" />
-          </div>
-          <div>
-            <p className="text-[10px] font-medium text-[#A1887F] uppercase tracking-widest">
-              Positive
-            </p>
-            <p className="text-3xl font-medium text-green-700">
-              {analytics.positive}
-            </p>
-          </div>
-        </div>
-        <div className="bg-white p-8 rounded-[2.5rem] border border-[#F5F5DC] shadow-sm flex items-center gap-6">
-          <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center">
-            <TrendingDown className="w-8 h-8 text-red-700" />
-          </div>
-          <div>
-            <p className="text-[10px] font-medium text-[#A1887F] uppercase tracking-widest">
-              Negative
-            </p>
-            <p className="text-3xl font-medium text-red-700">
-              {analytics.negative}
-            </p>
-          </div>
-        </div>
-      </div>
+    <div className="flex-1 overflow-y-auto bg-[#FCFAF6] px-3 sm:px-4 lg:px-6 pb-10 sm:pb-16 pt-4">
+      <div className="space-y-5 sm:space-y-6 lg:space-y-8">
+        {/* Header */}
+        <div className="rounded-[1.5rem] sm:rounded-[2rem] border border-[#EEE6D9] bg-gradient-to-r from-white to-[#FAF5EC] p-4 sm:p-6 shadow-sm">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs sm:text-sm font-medium text-[#A1784E]">
+                Daily Call Intelligence
+              </p>
+              <h2 className="mt-1 text-xl sm:text-2xl font-semibold text-[#2D1F16] leading-tight">
+                Call Performance Dashboard
+              </h2>
+              <p className="mt-2 text-xs sm:text-sm text-[#7A6753] leading-relaxed">
+                Understand student call effort, success, failures, manual
+                entries, and follow-up pipeline for{" "}
+                <span className="font-semibold text-[#5C3B1E]">
+                  {selectedDate}
+                </span>
+                .
+              </p>
+            </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        {/* Charts Section */}
-        <div className="lg:col-span-1 bg-white p-8 rounded-[3rem] border border-[#F5F5DC] shadow-sm space-y-6">
-          <h3 className="text-xl font-medium text-[#3E2723] px-2 text-center">
-            Sentiment Distribution
-          </h3>
-          <div className="h-[300px]">
-            {analytics.totalCalls > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    innerRadius={80}
-                    outerRadius={110}
-                    paddingAngle={8}
-                    dataKey="value"
-                    stroke="none"
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      borderRadius: "20px",
-                      border: "none",
-                      boxShadow: "0 10px 30px rgba(0,0,0,0.1)",
-                      fontFamily: "Montserrat",
-                    }}
-                  />
-                  <Legend
-                    verticalAlign="bottom"
-                    height={36}
-                    iconType="circle"
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex items-center justify-center text-[#D2B48C] font-medium italic">
-                No chart data for {selectedDate}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Table Section */}
-        <div className="lg:col-span-2 bg-white rounded-[3rem] border border-[#F5F5DC] shadow-sm overflow-hidden flex flex-col">
-          <div className="p-8 pb-4 flex justify-between items-center sm:px-10">
-            <h3 className="text-xl font-medium text-[#3E2723]">
-              Call Details Overview
-            </h3>
             <button
               onClick={downloadCSV}
               disabled={analytics.students.length === 0}
-              className="flex items-center gap-2 px-6 py-3 bg-[#FAF9F6] border border-[#F5F5DC] text-[#8B4513] rounded-2xl font-medium hover:bg-[#8B4513] hover:text-white transition-all disabled:opacity-50"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-2xl border border-[#E7D9C6] bg-white px-4 sm:px-5 py-3 text-sm font-medium text-[#8B4513] transition hover:bg-[#8B4513] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <Download className="w-4 h-4" /> Export CSV
+              <Download className="h-4 w-4" />
+              Export CSV
             </button>
           </div>
+        </div>
 
-          <div className="flex-1 overflow-x-auto min-h-[350px]">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-[#FAF9F6]">
-                  <th className="px-10 py-5 text-[10px] font-medium text-[#A1887F] uppercase tracking-widest">
-                    Students
+        {/* KPI cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 sm:gap-5">
+          <div className={cardBase}>
+            <div className="mb-3 sm:mb-4 flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-2xl bg-[#FFF3E7]">
+              <PhoneCall className="h-5 w-5 sm:h-6 sm:w-6 text-[#8B4513]" />
+            </div>
+            <p className={labelClass}>Total Calls</p>
+            <p className={valueClass}>{analytics.totalCalls}</p>
+            <p className="mt-2 text-[11px] sm:text-xs text-[#8A7968] leading-relaxed">
+              All recordings + manual entries
+            </p>
+          </div>
+
+          <div className={cardBase}>
+            <div className="mb-3 sm:mb-4 flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-2xl bg-[#F4EFE7]">
+              <Users className="h-5 w-5 sm:h-6 sm:w-6 text-[#8B4513]" />
+            </div>
+            <p className={labelClass}>Students</p>
+            <p className={valueClass}>{analytics.totalStudents}</p>
+            <p className="mt-2 text-[11px] sm:text-xs text-[#8A7968] leading-relaxed">
+              Unique students with call activity
+            </p>
+          </div>
+
+          <div className={cardBase}>
+            <div className="mb-3 sm:mb-4 flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-2xl bg-green-50">
+              <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-green-700" />
+            </div>
+            <p className={labelClass}>Positive</p>
+            <p className="text-2xl sm:text-3xl font-semibold text-green-700">
+              {analytics.positive}
+            </p>
+            <p className="mt-2 text-[11px] sm:text-xs text-[#8A7968] leading-relaxed">
+              Resume requested / success-type calls
+            </p>
+          </div>
+
+          <div className={cardBase}>
+            <div className="mb-3 sm:mb-4 flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-2xl bg-red-50">
+              <TrendingDown className="h-5 w-5 sm:h-6 sm:w-6 text-red-700" />
+            </div>
+            <p className={labelClass}>Negative</p>
+            <p className="text-2xl sm:text-3xl font-semibold text-red-700">
+              {analytics.negative}
+            </p>
+            <p className="mt-2 text-[11px] sm:text-xs text-[#8A7968] leading-relaxed">
+              Rejected / invalid / failed calls
+            </p>
+          </div>
+
+          <div className={cardBase}>
+            <div className="mb-3 sm:mb-4 flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-2xl bg-amber-50">
+              <MinusCircle className="h-5 w-5 sm:h-6 sm:w-6 text-amber-700" />
+            </div>
+            <p className={labelClass}>Neutral</p>
+            <p className="text-2xl sm:text-3xl font-semibold text-amber-700">
+              {analytics.neutral}
+            </p>
+            <p className="mt-2 text-[11px] sm:text-xs text-[#8A7968] leading-relaxed">
+              In-progress / info shared / no final outcome
+            </p>
+          </div>
+        </div>
+
+        {/* Secondary stats */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
+          <div className={cardBase}>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-2xl bg-green-50 shrink-0">
+                <TrendingUp className="h-5 w-5 text-green-700" />
+              </div>
+              <div className="min-w-0">
+                <p className={labelClass}>Conversion Rate</p>
+                <p className="text-xl sm:text-2xl font-semibold text-[#2D1F16]">
+                  {analytics.conversionRate}%
+                </p>
+              </div>
+            </div>
+            <p className="mt-3 text-sm text-[#7A6753]">
+              Positive calls out of total calls
+            </p>
+          </div>
+
+          <div className={cardBase}>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-2xl bg-[#FFF4EA] shrink-0">
+                <RefreshCw className="h-5 w-5 text-[#C47A21]" />
+              </div>
+              <div className="min-w-0">
+                <p className={labelClass}>Follow-up Required</p>
+                <p className="text-xl sm:text-2xl font-semibold text-[#2D1F16]">
+                  {analytics.followUps}
+                </p>
+              </div>
+            </div>
+            <p className="mt-3 text-sm text-[#7A6753]">
+              Calls that still need next action
+            </p>
+          </div>
+
+          <div className={cardBase}>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-2xl bg-[#F7F1E8] shrink-0">
+                <PhoneForwarded className="h-5 w-5 text-[#8B4513]" />
+              </div>
+              <div className="min-w-0">
+                <p className={labelClass}>Call Mix</p>
+                <p className="text-lg sm:text-2xl font-semibold text-[#2D1F16] break-words">
+                  {analytics.positive} / {analytics.neutral} / {analytics.negative}
+                </p>
+              </div>
+            </div>
+            <p className="mt-3 text-sm text-[#7A6753]">
+              Positive / Neutral / Negative split
+            </p>
+          </div>
+        </div>
+
+        {/* Charts */}
+        <div className="grid grid-cols-1 xl:grid-cols-5 gap-4 sm:gap-6">
+          <div className="xl:col-span-2 rounded-[1.5rem] sm:rounded-[2rem] border border-[#E9E2D6] bg-white p-4 sm:p-6 shadow-sm">
+            <div className="mb-4">
+              <h3 className="text-base sm:text-lg font-semibold text-[#2D1F16]">
+                Sentiment Distribution
+              </h3>
+              <p className="text-xs sm:text-sm text-[#7A6753]">
+                Overall call outcome split for the selected day
+              </p>
+            </div>
+
+            <div className="h-[260px] sm:h-[320px] lg:h-[340px]">
+              {analytics.sentimentData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={analytics.sentimentData}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius={55}
+                      outerRadius={95}
+                      paddingAngle={5}
+                      stroke="none"
+                    >
+                      {analytics.sentimentData.map((entry, index) => (
+                        <Cell key={index} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value: number, name: string) => [value, name]}
+                      contentStyle={{
+                        borderRadius: 16,
+                        border: "1px solid #eee2d0",
+                        boxShadow: "0 10px 25px rgba(0,0,0,0.08)",
+                      }}
+                    />
+                    <Legend
+                      verticalAlign="bottom"
+                      iconType="circle"
+                      wrapperStyle={{ fontSize: "12px" }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center text-sm text-[#9A8572] text-center px-4">
+                  No chart data available for {selectedDate}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="xl:col-span-3 rounded-[1.5rem] sm:rounded-[2rem] border border-[#E9E2D6] bg-white p-4 sm:p-6 shadow-sm">
+            <div className="mb-4">
+              <h3 className="text-base sm:text-lg font-semibold text-[#2D1F16]">
+                Top Student Performance
+              </h3>
+              <p className="text-xs sm:text-sm text-[#7A6753]">
+                Compare positive, neutral, and negative outcomes by student
+              </p>
+            </div>
+
+            <div className="h-[280px] sm:h-[320px] lg:h-[340px]">
+              {analytics.performanceData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={analytics.performanceData}
+                    margin={{ top: 10, right: 10, left: -20, bottom: 10 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#F0E9DF" />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fontSize: 11 }}
+                      interval={0}
+                    />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                    <Tooltip
+                      contentStyle={{
+                        borderRadius: 16,
+                        border: "1px solid #eee2d0",
+                        boxShadow: "0 10px 25px rgba(0,0,0,0.08)",
+                      }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: "12px" }} />
+                    <Bar dataKey="Positive" fill="#16a34a" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="Neutral" fill="#d97706" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="Negative" fill="#dc2626" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center text-sm text-[#9A8572] text-center px-4">
+                  No student chart data available
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Legend / help box */}
+        <div className="rounded-[1.5rem] sm:rounded-[2rem] border border-[#EEE2D2] bg-white p-4 sm:p-6 shadow-sm">
+          <h3 className="text-base sm:text-lg font-semibold text-[#2D1F16]">
+            How to Read This Dashboard
+          </h3>
+
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+            <div className="rounded-2xl bg-green-50 p-4">
+              <p className="font-semibold text-green-800">Positive</p>
+              <p className="mt-1 text-sm text-green-700 leading-relaxed">
+                Resume requested, clear progress, successful response
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-red-50 p-4">
+              <p className="font-semibold text-red-800">Negative</p>
+              <p className="mt-1 text-sm text-red-700 leading-relaxed">
+                Not interested, wrong number, invalid, dead call
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-amber-50 p-4">
+              <p className="font-semibold text-amber-800">Neutral</p>
+              <p className="mt-1 text-sm text-amber-700 leading-relaxed">
+                Information shared, callback requested, still open
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-[#FFF7ED] p-4">
+              <p className="font-semibold text-[#A86117]">Manual Logs</p>
+              <p className="mt-1 text-sm text-[#A86117] leading-relaxed">
+                Student manually entered outcome like DNP or invalid number
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Mobile cards */}
+        <div className="md:hidden space-y-4">
+          <div className="rounded-[1.5rem] border border-[#E9E2D6] bg-white shadow-sm p-4">
+            <h3 className="text-base font-semibold text-[#2D1F16]">
+              Student Call Details
+            </h3>
+            <p className="mt-1 text-sm text-[#7A6753]">
+              Student-wise activity overview
+            </p>
+          </div>
+
+          {analytics.students.length > 0 ? (
+            analytics.students.map((s, index) => (
+              <div
+                key={s.leadId + index}
+                className="rounded-[1.5rem] border border-[#E9E2D6] bg-white shadow-sm p-4"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F5EEDC] font-semibold text-[#8B4513] shrink-0">
+                    {s.name?.charAt(0)?.toUpperCase() || "S"}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-medium text-[#2D1F16] truncate">{s.name}</p>
+                    <p className="text-xs text-[#8A7968] break-all">{s.email}</p>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                  <div className="rounded-xl bg-[#FBF8F3] p-3">
+                    <p className="text-[11px] uppercase tracking-[0.15em] text-[#9A7B5A]">
+                      Total
+                    </p>
+                    <p className="mt-1 font-semibold text-[#2D1F16]">{s.total}</p>
+                  </div>
+
+                  <div className="rounded-xl bg-[#FBF8F3] p-3">
+                    <p className="text-[11px] uppercase tracking-[0.15em] text-[#9A7B5A]">
+                      Unique No.
+                    </p>
+                    <p className="mt-1 font-semibold text-[#2D1F16]">
+                      {s.uniqueNumbers}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl bg-green-50 p-3">
+                    <p className="text-[11px] uppercase tracking-[0.15em] text-green-700">
+                      Positive
+                    </p>
+                    <p className="mt-1 font-semibold text-green-700">{s.pos}</p>
+                  </div>
+
+                  <div className="rounded-xl bg-amber-50 p-3">
+                    <p className="text-[11px] uppercase tracking-[0.15em] text-amber-700">
+                      Neutral
+                    </p>
+                    <p className="mt-1 font-semibold text-amber-700">
+                      {s.neutral}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl bg-red-50 p-3">
+                    <p className="text-[11px] uppercase tracking-[0.15em] text-red-700">
+                      Negative
+                    </p>
+                    <p className="mt-1 font-semibold text-red-700">{s.neg}</p>
+                  </div>
+
+                  <div className="rounded-xl bg-[#F7F3EA] p-3">
+                    <p className="text-[11px] uppercase tracking-[0.15em] text-[#7A5A3A]">
+                      Follow-up
+                    </p>
+                    <p className="mt-1 font-semibold text-[#7A5A3A]">
+                      {s.followUps}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <div className="mb-2 flex items-center justify-between text-xs">
+                    <span className="text-[#7A6753]">Conversion</span>
+                    <span className="font-semibold text-[#2D1F16]">
+                      {s.conversionRate}%
+                    </span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-[#F2EADF]">
+                    <div
+                      className="h-full rounded-full bg-green-600"
+                      style={{ width: `${s.conversionRate}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="rounded-[1.5rem] border border-[#E9E2D6] bg-white shadow-sm p-8 text-center text-sm text-[#9A8572]">
+              No records found for this date.
+            </div>
+          )}
+        </div>
+
+        {/* Desktop table */}
+        <div className="hidden md:block overflow-hidden rounded-[2rem] border border-[#E9E2D6] bg-white shadow-sm">
+          <div className="border-b border-[#F3ECE2] px-6 py-5">
+            <h3 className="text-lg font-semibold text-[#2D1F16]">
+              Student Call Details Overview
+            </h3>
+            <p className="mt-1 text-sm text-[#7A6753]">
+              Student-wise activity, quality, and follow-up visibility
+            </p>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="min-w-full border-collapse">
+              <thead className="bg-[#FBF8F3]">
+                <tr>
+                  <th className="px-6 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9A7B5A]">
+                    Student
                   </th>
-                  <th className="px-6 py-5 text-[10px] font-medium text-[#A1887F] uppercase tracking-widest text-center">
-                    Total Calls
+                  <th className="px-4 py-4 text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9A7B5A]">
+                    Total
                   </th>
-                  <th className="px-6 py-5 text-[10px] font-medium text-[#A1887F] uppercase tracking-widest text-center">
-                    Manual Logs
-                  </th>
-                  <th className="px-6 py-5 text-[10px] font-medium text-[#A1887F] uppercase tracking-widest text-center">
+                  <th className="px-4 py-4 text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9A7B5A]">
                     Unique No.
                   </th>
-                  <th className="px-6 py-5 text-[10px] font-medium uppercase tracking-widest text-center text-green-600">
-                    Pos.
+                  <th className="px-4 py-4 text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-green-700">
+                    Positive
                   </th>
-                  <th className="px-6 py-5 text-[10px] font-medium uppercase tracking-widest text-center text-red-600">
-                    Neg.
+                  <th className="px-4 py-4 text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-700">
+                    Neutral
+                  </th>
+                  <th className="px-4 py-4 text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-red-700">
+                    Negative
+                  </th>
+                  <th className="px-4 py-4 text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9A7B5A]">
+                    Follow-up
+                  </th>
+                  <th className="px-4 py-4 text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9A7B5A]">
+                    Conversion
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#FDFBF7]">
-                {analytics.students.map((s, idx) => (
-                  <tr
-                    key={idx}
-                    className="hover:bg-[#FFFDFB] transition-colors group"
-                  >
-                    <td className="px-10 py-5">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-[#F5F5DC] rounded-xl flex items-center justify-center text-[#8B4513] font-medium">
-                          {s.name.charAt(0)}
+
+              <tbody className="divide-y divide-[#F7F0E6]">
+                {analytics.students.length > 0 ? (
+                  analytics.students.map((s, index) => (
+                    <tr key={s.leadId + index} className="hover:bg-[#FFFDF9]">
+                      <td className="px-6 py-5">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#F5EEDC] font-semibold text-[#8B4513]">
+                            {s.name?.charAt(0)?.toUpperCase() || "S"}
+                          </div>
+                          <div>
+                            <p className="font-medium text-[#2D1F16]">
+                              {s.name}
+                            </p>
+                            <p className="text-xs text-[#8A7968]">{s.email}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium text-sm text-[#3E2723]">
-                            {s.name}
-                          </p>
-                          <p className="text-[10px] text-[#A1887F]">
-                            {s.email}
-                          </p>
+                      </td>
+
+                      <td className="px-4 py-5 text-center font-semibold text-[#2D1F16]">
+                        {s.total}
+                      </td>
+
+                      <td className="px-4 py-5 text-center font-medium text-[#2D1F16]">
+                        {s.uniqueNumbers}
+                      </td>
+
+                      <td className="px-4 py-5 text-center">
+                        <span className="rounded-xl bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+                          {s.pos}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-5 text-center">
+                        <span className="rounded-xl bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+                          {s.neutral}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-5 text-center">
+                        <span className="rounded-xl bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
+                          {s.neg}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-5 text-center">
+                        <span className="rounded-xl bg-[#F7F3EA] px-3 py-1 text-xs font-semibold text-[#7A5A3A]">
+                          {s.followUps}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-5 text-center">
+                        <div className="mx-auto w-[90px]">
+                          <div className="mb-1 flex items-center justify-between text-xs">
+                            <span className="font-semibold text-[#2D1F16]">
+                              {s.conversionRate}%
+                            </span>
+                          </div>
+                          <div className="h-2 overflow-hidden rounded-full bg-[#F2EADF]">
+                            <div
+                              className="h-full rounded-full bg-green-600"
+                              style={{ width: `${s.conversionRate}%` }}
+                            />
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-5 text-center font-medium text-[#4A2C2A]">
-                      {s.total}
-                    </td>
-                    <td className="px-6 py-5 text-center">
-                      <span className="px-3 py-1 bg-[#FDF5E6] text-[#8B4513] rounded-lg text-xs font-medium">
-                        {s.manual}
-                      </span>
-                    </td>
-                    <td className="px-6 py-5 text-center font-medium text-[#4A2C2A]">
-                      {s.numbers.size}
-                    </td>
-                    <td className="px-6 py-5 text-center">
-                      <span className="px-3 py-1 bg-green-50 text-green-700 rounded-lg text-xs font-medium">
-                        {s.pos}
-                      </span>
-                    </td>
-                    <td className="px-6 py-5 text-center">
-                      <span className="px-3 py-1 bg-red-50 text-red-700 rounded-lg text-xs font-medium">
-                        {s.neg}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-                {analytics.students.length === 0 && (
+                      </td>
+                    </tr>
+                  ))
+                ) : (
                   <tr>
                     <td
-                      colSpan={5}
-                      className="py-20 text-center text-[#D2B48C] font-medium italic"
+                      colSpan={8}
+                      className="px-6 py-16 text-center text-sm text-[#9A8572]"
                     >
                       No records found for this date.
                     </td>
