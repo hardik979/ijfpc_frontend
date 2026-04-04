@@ -8,3 +8,6 @@ declare global {
     }
   }
 }
+
+// Allow importing CSS files
+declare module '*.css';
