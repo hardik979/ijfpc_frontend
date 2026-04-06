@@ -23,6 +23,7 @@ export const ACCESS: Record<string, readonly Role[]> = {
   "/founder": [ROLES.SUPER_ADMIN, ROLES.FOUNDER],
   "/admin": [ROLES.SUPER_ADMIN],
   "/students-call-reports": [ROLES.SUPER_ADMIN, ROLES.CALLING_STAFF],
+  "/resume-builder": [ROLES.SUPER_ADMIN, ROLES.CALLING_STAFF],
 } as const;
 
 export function isAllowed(pathname: string, role?: string) {

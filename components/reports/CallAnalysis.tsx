@@ -49,9 +49,11 @@ interface CallAnalysisProps {
 }
 
 export default function CallAnalysis({ reports }: CallAnalysisProps) {
+
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [selectedRecording, setSelectedRecording] = useState<RecordingReport | null>(null);
+
 
   // Group recordings by Student
   const studentGroups = useMemo(() => {

@@ -9,7 +9,10 @@ import {
   LayoutDashboard,
   BarChart3,
   ChevronDown,
+  FileText,
 } from "lucide-react";
+import Link from "next/link";
+
 import DailyCallReport from "@/components/reports/DailyCallReport";
 import CallAnalysis from "@/components/reports/CallAnalysis";
 
@@ -109,6 +112,14 @@ export default function StudentsCallReports() {
           </div>
 
           <div className="flex items-center gap-6">
+            <Link 
+              href="/resume-builder"
+              className="flex items-center gap-3 px-8 py-4 bg-white text-[#8B4513] border border-[#EFEBE9] rounded-3xl font-medium text-sm transition-all duration-300 hover:bg-[#FAF9F6] hover:shadow-md shadow-sm group"
+            >
+              <FileText className="w-4 h-4 text-[#D2B48C] group-hover:text-[#8B4513] transition-colors" />
+              <span>Resume Builder</span>
+            </Link>
+
             {/* Premium Date Picker */}
             <div className="relative group">
                <CalendarIcon className="absolute left-6 top-1/2 -translate-y-1/2 text-[#D2B48C] w-5 h-5 pointer-events-none group-focus-within:text-[#8B4513]" />
