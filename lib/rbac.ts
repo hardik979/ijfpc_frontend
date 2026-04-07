@@ -22,7 +22,11 @@ export const ACCESS: Record<string, readonly Role[]> = {
   "/remaining-notification": [ROLES.SUPER_ADMIN, ROLES.FEE_STAFF], // adjust as needed
   "/founder": [ROLES.SUPER_ADMIN, ROLES.FOUNDER],
   "/admin": [ROLES.SUPER_ADMIN],
-  "/students-call-reports": [ROLES.SUPER_ADMIN, ROLES.CALLING_STAFF],
+  "/students-call-reports": [
+    ROLES.SUPER_ADMIN,
+    ROLES.CALLING_STAFF,
+    ROLES.FEE_STAFF,
+  ],
   "/resume-builder": [ROLES.SUPER_ADMIN, ROLES.CALLING_STAFF],
 } as const;
 

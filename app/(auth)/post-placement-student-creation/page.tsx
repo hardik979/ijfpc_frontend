@@ -39,7 +39,7 @@ export default function ITJobsFactoryDashboard() {
       description: "Daily Hr calls report",
       icon: ScrollTextIcon,
       gradient: "from-pink-400 to-red-500",
-      path: "/post-placement-student-creation/HR-call-report",
+      path: "/student-call-reports",
     },
   ];
 
