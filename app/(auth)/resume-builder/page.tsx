@@ -15,22 +15,19 @@ import {
 } from "lucide-react";
 import { BlobProvider } from "@react-pdf/renderer";
 
-import {ResumeDocumentRouter} from "@/components/resume-builder/ResumePDF"
+import { ResumeDocumentRouter } from "@/components/resume-builder/ResumePDF"
 import ResumeFormStep4 from "./ResumeFormStep4";
 import ResumeFormStep3 from "./ResumeFormStep3";
 import ResumeFormStep1 from "./ResumeFormStep1";
 import ResumeFormStep2 from "./ResumeFormStep2";
-//import ResumeFormStepProjects from "./ResumeFormStepProjects";
 import ResumeFormStep5 from "./ResumeFormStep5";
 import ResumePlayground, {
   PlaygroundDesign,
 } from "./ResumePlayground";
 
-//import type { ResumeData } from "@/types/resume";
 import type { ResumeData } from "@/lib/resume";
 import RestoreDraftDialog from "@/components/resume-builder/RestoreDraftDialog";
-//import { useResumeDraft } from "@/lib/hooks/useResumeDraft";
-import {useResumeDraft} from "@/lib/hooks/useResumeDraft"
+import { useResumeDraft } from "@/lib/hooks/useResumeDraft"
 
 const STEPS = [
   {
@@ -162,11 +159,13 @@ function StepHeader({
   title,
   subtitle,
   gradient,
+  skillsInput
 }: {
   icon: any;
   title: string;
   subtitle?: string;
   gradient: string;
+  skillsInput?: string[];
 }) {
   return (
     <div className="flex flex-col items-center text-center pb-6 mb-6 border-b border-gray-50">
@@ -399,6 +398,7 @@ export default function ResumeBuilderPage() {
                     jobRole: resumeData.role || resumeData.jobRole || "",
                     experienceYears: resumeData.experienceYears,
                     languages: resumeData.languages ?? [],
+                    domain: (resumeData as any).domain || "",
                   }}
                   onNext={(data) => handleNext(data)}
                 />
@@ -439,6 +439,7 @@ export default function ResumeBuilderPage() {
                   initialExperience={resumeData.experience as any}
                   onBack={handleBack}
                   onNext={(data) => handleNext(data)}
+                  skillsInput={resumeData?.skillsInput}
                 />
               </div>
             </StepCard>
@@ -485,6 +486,11 @@ export default function ResumeBuilderPage() {
                     }
 
                     setStep(6);
+                  }}
+                  resumeData={{
+                    skillsInput: Array.isArray(resumeData?.skillsInput)
+                      ? resumeData.skillsInput.join(", ")
+                      : resumeData?.skillsInput
                   }}
                 />
               </div>
@@ -602,7 +608,7 @@ export default function ResumeBuilderPage() {
               </div>
             </div>
           )}
-          
+
         </div>
 
         <aside className="hidden lg:flex flex-col gap-4 sticky top-24">
@@ -636,10 +642,10 @@ export default function ResumeBuilderPage() {
 
                     <span
                       className={`text-sm ${active
-                          ? "font-semibold text-gray-900"
-                          : done
-                            ? "text-gray-500"
-                            : "text-gray-300"
+                        ? "font-semibold text-gray-900"
+                        : done
+                          ? "text-gray-500"
+                          : "text-gray-300"
                         }`}
                     >
                       {s.title}

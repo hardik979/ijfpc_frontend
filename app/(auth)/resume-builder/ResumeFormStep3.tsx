@@ -382,10 +382,12 @@ export default function ResumeFormStep3({
   onNext,
   onBack,
   initialExperience,
+  skillsInput
 }: {
   onNext: (data: Step3Form) => void;
   onBack: () => void;
   initialExperience?: ExperienceEntry[];
+  skillsInput?: string | string[];
 }) {
   const defaultEntry = (): ExperienceEntry => ({
     jobTitle: "",
@@ -396,6 +398,9 @@ export default function ResumeFormStep3({
     bullets: [""],
     isCurrent: false,
   });
+
+  console.log('skillsInput --->', skillsInput);
+
 
   const normalizedInitialExperience =
     initialExperience && initialExperience.length
@@ -452,54 +457,70 @@ export default function ResumeFormStep3({
       setLoading(false);
     }, 300);
   };
-
+ 
   const generateAI = async (index: number) => {
-    const job = getValues(`experience.${index}.jobTitle`)?.trim();
-    const company = getValues(`experience.${index}.company`)?.trim();
-    const tech = getValues(`experience.${index}.techStack`) || "SQL, Linux";
+  const job = getValues(`experience.${index}.jobTitle`)?.trim();
+  const company = getValues(`experience.${index}.company`)?.trim();
+  const tech = getValues(`experience.${index}.techStack`) || "SQL, Linux";
 
-    if (!job || !company) {
-      alert("Please enter job title and company before generating.");
-      return;
-    }
+  if (!job || !company) {
+    alert("Please enter job title and company before generating.");
+    return;
+  }
 
-    const techStack = tech
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
+  const techStack = tech
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
 
-    setAiLoading(index);
+ let cleanedSkills: string[] = [];
 
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_LMS_URL}/api/ai/generate-experience`, {
+if (Array.isArray(skillsInput)) {
+  cleanedSkills = skillsInput
+    .map((s) => String(s || "").trim())
+    .filter(Boolean);
+} else if (typeof skillsInput === "string") {
+  cleanedSkills = skillsInput
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+  setAiLoading(index);
+
+  try {
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_LMS_URL}/api/ai/generate-experience`,
+      {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           jobTitle: job,
           company,
           techStack,
+          skills: cleanedSkills, // ✅ pass skills also
         }),
-      });
-
-      if (!res.ok) {
-        throw new Error("Failed to generate AI bullets");
       }
+    );
 
-      const data = await res.json();
-      const cleanedBullets = sanitizeAIBullets(data?.bullets);
-
-      setValue(`experience.${index}.bullets`, cleanedBullets, {
-        shouldDirty: true,
-        shouldTouch: true,
-        shouldValidate: true,
-      });
-    } catch (err) {
-      console.error("AI generation failed:", err);
-      alert("AI generation failed. Try again.");
-    } finally {
-      setAiLoading(null);
+    if (!res.ok) {
+      throw new Error("Failed to generate AI bullets");
     }
-  };
+
+    const data = await res.json();
+    const cleanedBullets = sanitizeAIBullets(data?.bullets);
+
+    setValue(`experience.${index}.bullets`, cleanedBullets, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+  } catch (err) {
+    console.error("AI generation failed:", err);
+    alert("AI generation failed. Try again.");
+  } finally {
+    setAiLoading(null);
+  }
+};
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">

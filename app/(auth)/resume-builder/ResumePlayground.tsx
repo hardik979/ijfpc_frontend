@@ -24,10 +24,21 @@ import {
 
 import { ResumeDocumentRouter } from "@/components/resume-builder/ResumePDF";
 import { getCroppedImage } from "@/utils/getCroppedImage";
-import type { ResumeData, TemplateKey } from "@/lib/resume";
+import type { ResumeData, TemplateKey, ResumeFontFamily } from "@/lib/resume";
+import {
+  uploadedPdfTemplateOptions,
+  type UploadedPdfTemplateKey,
+} from "@/components/resume-builder/uploadedPdfResumeTemplates";
 
 const A4_WIDTH = 794;
 const A4_HEIGHT = 1123;
+
+const uploadedLayouts = uploadedPdfTemplateOptions.map((item) => ({
+  key: item.key as TemplateKey,
+  name: item.label,
+  note: "Imported PDF-inspired template",
+  icon: "🧾",
+}));
 
 const LAYOUTS: Array<{
   key: TemplateKey;
@@ -35,67 +46,54 @@ const LAYOUTS: Array<{
   note: string;
   icon: string;
 }> = [
-  {
-    key: "classicSidebar",
-    name: "Classic Sidebar",
-    note: "Left rail, content right",
-    icon: "📄",
-  },
-  {
-    key: "accentHeader",
-    name: "Accent Header",
-    note: "Top band, photo right",
-    icon: "🎯",
-  },
-  {
-    key: "splitTwoColumn",
-    name: "Split Two-Column",
-    note: "Balanced two columns",
-    icon: "📊",
-  },
-  {
-    key: "timeline",
-    name: "Timeline",
-    note: "Vertical timeline of jobs",
-    icon: "⏱️",
-  },
-  {
-    key: "minimalClean",
-    name: "Minimal Clean",
-    note: "Single column, airy",
-    icon: "✨",
-  },
-  {
-    key: "modernCorporate",
-    name: "Modern Corporate",
-    note: "Clean 2-column, subtle blue",
-    icon: "🏢",
-  },
-  {
-    key: "atsCompact",
-    name: "ATS Compact",
-    note: "Simple single column, ATS-safe",
-    icon: "✅",
-  },
-  {
-    key: "elegantSidebar",
-    name: "Elegant Sidebar",
-    note: "Right sidebar, muted tones",
-    icon: "🪄",
-  },
-];
+    { key: "classicSidebar", name: "Classic Sidebar", note: "Dark left rail, content right", icon: "📄" },
+    { key: "accentHeader", name: "Accent Header", note: "Colored band, two-col bottom", icon: "🎯" },
+    { key: "splitTwoColumn", name: "Split Two-Column", note: "Info left, work right", icon: "📊" },
+    { key: "timeline", name: "Timeline", note: "Left-border experience timeline", icon: "⏱️" },
+    { key: "minimalClean", name: "Minimal Clean", note: "Accent strip, airy single column", icon: "✨" },
+    { key: "modernCorporate", name: "Modern Corporate", note: "Card header with photo, 65/35", icon: "🏢" },
+    { key: "atsCompact", name: "ATS Compact", note: "Plain single column, ATS-safe", icon: "✅" },
+    { key: "elegantSidebar", name: "Elegant Sidebar", note: "Soft-toned light sidebar", icon: "🪄" },
+    { key: "template9", name: "Modern Left Bar", note: "Solid color left column", icon: "🖤" },
+    { key: "template10", name: "Simple Header", note: "Bold gradient header strip", icon: "🎨" },
+    { key: "template11", name: "Compact Pro", note: "Strip header, 3-column footer", icon: "💼" },
+    { key: "template12", name: "Bold Name", note: "Oversized name, underline rule", icon: "✍️" },
+    { key: "template13", name: "Infographic Bar", note: "Visual skill-bar sidebar", icon: "📈" },
+    { key: "template14", name: "Top Contact Bar", note: "Contact info banner at top", icon: "📌" },
+    { key: "template15", name: "Executive", note: "Right sidebar, premium feel", icon: "👔" },
+    { key: "template16", name: "Two-Tone Split", note: "Soft left panel, white right", icon: "🎭" },
+    { key: "template17", name: "Minimalist Line", note: "Thin rules, uppercase labels", icon: "📐" },
+    { key: "template18", name: "Card Stack", note: "Each section in a bordered card", icon: "🃏" },
+    { key: "template19", name: "Fresh Graduate", note: "Photo + name side by side", icon: "🎓" },
+    { key: "template20", name: "Tech Dark", note: "Dark themed, inverted sidebar", icon: "💻" },
+    {
+      key: "naukriStyle",
+      name: "Naukri Style",
+      note: "Recruiter-friendly Naukri inspired format",
+      icon: "📘",
+    },
+    ...uploadedLayouts
+  ];
 
 const themePills = [
   { key: "blue", name: "Blue", dot: "from-blue-500 to-indigo-600" },
   { key: "slate", name: "Slate", dot: "from-slate-500 to-slate-700" },
   { key: "emerald", name: "Emerald", dot: "from-emerald-500 to-teal-600" },
+  { key: "purple", name: "Purple", dot: "from-purple-500 to-violet-700" },
+  { key: "rose", name: "Rose", dot: "from-rose-500 to-pink-600" },
+  { key: "teal", name: "Teal", dot: "from-teal-500 to-cyan-600" },
+  { key: "amber", name: "Amber", dot: "from-amber-500 to-orange-600" },
 ] as const;
 
-const fontFamilies = [
+type ThemeKey = (typeof themePills)[number]["key"];
+
+const fontFamilies: Array<{ key: ResumeFontFamily; name: string }> = [
   { key: "Helvetica", name: "Helvetica" },
   { key: "Times-Roman", name: "Times" },
   { key: "Courier", name: "Courier" },
-] as const;
+  { key: "Roboto", name: "Roboto" },
+
+];
 
 const fontSizes = [
   { key: "small", name: "Small", value: 10 },
@@ -103,42 +101,17 @@ const fontSizes = [
   { key: "large", name: "Large", value: 14 },
 ] as const;
 
-// function AutoFitA4({
-//   children,
-//   zoomMul,
-// }: {
-//   children: (dims: { w: number; h: number }) => React.ReactNode;
-//   zoomMul: number;
-// }) {
-//   const wrapRef = useRef<HTMLDivElement | null>(null);
-//   const [viewerW, setViewerW] = useState<number>(600);
+function isValidTheme(value: unknown): value is ThemeKey {
+  return themePills.some((t) => t.key === value);
+}
 
-//   useEffect(() => {
-//     if (!wrapRef.current) return;
+function isValidFontFamily(value: unknown): value is ResumeFontFamily {
+  return fontFamilies.some((f) => f.key === value);
+}
 
-//     const ro = new ResizeObserver(([entry]) => {
-//       const maxW = entry.contentRect.width;
-//       const baseFit = Math.max(320, Math.min(maxW - 48, 1200));
-//       setViewerW(Math.round(baseFit * zoomMul));
-//     });
-
-//     ro.observe(wrapRef.current);
-//     return () => ro.disconnect();
-//   }, [zoomMul]);
-
-//   const aspect = A4_HEIGHT / A4_WIDTH;
-
-//   return (
-//     <div ref={wrapRef} className="w-full flex justify-center">
-//       <div
-//         className="overflow-hidden rounded-[20px] border border-violet-100 bg-white shadow-[0_20px_70px_rgba(76,29,149,0.12)] ring-1 ring-violet-100/70"
-//         style={{ width: viewerW, height: viewerW * aspect, flexShrink: 0 }}
-//       >
-//         {children({ w: viewerW, h: viewerW * aspect })}
-//       </div>
-//     </div>
-//   );
-// }
+function isValidTemplateKey(value: unknown): value is TemplateKey {
+  return LAYOUTS.some((t) => t.key === value);
+}
 
 function AutoFitA4({
   children,
@@ -156,12 +129,12 @@ function AutoFitA4({
     const ro = new ResizeObserver(([entry]) => {
       const maxW = entry.contentRect.width;
       const baseFit = Math.max(320, Math.min(maxW - 48, 1200));
-      setBaseW(Math.round(baseFit)); // ← no zoomMul here anymore
+      setBaseW(Math.round(baseFit));
     });
 
     ro.observe(wrapRef.current);
     return () => ro.disconnect();
-  }, []); // ← removed zoomMul from deps
+  }, []);
 
   const aspect = A4_HEIGHT / A4_WIDTH;
   const scaledW = Math.round(baseW * zoomMul);
@@ -169,12 +142,10 @@ function AutoFitA4({
 
   return (
     <div ref={wrapRef} className="w-full flex justify-center">
-      {/* Outer box clips to the scaled size */}
       <div
         className="overflow-hidden rounded-[20px] border border-violet-100 bg-white shadow-[0_20px_70px_rgba(76,29,149,0.12)] ring-1 ring-violet-100/70"
         style={{ width: scaledW, height: scaledH, flexShrink: 0 }}
       >
-        {/* Inner wrapper is always natural size, scaled via CSS */}
         <div
           style={{
             width: baseW,
@@ -194,18 +165,18 @@ export type PlaygroundDesign = {
   about: string;
   photo: string | null;
   layout: TemplateKey;
-  theme: "blue" | "slate" | "emerald";
-  fontFamily: "Helvetica" | "Times-Roman" | "Courier";
+  theme: ThemeKey;
+  fontFamily: ResumeFontFamily;
   fontSize: number;
 };
 
 type ResumeWithExtras = ResumeData & {
   summary: string;
   layout: TemplateKey;
-  profileImage: string | undefined;
-  photo: string | undefined;
-  theme: "blue" | "slate" | "emerald";
-  fontFamily: "Helvetica" | "Times-Roman" | "Courier";
+  profileImage?: string;
+  photo?: string;
+  theme: ThemeKey;
+  fontFamily: ResumeFontFamily;
   fontSize: number;
 };
 
@@ -216,33 +187,39 @@ type Props = {
 };
 
 export default function ResumePlayground({ data, onNext, onBack }: Props) {
-  const initialAbout = useMemo(
-    () => (typeof data.summary === "string" ? data.summary : "") ?? "",
-    [data.summary]
-  );
+  const safeData = data as ResumeData & {
+    layout?: TemplateKey;
+    profileImage?: string;
+    photo?: string;
+    theme?: ThemeKey;
+    fontFamily?: ResumeFontFamily;
+    fontSize?: number;
+  };
 
-  const initialPhoto = (data.profileImage ?? data.photo ?? null) as
-    | string
-    | null;
+  const initialAbout = useMemo(() => {
+    return typeof data.summary === "string" ? data.summary : "";
+  }, [data.summary]);
+
+  const initialPhoto = (safeData.profileImage ?? safeData.photo ?? null) as string | null;
 
   const [about, setAbout] = useState<string>(initialAbout);
   const [layout, setLayout] = useState<TemplateKey>(
-    data.layout ?? "classicSidebar"
+    isValidTemplateKey(safeData.layout) ? safeData.layout : "classicSidebar"
   );
   const [photo, setPhoto] = useState<string | null>(initialPhoto);
   const [rawPhotoSrc, setRawPhotoSrc] = useState<string | null>(null);
   const [showCropper, setShowCropper] = useState<boolean>(false);
 
-  const [selectedTheme, setSelectedTheme] = useState<
-    "blue" | "slate" | "emerald"
-  >(data.theme ?? "blue");
+  const [selectedTheme, setSelectedTheme] = useState<ThemeKey>(
+    isValidTheme(safeData.theme) ? safeData.theme : "blue"
+  );
 
-  const [selectedFontFamily, setSelectedFontFamily] = useState<
-    "Helvetica" | "Times-Roman" | "Courier"
-  >(data.fontFamily ?? "Helvetica");
+  const [selectedFontFamily, setSelectedFontFamily] = useState<ResumeFontFamily>(
+    isValidFontFamily(safeData.fontFamily) ? safeData.fontFamily : "Helvetica"
+  );
 
   const [selectedFontSize, setSelectedFontSize] = useState<number>(
-    data.fontSize ?? 12
+    typeof safeData.fontSize === "number" ? safeData.fontSize : 12
   );
 
   const [crop, setCrop] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -252,7 +229,6 @@ export default function ResumePlayground({ data, onNext, onBack }: Props) {
 
   const onFileSelect = (file: File) => {
     const reader = new FileReader();
-
     reader.onload = () => {
       const result = reader.result as string;
       setRawPhotoSrc(result);
@@ -261,11 +237,10 @@ export default function ResumePlayground({ data, onNext, onBack }: Props) {
       setZoom(1.2);
       setCroppedAreaPixels(null);
     };
-
     reader.readAsDataURL(file);
   };
 
-  const onCropComplete = (_: Area, pixels: Area) => {
+  const onCropComplete = (_croppedArea: Area, pixels: Area) => {
     setCroppedAreaPixels(pixels);
   };
 
@@ -291,7 +266,7 @@ export default function ResumePlayground({ data, onNext, onBack }: Props) {
     }
   };
 
-  const effectivePhoto = photo ?? data.profileImage ?? data.photo ?? undefined;
+  const effectivePhoto = photo ?? safeData.profileImage ?? safeData.photo ?? undefined;
 
   const mergedData: ResumeWithExtras = {
     ...data,
@@ -304,11 +279,7 @@ export default function ResumePlayground({ data, onNext, onBack }: Props) {
     fontSize: selectedFontSize,
   };
 
-  const docKey = useMemo(() => {
-    return JSON.stringify({
-      data: mergedData,
-    });
-  }, [mergedData]);
+  const docKey = useMemo(() => JSON.stringify(mergedData), [mergedData]);
 
   return (
     <div className="flex min-h-[calc(100vh-64px)] bg-[radial-gradient(circle_at_top_left,_rgba(139,92,246,0.12),_transparent_28%),linear-gradient(180deg,#faf7ff_0%,#ffffff_48%,#f8fbff_100%)] text-gray-900">
@@ -321,9 +292,7 @@ export default function ResumePlayground({ data, onNext, onBack }: Props) {
             <Sparkles className="h-5 w-5 text-white" />
           </div>
           <div>
-            <h2 className="text-lg font-bold tracking-tight text-gray-900">
-              Design Studio
-            </h2>
+            <h2 className="text-lg font-bold tracking-tight text-gray-900">Design Studio</h2>
             <p className="mt-0.5 text-xs text-gray-500">
               Customize your resume with a premium layout.
             </p>
@@ -336,83 +305,79 @@ export default function ResumePlayground({ data, onNext, onBack }: Props) {
             <p className="text-sm font-semibold text-gray-800">Design Tips</p>
           </div>
           <p className="mt-1.5 text-xs leading-5 text-gray-500">
-            Pick a layout, refine your summary, and adjust theme and typography
-            for a stronger preview.
+            Pick a layout, refine your summary, and adjust theme and typography for a stronger preview.
           </p>
         </div>
 
         <div className="mb-6">
           <div className="mb-3 flex items-center gap-2">
             <Layout className="h-4 w-4 text-violet-600" />
-            <div className="text-sm font-semibold text-gray-900">
-              Layout Style
-            </div>
+            <div className="text-sm font-semibold text-gray-900">Layout Style</div>
+            <span className="ml-auto rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-700">
+              {LAYOUTS.length} templates
+            </span>
           </div>
 
-          <div className="space-y-2">
-            {LAYOUTS.map((t) => (
-              <label
-                key={t.key}
-                className={[
-                  "block cursor-pointer rounded-xl border p-3 transition-all duration-200",
-                  layout === t.key
-                    ? "border-violet-200 bg-gradient-to-r from-violet-50 to-indigo-50 shadow-sm ring-1 ring-violet-100"
-                    : "border-gray-200 bg-white hover:border-violet-200 hover:bg-violet-50/40",
-                ].join(" ")}
-              >
-                <input
-                  type="radio"
-                  name="layout"
-                  value={t.key}
-                  checked={layout === t.key}
-                  onChange={() => setLayout(t.key)}
-                  className="sr-only"
-                />
-
-                <div className="flex items-center gap-2.5">
-                  <span className="text-lg">{t.icon}</span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-semibold text-gray-900">
-                        {t.name}
-                      </span>
+          <div className="rounded-2xl border border-violet-100 bg-white p-3 shadow-sm">
+            <div className="max-h-[420px] overflow-y-auto pr-1">
+              <div className="grid grid-cols-2 gap-3">
+                {LAYOUTS.map((t) => (
+                  <button
+                    key={t.key}
+                    type="button"
+                    onClick={() => setLayout(t.key)}
+                    className={[
+                      "group relative rounded-2xl border p-3 text-left transition-all duration-200",
+                      layout === t.key
+                        ? "border-violet-300 bg-gradient-to-br from-violet-50 to-indigo-50 ring-2 ring-violet-100 shadow-sm"
+                        : "border-gray-200 bg-white hover:border-violet-200 hover:bg-violet-50/40",
+                    ].join(" ")}
+                  >
+                    <div className="mb-2 flex items-start justify-between gap-2">
+                      <span className="text-xl">{t.icon}</span>
                       {layout === t.key && (
                         <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-sm">
                           <Check className="h-3 w-3" />
                         </div>
                       )}
                     </div>
-                    <div className="text-[11px] text-gray-400">{t.note}</div>
-                  </div>
-                </div>
-              </label>
-            ))}
+
+                    <div className="space-y-1">
+                      <div className="line-clamp-1 text-xs font-semibold text-gray-900">
+                        {t.name}
+                      </div>
+                      <div className="line-clamp-2 text-[10px] leading-4 text-gray-500">
+                        {t.note}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
         <div className="mb-6 rounded-2xl border border-violet-100 bg-white p-4 shadow-sm">
           <div className="mb-3 flex items-center gap-2">
             <Palette className="h-4 w-4 text-violet-600" />
-            <h3 className="text-sm font-semibold text-gray-900">
-              Theme Accent
-            </h3>
+            <h3 className="text-sm font-semibold text-gray-900">Theme Accent</h3>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             {themePills.map((theme) => (
               <button
                 key={theme.key}
                 type="button"
                 onClick={() => setSelectedTheme(theme.key)}
                 className={[
-                  "rounded-xl border px-3 py-2.5 text-xs font-semibold transition-all",
+                  "rounded-xl border px-2 py-2 text-[11px] font-semibold transition-all",
                   selectedTheme === theme.key
                     ? "border-violet-200 bg-violet-50 text-violet-700 ring-1 ring-violet-100"
                     : "border-gray-200 bg-white text-gray-600 hover:border-violet-200",
                 ].join(" ")}
               >
                 <div
-                  className={`mx-auto mb-1.5 h-2.5 w-8 rounded-full bg-gradient-to-r ${theme.dot}`}
+                  className={`mx-auto mb-1.5 h-2.5 w-6 rounded-full bg-gradient-to-r ${theme.dot}`}
                 />
                 {theme.name}
               </button>
@@ -433,11 +398,12 @@ export default function ResumePlayground({ data, onNext, onBack }: Props) {
               </label>
               <select
                 value={selectedFontFamily}
-                onChange={(e) =>
-                  setSelectedFontFamily(
-                    e.target.value as "Helvetica" | "Times-Roman" | "Courier"
-                  )
-                }
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (isValidFontFamily(value)) {
+                    setSelectedFontFamily(value);
+                  }
+                }}
                 className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 outline-none transition-all focus:border-violet-400 focus:ring-4 focus:ring-violet-100"
               >
                 {fontFamilies.map((font) => (
@@ -470,9 +436,7 @@ export default function ResumePlayground({ data, onNext, onBack }: Props) {
         <div className="mb-6 rounded-2xl border border-violet-100 bg-white p-4 shadow-sm">
           <div className="mb-3 flex items-center gap-2">
             <Camera className="h-4 w-4 text-violet-600" />
-            <h3 className="text-sm font-semibold text-gray-900">
-              Profile Photo
-            </h3>
+            <h3 className="text-sm font-semibold text-gray-900">Profile Photo</h3>
           </div>
 
           <div className="mb-3 flex items-center gap-3">
@@ -558,7 +522,6 @@ export default function ResumePlayground({ data, onNext, onBack }: Props) {
                   >
                     Cancel
                   </button>
-
                   <button
                     type="button"
                     onClick={saveCrop}
@@ -575,11 +538,8 @@ export default function ResumePlayground({ data, onNext, onBack }: Props) {
         <div className="mb-6">
           <div className="mb-2 flex items-center gap-2">
             <FileText className="h-4 w-4 text-violet-600" />
-            <div className="text-sm font-semibold text-gray-900">
-              Profile Summary
-            </div>
+            <div className="text-sm font-semibold text-gray-900">Profile Summary</div>
           </div>
-
           <textarea
             value={about}
             onChange={(e) => setAbout(e.target.value)}
@@ -587,7 +547,6 @@ export default function ResumePlayground({ data, onNext, onBack }: Props) {
             className="w-full rounded-xl border border-gray-200 bg-white p-3 text-sm text-gray-700 outline-none transition-all duration-200 placeholder:text-gray-300 hover:border-violet-300 focus:border-violet-400 focus:ring-4 focus:ring-violet-100 resize-none"
             placeholder="Write a compelling 3–5 line summary about yourself..."
           />
-
           <div className="mt-1 text-xs font-medium text-gray-400">
             {about.length} characters
           </div>
@@ -635,9 +594,7 @@ export default function ResumePlayground({ data, onNext, onBack }: Props) {
                 <Monitor className="h-3 w-3" />
                 Live Preview
               </div>
-              <h1 className="text-xl font-bold tracking-tight text-gray-900">
-                Resume Preview
-              </h1>
+              <h1 className="text-xl font-bold tracking-tight text-gray-900">Resume Preview</h1>
               <p className="mt-0.5 text-xs text-gray-500">
                 Your resume updates in real time while you refine the design.
               </p>
@@ -646,9 +603,7 @@ export default function ResumePlayground({ data, onNext, onBack }: Props) {
             <div className="flex w-fit items-center gap-2.5 rounded-xl border border-violet-100 bg-white px-3 py-2 shadow-sm">
               <button
                 type="button"
-                onClick={() =>
-                  setZoomMul((z) => Math.max(0.5, +(z - 0.05).toFixed(2)))
-                }
+                onClick={() => setZoomMul((z) => Math.max(0.4, +(z - 0.05).toFixed(2)))}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gray-100 text-gray-700 transition-all hover:bg-gray-200"
                 aria-label="Zoom out"
               >
@@ -661,9 +616,7 @@ export default function ResumePlayground({ data, onNext, onBack }: Props) {
 
               <button
                 type="button"
-                onClick={() =>
-                  setZoomMul((z) => Math.min(1.5, +(z + 0.05).toFixed(2)))
-                }
+                onClick={() => setZoomMul((z) => Math.min(1.5, +(z + 0.05).toFixed(2)))}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gray-100 text-gray-700 transition-all hover:bg-gray-200"
                 aria-label="Zoom in"
               >
@@ -687,9 +640,7 @@ export default function ResumePlayground({ data, onNext, onBack }: Props) {
                           className="flex flex-col items-center justify-center bg-white gap-3"
                         >
                           <div className="h-8 w-8 animate-spin rounded-full border-4 border-violet-200 border-t-violet-600" />
-                          <span className="text-sm text-gray-400">
-                            Rendering PDF...
-                          </span>
+                          <span className="text-sm text-gray-400">Rendering PDF...</span>
                         </div>
                       );
                     }
