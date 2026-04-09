@@ -1,9 +1,12 @@
+import { UploadedPdfTemplateKey } from "@/components/resume-builder/uploadedPdfResumeTemplates";
+
 export type EducationEntry = {
   degree?: string;
   institution?: string;
   startYear?: string;
   endYear?: string;
   currentlyStudying?: boolean;
+  highlights?: string[];
 };
 
 export type ProjectEntry = {
@@ -21,10 +24,42 @@ export type TemplateKey =
   | "minimalClean"
   | "modernCorporate"
   | "atsCompact"
-  | "elegantSidebar";
+  | "elegantSidebar"
+  | "template9"
+  | "template10"
+  | "template11"
+  | "template12"
+  | "template13"
+  | "template14"
+  | "template15"
+  | "template16"
+  | "template17"
+  | "template18"
+  | "template19"
+  | "template20"
+  | "naukriStyle"
+  | UploadedPdfTemplateKey;
 
-export type ResumeTheme = "blue" | "slate" | "emerald";
-export type ResumeFontFamily = "Helvetica" | "Times-Roman" | "Courier";
+export type ResumeTheme =
+  | "blue"
+  | "slate"
+  | "emerald"
+  | "purple"
+  | "rose"
+  | "teal"
+  | "amber";
+
+export type ResumeFontFamily =
+  | "Helvetica"
+  | "Times-Roman"
+  | "Courier"
+  | "Roboto"
+  | "Lato"
+  | "Montserrat"
+  | "OpenSans"
+  | "SourceSansPro"
+  | "Merriweather"
+  | "Nunito";
 
 export type ExperienceEntry = {
   jobTitle?: string;
@@ -43,6 +78,7 @@ export type ResumeData = {
   fullName?: string;
   role?: string;
   jobRole?: string;
+  domain?: string;
   experienceYears?: number;
 
   summary?: string;
@@ -56,7 +92,7 @@ export type ResumeData = {
   photo?: string | null;
 
   skills?: string[];
-  skillsInput?: string;
+  skillsInput?: string | string[];
   languages?: string[];
 
   education?: EducationEntry[];
@@ -64,7 +100,6 @@ export type ResumeData = {
   projects?: ProjectEntry[];
 
   layout?: TemplateKey;
-
   theme?: ResumeTheme;
   fontFamily?: ResumeFontFamily;
   fontSize?: number;

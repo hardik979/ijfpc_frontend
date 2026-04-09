@@ -1,12 +1,9 @@
-// app/(auth)/student-dashboard/resume-builder/ResumeFormStep1.tsx
 "use client";
 
 import { useForm } from "react-hook-form";
 import { useCallback, useEffect, useState } from "react";
 import Cropper, { Area } from "react-easy-crop";
 import { getCroppedImage } from "@/utils/getCroppedImage";
-//import { API_BASE_URL } from "@/lib/api";
-//import type { ResumeData } from "@/types/resume";
 import type { ResumeData } from "@/lib/resume";
 import {
   Sparkles,
@@ -25,9 +22,18 @@ import {
   ZoomIn,
   CheckCircle2,
   Languages,
-  Plus,
+  Building2,
 } from "lucide-react";
-import next from "next";
+
+const LANGUAGE_OPTIONS = ["English", "Hindi"] as const;
+
+const DOMAIN_OPTIONS = [
+  "Healthcare",
+  "E-commerce",
+  "Telecom",
+  "BFSI",
+  "Sports management"
+] as const;
 
 type Step1Data = Pick<
   ResumeData,
@@ -44,7 +50,9 @@ type Step1Data = Pick<
   | "experienceYears"
   | "languages"
   | "role"
->;
+> & {
+  domain?: string;
+};
 
 interface Step1Props {
   onNext: (data: Step1Data) => void;
@@ -53,7 +61,6 @@ interface Step1Props {
 
 const MAX_SUMMARY_LENGTH = 1000;
 
-/* ── tiny helper: field wrapper ───────────────────────────── */
 function Field({
   label,
   icon: Icon,
@@ -80,7 +87,6 @@ function Field({
   );
 }
 
-/* ── shared input className ─────────────────────────────────── */
 const inputCls = (hasError?: boolean) =>
   [
     "w-full px-3.5 py-2.5 rounded-xl text-sm text-gray-900 bg-white",
@@ -91,7 +97,6 @@ const inputCls = (hasError?: boolean) =>
       : "border-gray-200 hover:border-violet-300 focus:border-violet-400 focus:ring-2 focus:ring-violet-100",
   ].join(" ");
 
-/* ═══════════════════════════════════════════════════════════ */
 export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
   const {
     register,
@@ -105,11 +110,12 @@ export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
     defaultValues: {
       summary: "",
       languages: [],
+      domain: "",
       ...initial,
     },
   });
 
-  /* photo state */
+  
   const [rawPhotoSrc, setRawPhotoSrc] = useState<string | null>(null);
   const [showCropper, setShowCropper] = useState(false);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
@@ -117,21 +123,18 @@ export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
   const [zoom, setZoom] = useState(1.2);
   const [isDragging, setIsDragging] = useState(false);
 
-  /* ui state */
   const [aiLoading, setAiLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [aiSuccess, setAiSuccess] = useState(false);
 
-  /* languages state */
-  const [languageInput, setLanguageInput] = useState("");
-
   const summaryText = watch("summary") ?? "";
   const profileImage = watch("profileImage");
   const languages = watch("languages") ?? [];
+  const selectedDomain = watch("domain") ?? "";
+
   const charCount = summaryText.length;
   const charPct = Math.min((charCount / MAX_SUMMARY_LENGTH) * 100, 100);
 
-  /* ── file handling ──────────────────────────────────────── */
   const handleFile = useCallback((file?: File) => {
     if (!file) return;
     const reader = new FileReader();
@@ -183,6 +186,7 @@ export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
         },
         700
       );
+
       setValue("profileImageRaw", rawPhotoSrc);
       setValue("profileImage", dataUrl);
       setShowCropper(false);
@@ -191,45 +195,23 @@ export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
     }
   }, [rawPhotoSrc, croppedAreaPixels, setValue]);
 
-  /* ── languages handling ────────────────────────────────── */
-  const addLanguage = () => {
-    const value = languageInput.trim();
-    if (!value) return;
-
+  const toggleLanguage = (lang: string) => {
     const current = getValues("languages") || [];
-    const exists = current.some(
-      (lang) => lang.toLowerCase() === value.toLowerCase()
-    );
+    const exists = current.includes(lang);
 
-    if (exists) {
-      setLanguageInput("");
-      return;
-    }
+    const updated = exists
+      ? current.filter((item) => item !== lang)
+      : [...current, lang];
 
-    setValue("languages", [...current, value], {
+    setValue("languages", updated, {
       shouldDirty: true,
       shouldTouch: true,
       shouldValidate: true,
     });
-    setLanguageInput("");
   };
 
-  const removeLanguage = (langToRemove: string) => {
-    const current = getValues("languages") || [];
-    setValue(
-      "languages",
-      current.filter((lang) => lang !== langToRemove),
-      {
-        shouldDirty: true,
-        shouldTouch: true,
-        shouldValidate: true,
-      }
-    );
-  };
-
-  /* ── AI summary ─────────────────────────────────────────── */
   const handleAI = async () => {
-    const { fullName, jobRole, experienceYears } = getValues();
+    const { fullName, jobRole, experienceYears, domain } = getValues();
 
     if (!fullName || !jobRole) {
       alert("Please enter your name and target job role first.");
@@ -240,17 +222,21 @@ export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
       setAiLoading(true);
       setAiSuccess(false);
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_LMS_URL}/api/ai/generate-overview`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fullName,
-          jobRole,
-          ...(Number.isFinite(experienceYears)
-            ? { experienceYears: Number(experienceYears) }
-            : {}),
-        }),
-      });
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_LMS_URL}/api/ai/generate-overview`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fullName,
+            jobRole,
+            domain,
+            ...(Number.isFinite(experienceYears)
+              ? { experienceYears: Number(experienceYears) }
+              : {}),
+          }),
+        }
+      );
 
       if (!res.ok) throw new Error();
 
@@ -265,36 +251,34 @@ export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
     }
   };
 
-  /* ── submit ─────────────────────────────────────────────── */
   const onSubmit = (data: Step1Data) => {
-  setSubmitting(true);
+    setSubmitting(true);
 
-  setTimeout(() => {
-    onNext({
-      ...data,
-      role: data.jobRole || data.role || "",
-      languages: data.languages || [],
-    });
-    setSubmitting(false);
-  }, 250);
-};
+    setTimeout(() => {
+      onNext({
+        ...data,
+        role: data.jobRole || data.role || "",
+        languages: data.languages || [],
+        domain: data.domain || "",
+      });
+      setSubmitting(false);
+    }, 250);
+  };
 
   useEffect(() => {
     if (initial) {
       reset({
         summary: "",
         languages: [],
+        domain: "",
         ...initial,
       });
     }
   }, [initial, reset]);
 
-  /* ═══════════════════════════════════════════════════════ */
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      {/* ── Photo + Basic info row ────────────────────────── */}
       <div className="grid grid-cols-1 gap-5 md:grid-cols-[160px_1fr]">
-        {/* Photo column */}
         <div className="flex flex-col gap-3">
           <div className="relative">
             {profileImage ? (
@@ -307,8 +291,8 @@ export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
                 <button
                   type="button"
                   onClick={() => {
-                    setValue("profileImage", null);
-                    setValue("profileImageRaw", null);
+                    setValue("profileImage", null as any);
+                    setValue("profileImageRaw", null as any);
                   }}
                   className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-rose-500 text-white shadow-md opacity-0 transition-opacity group-hover:opacity-100"
                 >
@@ -400,7 +384,6 @@ export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
           </p>
         </div>
 
-        {/* Name / Email / Phone / Location */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field
             label="Full Name"
@@ -468,15 +451,35 @@ export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
           >
             <input
               {...register("jobRole", { required: "Required" })}
-              placeholder="e.g. Frontend Developer"
+              placeholder="e.g. DevOps Engineer"
               className={inputCls(!!errors.jobRole)}
             />
+          </Field>
+
+          <Field
+            label="Domain / Industry"
+            icon={Building2}
+            required
+            //error={errors.domain?.message}
+          >
+            <select
+              {...register("domain")}
+              className={inputCls(!!errors.domain)}
+              defaultValue={selectedDomain || ""}
+            >
+              <option value="">Select domain</option>
+              {DOMAIN_OPTIONS.map((domain) => (
+                <option key={domain} value={domain}>
+                  {domain}
+                </option>
+              ))}
+            </select>
           </Field>
 
           <Field label="Years of Experience" icon={Award}>
             <input
               type="number"
-              step={0.5}
+              step='any'
               min={0}
               max={50}
               {...register("experienceYears", { valueAsNumber: true })}
@@ -485,62 +488,55 @@ export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
             />
           </Field>
 
-          <Field label="Key Skills" icon={Sparkles}>
-            <input
-              {...register("skillsInput")}
-              placeholder="React, Node.js, SQL"
-              className={inputCls()}
-            />
-          </Field>
+          <div className="sm:col-span-2">
+            <Field label="Key Skills" icon={Sparkles}>
+              <input
+                {...register("skillsInput")}
+                placeholder="React, Node.js, SQL"
+                className={inputCls()}
+              />
+            </Field>
+          </div>
 
-          {/* Languages field */}
           <div className="sm:col-span-2">
             <Field label="Languages" icon={Languages}>
               <div className="space-y-3">
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <input
-                    value={languageInput}
-                    onChange={(e) => setLanguageInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        addLanguage();
-                      }
-                    }}
-                    placeholder="e.g. English, Hindi, Marathi"
-                    className={inputCls()}
-                  />
-                  <button
-                    type="button"
-                    onClick={addLanguage}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-700"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add
-                  </button>
+                <div className="flex flex-wrap gap-3">
+                  {LANGUAGE_OPTIONS.map((lang) => {
+                    const selected = languages.includes(lang);
+                    return (
+                      <button
+                        key={lang}
+                        type="button"
+                        onClick={() => toggleLanguage(lang)}
+                        className={[
+                          "inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-all duration-200",
+                          selected
+                            ? "border-violet-500 bg-violet-600 text-white shadow-md"
+                            : "border-gray-200 bg-white text-gray-700 hover:border-violet-300 hover:bg-violet-50",
+                        ].join(" ")}
+                      >
+                        {selected && <CheckCircle2 className="h-4 w-4" />}
+                        {lang}
+                      </button>
+                    );
+                  })}
                 </div>
 
                 {languages.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
-                    {languages.map((lang, index) => (
-                      <div
-                        key={`${lang}-${index}`}
-                        className="inline-flex items-center gap-2 rounded-full border border-violet-200 bg-violet-50 px-3 py-1.5 text-sm font-medium text-violet-700"
+                    {languages.map((lang) => (
+                      <span
+                        key={lang}
+                        className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700"
                       >
-                        <span>{lang}</span>
-                        <button
-                          type="button"
-                          onClick={() => removeLanguage(lang)}
-                          className="rounded-full p-0.5 text-violet-500 transition hover:bg-violet-100 hover:text-violet-700"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
+                        {lang}
+                      </span>
                     ))}
                   </div>
                 ) : (
                   <p className="text-xs text-gray-400">
-                    Add one or more languages you know.
+                    Select one or more languages.
                   </p>
                 )}
               </div>
@@ -551,10 +547,9 @@ export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
 
       <div className="h-px bg-gradient-to-r from-transparent via-violet-100 to-transparent" />
 
-      {/* ── Professional Summary ──────────────────────────── */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <label className="flex items-center gap-1.5 text-[11px] font-700 uppercase tracking-widest text-gray-500">
+          <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-gray-500">
             <Sparkles className="h-3.5 w-3.5 text-violet-400" />
             Professional Summary
             <span className="ml-0.5 text-rose-400">*</span>
@@ -604,7 +599,7 @@ export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
               },
             })}
             rows={5}
-            placeholder="Results-driven developer with 3+ years building scalable web applications. Passionate about clean code, great UX, and continuous learning..."
+            placeholder="Results-driven professional with hands-on experience in building scalable solutions, improving operations, and delivering business value..."
             className={[inputCls(!!errors.summary), "resize-none leading-relaxed"].join(" ")}
           />
           {errors.summary && (
@@ -614,7 +609,7 @@ export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
           )}
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={handleAI}
@@ -624,7 +619,7 @@ export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
               aiSuccess
                 ? "bg-emerald-500 text-white shadow-md"
                 : "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-[0_4px_14px_rgba(124,58,237,0.35)] hover:-translate-y-0.5 hover:shadow-[0_6px_20px_rgba(124,58,237,0.45)]",
-              aiLoading && "cursor-not-allowed opacity-70",
+              aiLoading ? "cursor-not-allowed opacity-70" : "",
             ].join(" ")}
           >
             {aiLoading ? (
@@ -643,16 +638,14 @@ export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
           </button>
 
           <p className="text-[11px] text-gray-400">
-            Fill in your name &amp; role first, then let AI draft your summary.
+            Fill name, role, and domain first for better AI summary.
           </p>
         </div>
       </div>
 
-      {/* ── Footer ───────────────────────────────────────────── */}
       <div className="flex items-center justify-between border-t border-gray-100 pt-2">
         <p className="text-[11px] text-gray-400">
-          Fields marked <span className="font-bold text-rose-400">*</span> are
-          required
+          Fields marked <span className="font-bold text-rose-400">*</span> are required
         </p>
 
         <button
@@ -665,7 +658,7 @@ export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
             "hover:-translate-y-0.5 hover:shadow-[0_6px_24px_rgba(124,58,237,0.5)]",
             "active:translate-y-0 active:shadow-md",
             "transition-all duration-200",
-            submitting && "cursor-not-allowed opacity-70",
+            submitting ? "cursor-not-allowed opacity-70" : "",
           ].join(" ")}
         >
           {submitting ? (

@@ -22,6 +22,9 @@ type FormData = {
 };
 
 interface ResumeFormStep4Props {
+  resumeData?: {
+    skillsInput?: string;
+  };
   onNext: (data: { skills: string[] }) => void;
   onBack: () => void;
   initialSkills?: string[];
@@ -37,17 +40,33 @@ const steps = [
   { icon: Award, label: "Final Details", active: true },
 ];
 
+const parseSkills = (skills?: string): string[] => {
+  if (!skills) return [];
+
+  return skills
+    .split(",")
+    .map((skill) => skill.trim())
+    .filter((skill) => skill.length > 0);
+};
+
 export default function ResumeFormStep4({
+  resumeData,
   onNext,
   onBack,
   initialSkills,
 }: ResumeFormStep4Props) {
+  const parsedResumeSkills = parseSkills(resumeData?.skillsInput);
+
+  const skillsFromProps =
+    parsedResumeSkills.length > 0
+      ? parsedResumeSkills
+      : initialSkills && initialSkills.length > 0
+      ? initialSkills
+      : [""];
+
   const { register, control, handleSubmit, reset, watch } = useForm<FormData>({
     defaultValues: {
-      skills:
-        initialSkills && initialSkills.length
-          ? initialSkills.map((s) => ({ value: s }))
-          : [{ value: "" }],
+      skills: skillsFromProps.map((s) => ({ value: s })),
     },
   });
 
@@ -73,15 +92,19 @@ export default function ResumeFormStep4({
   };
 
   useEffect(() => {
-    if (initialSkills) {
-      reset({
-        skills:
-          initialSkills.length > 0
-            ? initialSkills.map((s) => ({ value: s }))
-            : [{ value: "" }],
-      });
-    }
-  }, [initialSkills, reset]);
+    const parsedResumeSkills = parseSkills(resumeData?.skillsInput);
+
+    const nextSkills =
+      parsedResumeSkills.length > 0
+        ? parsedResumeSkills
+        : initialSkills && initialSkills.length > 0
+        ? initialSkills
+        : [""];
+
+    reset({
+      skills: nextSkills.map((s) => ({ value: s })),
+    });
+  }, [resumeData?.skillsInput, initialSkills, reset]);
 
   const filledSkillsCount =
     watchedSkills?.filter((skill) => skill?.value?.trim().length > 0).length || 0;
