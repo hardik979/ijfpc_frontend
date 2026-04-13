@@ -51,7 +51,7 @@ export default function StudentsCallReports() {
       const token = await getToken();
       if (!token) return;
       
-      const baseUrl = process.env.NEXT_PUBLIC_HR_URL || "http://localhost:4000";
+      const baseUrl = process.env.NEXT_PUBLIC_HR_URL;
       const res = await fetch(`${baseUrl}/api/reports/all-reports?date=${selectedDate}`, {
         headers: {
           Authorization: `Bearer ${token}`,
