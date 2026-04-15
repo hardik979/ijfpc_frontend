@@ -35,6 +35,10 @@ interface Stats {
   percentage: number | string;
   firstAttempt?: string | null;
   lastAttempt?: string | null;
+  failed?: number;
+  passed?: number;
+  failRate?: number;
+  passRate?: number;
 }
 
 interface StudentInfo {
@@ -69,6 +73,12 @@ interface ApiResponse {
     attempts?: QuizEntry[];
     stats?: Stats;
   };
+  mockInterviewData?: {
+    // attempts?: QuizEntry[];
+    stats?: Stats;
+  };
+
+  callrecordingDetails?: any
 }
 
 interface Grade {
@@ -187,61 +197,9 @@ function ScoreBar({
   );
 }
 
-function CircleProgress({
-  value,
-  label,
-  color,
-}: {
-  value: number;
-  label: string;
-  color: string;
-}) {
-  const radius = 40;
-  const circumference = 2 * Math.PI * radius;
-  const dash = (value / 100) * circumference;
-
-  return (
-    <div className="flex flex-col items-center justify-center rounded-2xl border border-[#312a63] bg-[#120f2d] p-4 shadow-sm">
-      <svg width="110" height="110" viewBox="0 0 100 100">
-        <circle
-          cx="50"
-          cy="50"
-          r={radius}
-          fill="none"
-          stroke="#241d4d"
-          strokeWidth="8"
-        />
-        <circle
-          cx="50"
-          cy="50"
-          r={radius}
-          fill="none"
-          stroke={color}
-          strokeWidth="8"
-          strokeDasharray={`${dash} ${circumference}`}
-          strokeLinecap="round"
-          transform="rotate(-90 50 50)"
-          style={{ transition: "stroke-dasharray 0.8s ease" }}
-        />
-        <text
-          x="50"
-          y="48"
-          textAnchor="middle"
-          fill="#ffffff"
-          fontSize="16"
-          fontWeight="700"
-        >
-          {value}%
-        </text>
-        <text x="50" y="64" textAnchor="middle" fill="#a8a0d6" fontSize="9">
-          {label}
-        </text>
-      </svg>
-    </div>
-  );
-}
 
 function InfoCard({ label, value }: { label: string; value: React.ReactNode }) {
+
   return (
     <div className="rounded-2xl border border-[#312a63] bg-[#120f2d] p-4">
       <p className="mb-2 text-[11px] uppercase tracking-[0.18em] text-[#9a92c9]">
@@ -265,6 +223,8 @@ function StatCard({
   sub: string;
   accent: string;
 }) {
+
+  
   return (
     <div className="relative overflow-hidden rounded-2xl border border-[#312a63] bg-[#120f2d] p-5">
       <div
@@ -316,6 +276,33 @@ export default function StudentDashboard() {
     );
   }, [data]);
 
+  const Mockstatus = useMemo(() => {
+    return (
+      data?.mockInterviewData?.stats || {
+        totalDaysAttempted: 0,
+        totalAttempts: 0,
+        failed: 0,
+        passed: 0,
+        failRate: 0,
+        passRate: 0,
+        firstAttempt: null,
+        lastAttempt: null,
+      }
+    );
+  }, [data]);
+
+
+  const Callrecordingstatus = useMemo(() => {
+    return data?.callrecordingDetails || {
+      total: 0,
+      summary: {
+        pos: 0,
+        neg: 0,
+        neutral: 0,
+      },
+    };
+  }, [data]);
+  
   const paymentDetails = useMemo(() => {
     return Array.isArray(data?.paymentDetails) ? data.paymentDetails : [];
   }, [data]);
@@ -508,8 +495,8 @@ export default function StudentDashboard() {
                   value={
                     stats?.firstAttempt
                       ? `${formatDate(stats.firstAttempt)} to ${formatDate(
-                          stats.lastAttempt || stats.firstAttempt,
-                        )}`
+                        stats.lastAttempt || stats.firstAttempt,
+                      )}`
                       : "—"
                   }
                 />
@@ -535,6 +522,108 @@ export default function StudentDashboard() {
                 sub={`${totalObtained} / ${totalPossible} marks`}
                 accent="#10b981"
               />
+            </div>
+
+            <div>
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h1 className="text-xl font-semibold text-white-900">
+                    Mock Interview Details
+                  </h1>
+                  <p className="text-sm text-white-500">
+                    Overview of interview activity and performance
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <StatCard
+                  label="Days Attempted"
+                  value={Mockstatus?.totalDaysAttempted ?? 0}
+                  sub="Unique interview days"
+                  accent="#38bdf8"
+                />
+
+                <StatCard
+                  label="Total Attempts"
+                  value={Mockstatus?.totalAttempts ?? attempts.length}
+                  sub="All mock interview attempts"
+                  accent="#f97316"
+                />
+
+                <StatCard
+                  label="Fail"
+                  value={Mockstatus?.failed}
+                  sub="Total Failed Mock Interviews"
+                  accent="#f97316"
+                />
+
+                <StatCard
+                  label="Pass"
+                  value={Mockstatus?.passed}
+                  sub="Total Pass Mock Interviews"
+                  accent="#38bdf8"
+                />
+
+                <StatCard
+                  label="Failed Score"
+                  value={`${Mockstatus?.failRate ?? "0"}%`}
+                  sub="Failed Rate"
+                  accent="#b93a10"
+                />
+
+                <StatCard
+                  label="Pass Score"
+                  value={`${Mockstatus?.passRate ?? "0"}%`}
+                  sub="Pass Rate"
+                  accent="#10b981"
+                />
+              </div>
+
+            </div>
+
+            <div>
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h1 className="text-xl font-semibold text-white-900">
+                    H.R. Call Records  Details
+                  </h1>
+                  <p className="text-sm text-white-500">
+                    Overview of Call Records
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+
+                <StatCard
+                  label="Total Calls"
+                  value={Callrecordingstatus.total ?? 0}
+                  sub="All recordings + manual entries"
+                  accent="#38bdf8"
+                />
+
+                <StatCard
+                  label="Positive"
+                  value={Callrecordingstatus.summary.pos ?? 0}
+                  sub="Resume requested / success-type calls"
+                  accent="#10b981"
+                />
+
+                <StatCard
+                  label="Negative"
+                  value={Callrecordingstatus.summary.neg ?? 0}
+                  sub="Rejected / invalid / failed calls"
+                  accent="#ef4444"
+                />
+
+                <StatCard
+                  label="Neutral"
+                  value={Callrecordingstatus.summary.neutral ?? 0}
+                  sub="In-progress / info shared / no final outcome"
+                  accent="#f59e0b"
+                />
+              </div>
             </div>
 
             <div className="rounded-3xl border border-[#312a63] bg-[#0f0b24] p-5 sm:p-6">
@@ -567,13 +656,12 @@ export default function StudentDashboard() {
                         </div>
 
                         <span
-                          className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${
-                            payment.status === "paid"
-                              ? "bg-emerald-500/15 text-emerald-300"
-                              : payment.status === "partial"
-                                ? "bg-amber-500/15 text-amber-300"
-                                : "bg-rose-500/15 text-rose-300"
-                          }`}
+                          className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${payment.status === "paid"
+                            ? "bg-emerald-500/15 text-emerald-300"
+                            : payment.status === "partial"
+                              ? "bg-amber-500/15 text-amber-300"
+                              : "bg-rose-500/15 text-rose-300"
+                            }`}
                         >
                           {payment.status || "—"}
                         </span>

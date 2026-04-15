@@ -94,6 +94,7 @@ const safeDate = (val?: string) => {
   });
 };
 
+
 const StudentsListPage = () => {
   const router = useRouter();
   const searchBoxRef = useRef<HTMLDivElement | null>(null);
@@ -125,6 +126,8 @@ const StudentsListPage = () => {
   const totalPages = useMemo(() => {
     return Math.max(1, Math.ceil(total / limit));
   }, [total, limit]);
+
+ 
 
   const getStudentList = async () => {
     try {
