@@ -21,9 +21,7 @@ import ResumeFormStep3 from "./ResumeFormStep3";
 import ResumeFormStep1 from "./ResumeFormStep1";
 import ResumeFormStep2 from "./ResumeFormStep2";
 import ResumeFormStep5 from "./ResumeFormStep5";
-import ResumePlayground, {
-  PlaygroundDesign,
-} from "./ResumePlayground";
+import ResumePlayground from "./ResumePlayground";
 
 import type { ResumeData } from "@/lib/resume";
 import RestoreDraftDialog from "@/components/resume-builder/RestoreDraftDialog";
@@ -253,6 +251,22 @@ export default function ResumeBuilderPage() {
 
   const isFormStep = step >= 1 && step <= 5;
 
+  const finalDocKey = JSON.stringify({
+    fullName: resumeData.fullName,
+    role: (resumeData as any).role,
+    jobRole: (resumeData as any).jobRole,
+    summary: resumeData.summary,
+    profileImage: resumeData.profileImage ?? (resumeData as any).photo,
+    layout: (resumeData as any).layout,
+    theme: (resumeData as any).theme,
+    fontFamily: (resumeData as any).fontFamily,
+    fontSize: (resumeData as any).fontSize,
+    experience: resumeData.experience,
+    education: (resumeData as any).education,
+    skills: (resumeData as any).skills,
+    projects: (resumeData as any).projects,
+  });
+
   const Navbar = (
     <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-lg border-b border-gray-100">
       <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
@@ -272,6 +286,8 @@ export default function ResumeBuilderPage() {
     </header>
   );
 
+  // ONLY SHOWING IMPORTANT PART (STEP 6 FIXED)
+
   if (step === 6) {
     return (
       <div className="min-h-screen bg-[#F8F7FF]">
@@ -285,16 +301,25 @@ export default function ResumeBuilderPage() {
         <ResumePlayground
           data={resumeData as ResumeData}
           onBack={handleBack}
-          onNext={(finalDesign: PlaygroundDesign) => {
+          onNext={(finalData: any) => {
             const updated = {
               ...resumeData,
-              summary: finalDesign.about ?? resumeData.summary,
+              ...finalData,
+              fullName: finalData.fullName ?? resumeData.fullName ?? "",
+              role: finalData.role ?? finalData.jobRole ?? resumeData.role ?? resumeData.jobRole ?? "",
+              jobRole: finalData.jobRole ?? finalData.role ?? resumeData.jobRole ?? resumeData.role ?? "",
               profileImage:
-                finalDesign.photo ?? (resumeData as any).profileImage ?? null,
-              layout:
-                finalDesign.layout ??
-                (resumeData as any).layout ??
-                "classicSidebar",
+                finalData.profileImage ??
+                finalData.photo ??
+                resumeData.profileImage ??
+                (resumeData as any).photo ??
+                undefined,
+              photo:
+                finalData.photo ??
+                finalData.profileImage ??
+                (resumeData as any).photo ??
+                resumeData.profileImage ??
+                undefined,
             };
 
             setResumeData(updated);
@@ -524,8 +549,17 @@ export default function ResumeBuilderPage() {
 
               <div className="w-full rounded-3xl border border-gray-100 bg-white shadow-[0_8px_48px_-8px_rgba(0,0,0,0.10)] overflow-hidden">
                 <BlobProvider
+                  key={finalDocKey}
                   document={
-                    <ResumeDocumentRouter data={{ ...resumeData, profileImage: resumeData.profileImage ?? undefined }} />
+                    <ResumeDocumentRouter
+                      data={{
+                        ...resumeData,
+                        profileImage: resumeData.profileImage ?? (resumeData as any).photo ?? undefined,
+                        photo: (resumeData as any).photo ?? resumeData.profileImage ?? undefined,
+                        role: (resumeData as any).role ?? (resumeData as any).jobRole ?? "",
+                        jobRole: (resumeData as any).jobRole ?? (resumeData as any).role ?? "",
+                      }}
+                    />
                   }
                 >
                   {({ url, loading, error }) => {
@@ -568,19 +602,12 @@ export default function ResumeBuilderPage() {
                 <div className="border-t border-gray-100 bg-gray-50/60 px-6 py-4 flex items-center justify-between">
                   <button
                     onClick={handleBack}
-                    className="text-sm text-gray-500 hover:text-gray-800 flex items-center gap-1.5 transition-colors"
+                      className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-100 transition-colors"
                   >
-                    ← Edit design
+                    ← Back 
                   </button>
 
                   <div className="flex items-center gap-3">
-                    <a
-                      href="/student-dashboard/home"
-                      className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-100 transition-colors"
-                    >
-                      Back to Home
-                    </a>
-
                     <BlobProvider
                       document={
                         <ResumeDocumentRouter data={{ ...resumeData, profileImage: resumeData.profileImage || undefined }} />

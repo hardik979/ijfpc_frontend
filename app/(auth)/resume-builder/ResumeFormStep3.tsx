@@ -10,7 +10,6 @@ import {
   useWatch,
 } from "react-hook-form";
 import { useEffect, useState } from "react";
-import { API_BASE_URL } from "@/lib/api";
 import {
   Sparkles,
   Plus,
@@ -399,7 +398,7 @@ export default function ResumeFormStep3({
     isCurrent: false,
   });
 
-  console.log('skillsInput --->', skillsInput);
+
 
 
   const normalizedInitialExperience =

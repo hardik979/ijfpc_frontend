@@ -247,7 +247,6 @@ function CustomDatePicker({
   };
 
   const handleOptionSelect = (optionValue: string) => {
-    console.log(`Selected month value: ${optionValue}`); // Debug log
     onChange(optionValue);
     setIsOpen(false);
   };
@@ -313,25 +312,19 @@ function MonthlyCollectionCard({
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
 
   // Add debug logging
-  console.log(`Current month initialized as: ${currentMonth}`);
-  console.log(`Selected month state: ${selectedMonth}`);
+ 
 
   // Calculate monthly data based on selected month
   const monthlyData = useMemo(() => {
     let collected = 0;
     const studentsPaid = new Set<string>();
 
-    console.log(`Calculating data for month: ${selectedMonth}`);
 
     students.forEach((s) => {
       const paid = (s.payments || [])
         .filter((p) => {
           const paymentMonth = p.date ? monthKey(p.date) : null;
-          console.log(
-            `Payment date: ${p.date}, Month key: ${paymentMonth}, Matches: ${
-              paymentMonth === selectedMonth
-            }`
-          );
+         
           return p.date && paymentMonth === selectedMonth;
         })
         .reduce((a, p) => a + p.amount, 0);
@@ -348,7 +341,7 @@ function MonthlyCollectionCard({
       if (net > 0) studentsPaid.add(s._id);
     });
 
-    console.log(`Total collected for ${selectedMonth}: ${collected}`);
+    
     return { collected, studentCount: studentsPaid.size };
   }, [students, selectedMonth]);
 
@@ -363,7 +356,7 @@ function MonthlyCollectionCard({
       month: "long",
       year: "numeric",
     });
-    console.log(`Display title for ${selectedMonth}: ${displayDate}`);
+    
     return displayDate + " Collection";
   };
 
