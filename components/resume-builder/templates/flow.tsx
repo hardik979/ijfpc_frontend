@@ -24,6 +24,7 @@ const COLORS = {
   textMuted: "#77736c",
   line: "#6d6b66",
   white: "#ffffff",
+  photoPlaceholder: "#d8cfbf",
 };
 
 const styles = StyleSheet.create({
@@ -89,6 +90,14 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
     backgroundColor: "#c8b889",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  photoPlaceholder: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: COLORS.photoPlaceholder,
   },
   photo: {
     width: "100%",
@@ -341,8 +350,8 @@ function getFirstTwoLinesName(fullName?: string) {
 
 function formatDateRange(start?: string, end?: string, current?: boolean) {
   const s = clean(start);
-  const e = current ? "present" : clean(end);
-  if (s && e) return `${s}-${e}`;
+  const e = current ? "Present" : clean(end);
+  if (s && e) return `${s} - ${e}`;
   return s || e || "";
 }
 
@@ -444,7 +453,11 @@ function EducationSection({ data }: { data: ResumeData }) {
     <View style={styles.bannerSection}>
       <BannerTitle title="Education" />
       {visibleItems.map((item, index) => {
-        const range = formatDateRange(item.startYear, item.endYear, item.currentlyStudying);
+        const range = formatDateRange(
+          item.startYear,
+          item.endYear,
+          item.currentlyStudying
+        );
         const degree = clean(item.degree);
         const institution = clean(item.institution);
         const location = nonEmptyStrings(item.highlights).slice(0, 2).join(", ");
@@ -458,8 +471,12 @@ function EducationSection({ data }: { data: ResumeData }) {
             <View style={styles.timelineContent}>
               {range ? <Text style={styles.dateText}>{range}</Text> : null}
               {degree ? <Text style={styles.itemTitle}>{degree}</Text> : null}
-              {institution ? <Text style={styles.itemSubTitle}>{institution}</Text> : null}
-              {location ? <Text style={styles.itemMeta}>{normalizeParagraph(location)}</Text> : null}
+              {institution ? (
+                <Text style={styles.itemSubTitle}>{institution}</Text>
+              ) : null}
+              {location ? (
+                <Text style={styles.itemMeta}>{normalizeParagraph(location)}</Text>
+              ) : null}
             </View>
           </View>
         );
@@ -486,11 +503,22 @@ function ExperienceSection({ data }: { data: ResumeData }) {
     <View style={styles.bannerSection}>
       <BannerTitle title="Work Experience" />
       {items.slice(0, 2).map((item, index) => {
-        const bullets = nonEmptyStrings(item.bullets?.length ? item.bullets : item.points).slice(0, 4);
-        const dateRange = formatDateRange(item.startDate, item.endDate);
+        const bullets = nonEmptyStrings(
+          item.bullets?.length ? item.bullets : item.points
+        ).slice(0, 4);
+
+        const dateRange = formatDateRange(
+          item.startDate,
+          item.endDate,
+          item.isCurrent
+        );
+
         const title = clean(item.jobTitle);
         const company = clean(item.company);
-        const companyLine = company || dateRange ? `${company}${company && dateRange ? " | " : ""}${dateRange}` : "";
+        const companyLine =
+          company || dateRange
+            ? `${company}${company && dateRange ? " | " : ""}${dateRange}`
+            : "";
 
         return (
           <View style={styles.workItem} key={`exp-${index}`}>
@@ -500,13 +528,73 @@ function ExperienceSection({ data }: { data: ResumeData }) {
             </View>
             <View style={styles.workTextBlock}>
               {title ? <Text style={styles.workTitleLine}>{title}</Text> : null}
-              {companyLine ? <Text style={styles.workCompanyLine}>{companyLine}</Text> : null}
+              {companyLine ? (
+                <Text style={styles.workCompanyLine}>{companyLine}</Text>
+              ) : null}
               {!!bullets.length && (
                 <View style={styles.nestedBulletList}>
                   {bullets.map((bullet, bulletIndex) => (
                     <View key={`exp-b-${index}-${bulletIndex}`} style={styles.nestedBulletRow}>
                       <Text style={styles.nestedBulletDot}>•</Text>
-                      <Text style={styles.nestedBulletText}>{normalizeParagraph(bullet)}</Text>
+                      <Text style={styles.nestedBulletText}>
+                        {normalizeParagraph(bullet)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function ProjectSection({ data }: { data: ResumeData }) {
+  const items = safeArray(data.projects).filter((item) => {
+    const bullets = nonEmptyStrings(item.bullets);
+    return clean(item.name) || clean(item.techStack) || clean(item.link) || bullets.length;
+  });
+
+  if (!items.length) return null;
+
+  return (
+    <View style={styles.bannerSection}>
+      <BannerTitle title="Projects" />
+      {items.slice(0, 2).map((item, index) => {
+        const bullets = nonEmptyStrings(item.bullets).slice(0, 3);
+        const title = clean(item.name);
+        const techStack = clean(item.techStack);
+        const link = clean(item.link);
+
+        let metaLine = "";
+        if (techStack && link) metaLine = `${techStack} | ${link}`;
+        else metaLine = techStack || link;
+
+        return (
+          <View style={styles.workItem} key={`project-${index}`}>
+            <View style={styles.timelineRail}>
+              <View style={styles.timelineDot} />
+              <View style={styles.timelineLine} />
+            </View>
+            <View style={styles.workTextBlock}>
+              {title ? <Text style={styles.workTitleLine}>{title}</Text> : null}
+              {metaLine ? (
+                <Text style={styles.workCompanyLine}>{metaLine}</Text>
+              ) : null}
+
+              {!!bullets.length && (
+                <View style={styles.nestedBulletList}>
+                  {bullets.map((bullet, bulletIndex) => (
+                    <View
+                      key={`project-b-${index}-${bulletIndex}`}
+                      style={styles.nestedBulletRow}
+                    >
+                      <Text style={styles.nestedBulletDot}>•</Text>
+                      <Text style={styles.nestedBulletText}>
+                        {normalizeParagraph(bullet)}
+                      </Text>
                     </View>
                   ))}
                 </View>
@@ -525,7 +613,7 @@ export function FlowCVTemplate({ data }: Props) {
   const contacts = getContactItems(data);
   const summary = normalizeParagraph(data.summary);
   const role = clean(data.jobRole);
-  const photo = clean(data.profileImage || undefined);
+  const photo = clean(data.profileImage || data.profileImageRaw || undefined);
 
   return (
     <Document>
@@ -540,13 +628,15 @@ export function FlowCVTemplate({ data }: Props) {
             {!!role && <Text style={styles.role}>{role}</Text>}
           </View>
 
-          {photo ? (
-            <View style={styles.photoFrameOuter}>
-              <View style={styles.photoFrameInner}>
+          <View style={styles.photoFrameOuter}>
+            <View style={styles.photoFrameInner}>
+              {photo ? (
                 <Image src={photo} style={styles.photo} />
-              </View>
+              ) : (
+                <View style={styles.photoPlaceholder} />
+              )}
             </View>
-          ) : null}
+          </View>
 
           <View style={styles.leftColumn}>
             {summary ? (
@@ -555,20 +645,6 @@ export function FlowCVTemplate({ data }: Props) {
                 <Text style={styles.aboutText}>{summary}</Text>
               </View>
             ) : null}
-
-            {!!skills.length && (
-              <View style={styles.skillSection}>
-                <LeftSectionTitle title="Expertise Skill" />
-                <View style={styles.bulletList}>
-                  {skills.map((skill, index) => (
-                    <View key={`skill-${index}`} style={styles.bulletRow}>
-                      <Text style={styles.bulletDot}>•</Text>
-                      <Text style={styles.bulletText}>{normalizeParagraph(skill)}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
 
             {!!contacts.length && (
               <View style={styles.contactSection}>
@@ -583,11 +659,26 @@ export function FlowCVTemplate({ data }: Props) {
                 ))}
               </View>
             )}
+
+            {!!skills.length && (
+              <View style={styles.skillSection}>
+                <LeftSectionTitle title="Expertise Skill" />
+                <View style={styles.bulletList}>
+                  {skills.map((skill, index) => (
+                    <View key={`skill-${index}`} style={styles.bulletRow}>
+                      <Text style={styles.bulletDot}>•</Text>
+                      <Text style={styles.bulletText}>{normalizeParagraph(skill)}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
           </View>
 
           <View style={styles.rightContent}>
             <EducationSection data={data} />
             <ExperienceSection data={data} />
+            <ProjectSection data={data} />
           </View>
         </View>
       </Page>

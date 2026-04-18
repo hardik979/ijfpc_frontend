@@ -38,21 +38,43 @@ export default function StudentsCallReports() {
   const [reports, setReports] = useState<RecordingReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"daily" | "analysis">("daily");
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const { getToken } = useAuth();
+
+  const [filterType, setFilterType] = useState<"day" | "week" | "month" | "year">("month");
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
   useEffect(() => {
     fetchReports();
-  }, [selectedDate]);
+  }, [filterType, selectedDate, selectedMonth, selectedYear]);
 
   const fetchReports = async () => {
     setLoading(true);
     try {
       const token = await getToken();
       if (!token) return;
-      
+
       const baseUrl = process.env.NEXT_PUBLIC_HR_URL;
-      const res = await fetch(`${baseUrl}/api/reports/all-reports?date=${selectedDate}`, {
+      let url = `${baseUrl}/api/reports/all-reports`;
+
+      if (filterType === "day") {
+        url += `?filterType=day&date=${selectedDate}`;
+      } else if (filterType === "week") {
+        const today = new Date(selectedDate);
+        const day = today.getDay(); // 0 = Sunday, 1 = Monday...
+        const diff = day === 0 ? -6 : 1 - day; // Monday as week start
+        const weekStartDate = new Date(today);
+        weekStartDate.setDate(today.getDate() + diff);
+        const weekStart = weekStartDate.toISOString().split("T")[0];
+        url += `?filterType=week&weekStart=${weekStart}`;
+      } else if (filterType === "month") {
+        url += `?filterType=month&month=${selectedMonth}&year=${selectedYear}`;
+      } else if (filterType === "year") {
+        url += `?filterType=year&year=${selectedYear}`;
+      };
+
+      const res = await fetch(url, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -81,10 +103,10 @@ export default function StudentsCallReports() {
   return (
     <div className="min-h-screen bg-[#FDFBF7] text-[#4A2C2A] selection:bg-[#EEDC82] selection:text-[#4A2C2A] flex flex-col">
       <div className="max-w-[1700px] mx-auto w-full flex-1 h-screen flex flex-col py-8 px-6 lg:px-12 overflow-hidden">
-        
+
         {/* Top Navigation & Global Controls */}
         <header className="shrink-0 flex flex-col xl:flex-row xl:items-center justify-between gap-10 mb-12">
-          
+
           <div className="flex items-center gap-10">
             {/* Logo area */}
             <div className="space-y-1 pr-10 border-r border-[#F5F5DC]">
@@ -112,7 +134,7 @@ export default function StudentsCallReports() {
           </div>
 
           <div className="flex items-center gap-6">
-            <Link 
+            <Link
               href="/resume-builder"
               className="flex items-center gap-3 px-8 py-4 bg-white text-[#8B4513] border border-[#EFEBE9] rounded-3xl font-medium text-sm transition-all duration-300 hover:bg-[#FAF9F6] hover:shadow-md shadow-sm group"
             >
@@ -120,16 +142,27 @@ export default function StudentsCallReports() {
               <span>Resume Builder</span>
             </Link>
 
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value as "day" | "week" | "month" | "year")}
+              className="bg-white px-5 py-5 rounded-3xl border border-[#EFEBE9] outline-none font-medium text-[#4A2C2A]"
+            >
+              <option value="day">Day</option>
+              <option value="week">Week</option>
+              <option value="month">Month</option>
+              <option value="year">Year</option>
+            </select>
+
             {/* Premium Date Picker */}
             <div className="relative group">
-               <CalendarIcon className="absolute left-6 top-1/2 -translate-y-1/2 text-[#D2B48C] w-5 h-5 pointer-events-none group-focus-within:text-[#8B4513]" />
-               <input 
-                 type="date"
-                 className="bg-white pl-16 pr-10 py-5 rounded-3xl border border-[#EFEBE9] outline-none font-medium text-[#4A2C2A] focus:ring-4 focus:ring-[#F5F5DC] focus:border-[#D2B48C] transition-all shadow-sm cursor-pointer appearance-none"
-                 value={selectedDate}
-                 onChange={(e) => setSelectedDate(e.target.value)}
-               />
-               <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 text-[#D2B48C] w-4 h-4 pointer-events-none" />
+              <CalendarIcon className="absolute left-6 top-1/2 -translate-y-1/2 text-[#D2B48C] w-5 h-5 pointer-events-none group-focus-within:text-[#8B4513]" />
+              <input
+                type="date"
+                className="bg-white pl-16 pr-10 py-5 rounded-3xl border border-[#EFEBE9] outline-none font-medium text-[#4A2C2A] focus:ring-4 focus:ring-[#F5F5DC] focus:border-[#D2B48C] transition-all shadow-sm cursor-pointer appearance-none"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+              />
+              <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 text-[#D2B48C] w-4 h-4 pointer-events-none" />
             </div>
 
             {loading && <Loader2 className="w-5 h-5 text-[#8B4513] animate-spin" />}
@@ -138,11 +171,11 @@ export default function StudentsCallReports() {
 
         {/* Dynamic Section Content */}
         <div className="flex-1 overflow-hidden flex flex-col relative">
-           {activeTab === "daily" ? (
-             <DailyCallReport reports={reports} selectedDate={selectedDate} />
-           ) : (
-             <CallAnalysis reports={reports} />
-           )}
+          {activeTab === "daily" ? (
+            <DailyCallReport reports={reports} selectedDate={selectedDate} />
+          ) : (
+            <CallAnalysis reports={reports} />
+          )}
         </div>
       </div>
 
