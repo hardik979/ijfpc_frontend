@@ -493,8 +493,6 @@ export default function CallAnalysis({ reports }: CallAnalysisProps) {
           </div>
         </div>
       )}
-
-
     </div>
   );
 }
