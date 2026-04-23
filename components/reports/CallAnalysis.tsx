@@ -1,19 +1,20 @@
 "use client";
 
-import  { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import {
-  Search,
-  Play,
-  FileText,
-  BarChart2,
+  TrendingUp,
+  TrendingDown,
   Calendar,
-  Phone,
-  User as UserIcon,
-  X,
-  ChevronRight,
-  Headphones,
+  BarChart3,
+  Activity,
+  CheckCircle2,
+  XCircle,
   Clock,
-  ArrowLeft,
+  Phone,
+  Users,
+  Upload,
+  ArrowUpRight,
+  ArrowDownRight,
 } from "lucide-react";
 
 interface RecordingReport {
@@ -36,463 +37,780 @@ interface RecordingReport {
   createdAt: string;
 }
 
-interface StudentGroup {
-  leadId: string;
-  studentName: string;
-  phone: string;
-  email: string;
-  recordings: RecordingReport[];
-}
-
 interface CallAnalysisProps {
   reports: RecordingReport[];
 }
 
-export default function CallAnalysis({ reports }: CallAnalysisProps) {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
-  const [selectedRecording, setSelectedRecording] = useState<RecordingReport | null>(null);
-  const [selectedAnalytics, setSelectedAnalytics] = useState<RecordingReport | null>(null);
+type TimeFilter = "today" | "week" | "month" | "year";
 
+interface DayStats {
+  date: string;
+  total: number;
+  positive: number;
+  negative: number;
+  neutral: number;
+  positivePercentage: number;
+}
 
-  // Group recordings by Student
-  const studentGroups = useMemo(() => {
-    const groups: Record<string, StudentGroup> = {};
+interface StudentStats {
+  studentName: string;
+  leadId: string;
+  total: number;
+  positive: number;
+  negative: number;
+  neutral: number;
+  positivePercentage: number;
+}
 
-    reports.forEach((rec) => {
-      if (!groups[rec.leadId]) {
-        groups[rec.leadId] = {
-          leadId: rec.leadId,
-          studentName: rec.studentName || "Unknown Student",
-          phone: rec.phone || "N/A",
-          email: rec.email || "N/A",
-          recordings: [],
-        };
+interface DayComparison {
+  label: string;
+  dateKey: string;
+  uploads: number;
+  positiveCount: number;
+  positivePercentage: number;
+  negativeCount: number;
+  neutralCount: number;
+}
+
+// ─── Upload Quality Comparison Chart ────────────────────────────────────────
+
+interface UploadQualityChartProps {
+  data: DayComparison[];
+  timeFilter: TimeFilter;
+}
+
+function UploadQualityChart({ data, timeFilter }: UploadQualityChartProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const chartRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (!canvasRef.current || data.length === 0) return;
+
+    const loadChart = async () => {
+      // Dynamically import Chart.js to avoid SSR issues
+      const { Chart, registerables } = await import("chart.js");
+      Chart.register(...registerables);
+
+      if (chartRef.current) {
+        chartRef.current.destroy();
       }
-      groups[rec.leadId].recordings.push(rec);
-    });
 
-    Object.values(groups).forEach(g => {
-      g.recordings.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    });
+      const isDark =
+        window.matchMedia &&
+        window.matchMedia("(prefers-color-scheme: dark)").matches;
 
-    return Object.values(groups).sort((a, b) => a.studentName.localeCompare(b.studentName));
-  }, [reports]);
+      const gridColor = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)";
+      const labelColor = isDark ? "#888780" : "#5F5E5A";
 
-  // Search Filter
-  const filteredStudents = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
-    if (!q) return studentGroups;
+      const maxUploads = Math.max(...data.map((d) => d.uploads), 10);
+      const yLeftMax = Math.ceil(maxUploads * 1.3 / 10) * 10;
 
-    return studentGroups.filter((s) =>
-      (s.studentName || "").toLowerCase().includes(q) ||
-      (s.phone || "").includes(q) ||
-      (s.email || "").toLowerCase().includes(q)
+      chartRef.current = new Chart(canvasRef.current!, {
+        data: {
+          labels: data.map((d) => d.label),
+          datasets: [
+            {
+              type: "bar" as const,
+              label: "Recordings Uploaded",
+              data: data.map((d) => d.uploads),
+              backgroundColor: isDark
+                ? "rgba(55,138,221,0.35)"
+                : "rgba(55,138,221,0.25)",
+              borderColor: "#378ADD",
+              borderWidth: 1.5,
+              borderRadius: 6,
+              borderSkipped: false,
+              yAxisID: "yLeft",
+              order: 2,
+            },
+            {
+              type: "line" as const,
+              label: "Positive Response %",
+              data: data.map((d) => d.positivePercentage),
+              borderColor: "#10b981",
+              backgroundColor: "rgba(16,185,129,0.08)",
+              borderWidth: 2.5,
+              pointBackgroundColor: "#10b981",
+              pointBorderColor: isDark ? "#1a1f2e" : "#fff",
+              pointBorderWidth: 2.5,
+              pointRadius: 6,
+              pointHoverRadius: 9,
+              tension: 0.4,
+              fill: true,
+              yAxisID: "yRight",
+              order: 1,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          animation: { duration: 600, easing: "easeInOutQuart" },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: isDark ? "#1a1f2e" : "#ffffff",
+              borderColor: isDark ? "#334155" : "#e2e8f0",
+              borderWidth: 1,
+              titleColor: isDark ? "#e2e8f0" : "#1e293b",
+              bodyColor: isDark ? "#94a3b8" : "#475569",
+              padding: 14,
+              cornerRadius: 10,
+              callbacks: {
+                label: (ctx: any) => {
+                  if (ctx.dataset.label === "Recordings Uploaded")
+                    return `  Uploads: ${ctx.parsed.y}`;
+                  return `  Positive rate: ${ctx.parsed.y}%`;
+                },
+              },
+            },
+          },
+          scales: {
+            x: {
+              grid: { color: gridColor },
+              ticks: {
+                color: labelColor,
+                font: { size: 12 },
+                maxRotation: 45,
+                autoSkip: data.length > 15,
+              },
+              border: { color: gridColor },
+            },
+            yLeft: {
+              type: "linear",
+              position: "left",
+              min: 0,
+              max: yLeftMax,
+              grid: { color: gridColor },
+              ticks: {
+                color: "#378ADD",
+                font: { size: 12 },
+                callback: (v: any) => v,
+              },
+              title: {
+                display: true,
+                text: "Recordings uploaded",
+                color: "#378ADD",
+                font: { size: 12 },
+              },
+              border: { color: gridColor },
+            },
+            yRight: {
+              type: "linear",
+              position: "right",
+              min: 0,
+              max: 100,
+              grid: { drawOnChartArea: false },
+              ticks: {
+                color: "#10b981",
+                font: { size: 12 },
+                stepSize: 20,
+                callback: (v: any) => v + "%",
+              },
+              title: {
+                display: true,
+                text: "Positive response %",
+                color: "#10b981",
+                font: { size: 12 },
+              },
+              border: { color: "transparent" },
+            },
+          },
+        },
+      });
+    };
+
+    loadChart();
+
+    return () => {
+      if (chartRef.current) {
+        chartRef.current.destroy();
+        chartRef.current = null;
+      }
+    };
+  }, [data]);
+
+  if (data.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-64 text-slate-500">
+        <div className="text-center">
+          <Upload className="w-10 h-10 mx-auto mb-3 opacity-30" />
+          <p className="text-sm">No data for this period</p>
+        </div>
+      </div>
     );
-  }, [studentGroups, searchQuery]);
+  }
 
-  const selectedStudent = useMemo(() =>
-    studentGroups.find(s => s.leadId === selectedStudentId),
-    [studentGroups, selectedStudentId]
-  );
+  // Summary metrics
+  const totalUploads = data.reduce((s, d) => s + d.uploads, 0);
+  const avgPositive =
+    data.length > 0
+      ? Math.round(
+          data.reduce((s, d) => s + d.positivePercentage, 0) / data.length
+        )
+      : 0;
 
-  const getStatusBadge = (status: string) => {
-    const base = "px-3 py-1 rounded-full text-[10px] font-medium uppercase tracking-wider border";
-    switch (status) {
-      case "DONE":
-        return `${base} bg-green-50 text-green-700 border-green-100`;
-      case "FAILED":
-        return `${base} bg-red-50 text-red-700 border-red-100`;
-      default:
-        return `${base} bg-orange-50 text-orange-700 border-orange-100`;
-    }
-  };
+  const firstHalf = data.slice(0, Math.floor(data.length / 2));
+  const secondHalf = data.slice(Math.floor(data.length / 2));
+  const firstAvgRate =
+    firstHalf.length > 0
+      ? firstHalf.reduce((s, d) => s + d.positivePercentage, 0) /
+        firstHalf.length
+      : 0;
+  const secondAvgRate =
+    secondHalf.length > 0
+      ? secondHalf.reduce((s, d) => s + d.positivePercentage, 0) /
+        secondHalf.length
+      : 0;
+  const rateTrend = secondAvgRate - firstAvgRate;
 
-  const getQualityBadge = (quality?: string) => {
-    const base =
-      "px-5 py-3 rounded-xl font-medium text-sm flex items-center gap-2 border transition-all";
-
-    switch ((quality || "").toLowerCase()) {
-      case "good":
-      case "excellent":
-        return `${base} bg-green-50 text-green-700 border-green-100 hover:bg-green-100`;
-      case "average":
-        return `${base} bg-orange-50 text-orange-700 border-orange-100 hover:bg-orange-100`;
-      case "poor":
-        return `${base} bg-red-50 text-red-700 border-red-100 hover:bg-red-100`;
-      default:
-        return `${base} bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100`;
-    }
-  };
+  const firstAvgUploads =
+    firstHalf.length > 0
+      ? firstHalf.reduce((s, d) => s + d.uploads, 0) / firstHalf.length
+      : 0;
+  const secondAvgUploads =
+    secondHalf.length > 0
+      ? secondHalf.reduce((s, d) => s + d.uploads, 0) / secondHalf.length
+      : 0;
+  const uploadTrend =
+    firstAvgUploads > 0
+      ? ((secondAvgUploads - firstAvgUploads) / firstAvgUploads) * 100
+      : 0;
 
   return (
-    <div className="flex-1 flex flex-col pt-4">
-
-      {/* Search Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
-        <div className="space-y-1">
-          <h2 className="text-2xl font-medium text-[#3E2723]">Student Records</h2>
-          <p className="text-[#8D6E63] text-sm">Browse detailed call history and AI analysis by student</p>
-        </div>
-
-        <div className="relative w-full md:w-[400px] group">
-          <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-[#D2B48C] w-5 h-5 transition-colors group-focus-within:text-[#8B4513]" />
-          <input
-            type="text"
-            placeholder="Search student or phone..."
-            className="w-full pl-14 pr-6 py-4 bg-white border border-[#EFEBE9] rounded-2xl focus:ring-4 focus:ring-[#F5F5DC] focus:border-[#D2B48C] transition-all outline-none shadow-sm text-base placeholder:text-[#D2B48C] font-medium"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-      </div>
-
-      <div className="flex-1 flex flex-col lg:flex-row gap-8 overflow-hidden">
-
-        {/* Left: Student List */}
-        <aside className={`flex-1 lg:max-w-[380px] flex flex-col bg-white border border-[#F5F5DC] rounded-[2rem] shadow-sm overflow-hidden ${selectedStudentId && 'hidden lg:flex'}`}>
-          <div className="p-5 border-b border-[#FDFBF7] flex justify-between items-center bg-[#FAF9F6]">
-            <span className="font-medium text-xs text-[#A1887F] uppercase tracking-widest">Active Students</span>
-            <span className="bg-[#F5F5DC] text-[#8B4513] px-3 py-1 rounded-lg text-xs font-medium">{filteredStudents.length}</span>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-            {filteredStudents.length > 0 ? (
-              <div className="space-y-2">
-                {filteredStudents.map((student) => (
-                  <button
-                    key={student.leadId}
-                    onClick={() => setSelectedStudentId(student.leadId)}
-                    className={`w-full flex items-center gap-4 p-4 rounded-[1.5rem] transition-all duration-300 group ${selectedStudentId === student.leadId
-                      ? 'bg-[#8B4513] text-white shadow-lg translate-x-1'
-                      : 'hover:bg-[#FFF9F0] border border-transparent hover:border-[#F5F5DC]'
-                      }`}
-                  >
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${selectedStudentId === student.leadId ? 'bg-white/20' : 'bg-[#FAF3E0] group-hover:bg-white'
-                      }`}>
-                      <UserIcon className={`w-6 h-6 ${selectedStudentId === student.leadId ? 'text-white' : 'text-[#A0522D]'}`} />
-                    </div>
-                    <div className="text-left flex-1 min-w-0">
-                      <p className="font-medium text-base truncate leading-tight">{student.studentName}</p>
-                      <p className={`text-xs mt-0.5 ${selectedStudentId === student.leadId ? 'text-white/70' : 'text-[#8D6E63]'}`}>
-                        {student.recordings.length} calls
-                      </p>
-                    </div>
-                    <ChevronRight className={`w-4 h-4 shrink-0 transition-transform ${selectedStudentId === student.leadId ? 'translate-x-1' : 'group-hover:translate-x-1 text-[#D2B48C]'}`} />
-                  </button>
-                ))}
-              </div>
+    <div className="space-y-6">
+      {/* Mini metric strip */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-4">
+          <p className="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-1">
+            Total Uploads
+          </p>
+          <p className="text-2xl font-bold text-blue-400">{totalUploads}</p>
+          <div className="flex items-center gap-1 mt-1">
+            {uploadTrend >= 0 ? (
+              <ArrowUpRight className="w-3.5 h-3.5 text-blue-400" />
             ) : (
-              <div className="h-full flex flex-col items-center justify-center text-center p-10">
-                <Search className="w-10 h-10 text-[#D2B48C] mb-4" />
-                <p className="font-medium text-[#8D6E63]">No matches</p>
-              </div>
+              <ArrowDownRight className="w-3.5 h-3.5 text-slate-400" />
             )}
+            <span
+              className={`text-xs font-medium ${uploadTrend >= 0 ? "text-blue-400" : "text-slate-400"}`}
+            >
+              {uploadTrend >= 0 ? "+" : ""}
+              {Math.abs(uploadTrend).toFixed(1)}% vs prior half
+            </span>
           </div>
-        </aside>
+        </div>
 
-        {/* Right: Recordings Details */}
-        <main className={`flex-[2] flex flex-col bg-white border border-[#F5F5DC] rounded-[2.5rem] shadow-sm overflow-hidden ${!selectedStudentId && 'hidden lg:flex'}`}>
-          {selectedStudent ? (
-            <>
-              <div className="p-6 border-b border-[#FDFBF7] bg-[#FAF9F6] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-5">
-                  <button onClick={() => setSelectedStudentId(null)} className="lg:hidden p-2.5 bg-white border border-[#F5F5DC] rounded-xl text-[#8B4513]"><ArrowLeft className="w-5 h-5" /></button>
-                  <div className="w-16 h-16 bg-[#F5F5DC] rounded-[1.2rem] flex items-center justify-center text-2xl font-medium text-[#8B4513]">{selectedStudent.studentName.charAt(0)}</div>
-                  <div>
-                    <h2 className="text-2xl font-medium text-[#3E2723]">{selectedStudent.studentName}</h2>
-                    <div className="flex flex-wrap items-center gap-3 mt-1 text-[#8D6E63] font-medium text-xs">
-                      <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> {selectedStudent.phone}</span>
-                      <span className="w-1 h-1 bg-[#D2B48C] rounded-full"></span>
-                      <span className="truncate max-w-[150px] underline underline-offset-2 decoration-[#D2B48C]">{selectedStudent.email}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+        <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4">
+          <p className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-1">
+            Avg Positive Rate
+          </p>
+          <p className="text-2xl font-bold text-emerald-400">{avgPositive}%</p>
+          <div className="flex items-center gap-1 mt-1">
+            {rateTrend >= 0 ? (
+              <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400" />
+            ) : (
+              <ArrowDownRight className="w-3.5 h-3.5 text-red-400" />
+            )}
+            <span
+              className={`text-xs font-medium ${rateTrend >= 0 ? "text-emerald-400" : "text-red-400"}`}
+            >
+              {rateTrend >= 0 ? "+" : ""}
+              {Math.abs(rateTrend).toFixed(1)}% trend
+            </span>
+          </div>
+        </div>
 
-              <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-[#FFFDFB]">
-                <div className="max-w-2xl mx-auto space-y-10 relative">
-                  <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-[#FAF3E0]"></div>
-                  {selectedStudent.recordings.map((rec) => (
-                    <div key={rec._id} className="relative pl-14 group">
-                      <div className="absolute left-[22px] top-5 w-3.5 h-3.5 bg-white border-4 border-[#D2B48C] rounded-full z-10 group-hover:border-[#8B4513] transition-colors"></div>
-                      <div className="bg-white border border-[#F5F5DC] rounded-[1.8rem] p-6 shadow-sm hover:shadow-lg transition-all duration-300">
-                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-5">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2.5 bg-[#FFF9F0] rounded-xl"><Calendar className="w-4.5 h-4.5 text-[#A0522D]" /></div>
-                            <div>
-                              <p className="font-medium text-sm text-[#3E2723] leading-none">{new Date(rec.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</p>
-                              <p className="text-[10px] text-[#A1887F] font-medium mt-1 flex items-center gap-1"><Clock className="w-2.5 h-2.5" /> {new Date(rec.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</p>
-                            </div>
-                          </div>
-                          <span className={getStatusBadge(rec.status)}>{rec.status}</span>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-stretch">
-                          <div className="h-full">
-                            <button
-                              onClick={() => setSelectedRecording(rec)}
-                              className="h-full w-full px-5 py-3 bg-[#8B4513] text-white rounded-xl font-medium text-sm flex items-center justify-center gap-2 hover:bg-[#5D4037] transition-all shadow-md active:scale-95"
-                            >
-                              <Play className="w-3.5 h-3.5 fill-white" />
-                              Review {rec.type === "manual" ? "Status" : "Assets"}
-                            </button>
-                          </div>
-
-                          {rec.type === "manual" ? (
-                            <>
-                              <div className="h-full">
-                                <div className="h-full w-full px-5 py-3 bg-red-50 text-red-700 border border-red-100 rounded-xl font-medium text-sm flex items-center justify-center gap-2 text-center">
-                                  {rec.manualStatus?.replace("_", " ")} (Manual)
-                                </div>
-                              </div>
-
-                              <div className="h-full">
-                                <div className="h-full w-full px-5 py-3 bg-gray-50 text-gray-500 border border-gray-200 rounded-xl font-medium text-sm flex items-center justify-center text-center">
-                                  Analytics: N/A
-                                </div>
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="h-full">
-                                <div className="h-full w-full px-5 py-3 bg-[#FDF5E6] text-[#8B4513] border border-[#F5F5DC] rounded-xl font-medium text-sm flex items-center justify-center gap-2 text-center">
-                                  <BarChart2 className="w-3.5 h-3.5" />
-                                  {rec.analysis?.outcome || "Analyzed"}
-                                </div>
-                              </div>
-
-                              <div className="h-full">
-                                <button
-                                  onClick={() => setSelectedAnalytics(rec)}
-                                  className={`${getQualityBadge(
-                                    rec.analysis?.areasOfImprovement?.overallCallQuality
-                                  )} h-full w-full justify-center text-center`}
-                                >
-                                  <BarChart2 className="w-3.5 h-3.5" />
-                                  Analytics:{" "}
-                                  {rec.analysis?.areasOfImprovement?.overallCallQuality || "N/A"}
-                                </button>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="h-full flex flex-col items-center justify-center text-center p-20 bg-[#FAF9F6]/50">
-              <div className="w-32 h-32 bg-white rounded-full flex items-center justify-center mb-8 shadow-inner"><UserIcon className="w-16 h-16 text-[#D7CCC8]" /></div>
-              <h3 className="text-2xl font-medium text-[#8D6E63] mb-3">Select a Student</h3>
-              <p className="text-[#A1887F] max-w-xs font-medium text-sm leading-relaxed">Choose a student to see their call history and AI analysis.</p>
-            </div>
-          )}
-        </main>
+        <div
+          className={`rounded-xl p-4 border ${
+            uploadTrend > 0 && rateTrend < 0
+              ? "bg-red-500/5 border-red-500/20"
+              : uploadTrend > 0 && rateTrend >= 0
+                ? "bg-emerald-500/5 border-emerald-500/20"
+                : "bg-amber-500/5 border-amber-500/20"
+          }`}
+        >
+          <p
+            className={`text-xs font-semibold uppercase tracking-wider mb-1 ${
+              uploadTrend > 0 && rateTrend < 0
+                ? "text-red-400"
+                : uploadTrend > 0 && rateTrend >= 0
+                  ? "text-emerald-400"
+                  : "text-amber-400"
+            }`}
+          >
+            Quality Signal
+          </p>
+          <p
+            className={`text-sm font-bold ${
+              uploadTrend > 0 && rateTrend < 0
+                ? "text-red-400"
+                : uploadTrend > 0 && rateTrend >= 0
+                  ? "text-emerald-400"
+                  : "text-amber-400"
+            }`}
+          >
+            {uploadTrend > 0 && rateTrend < 0
+              ? "Volume ↑, Quality ↓"
+              : uploadTrend > 0 && rateTrend >= 0
+                ? "Volume ↑, Quality ↑"
+                : rateTrend < 0
+                  ? "Quality Declining"
+                  : "Stable"}
+          </p>
+          <p className="text-xs text-slate-500 mt-1">
+            {uploadTrend > 0 && rateTrend < 0
+              ? "Quantity outpacing quality"
+              : uploadTrend > 0 && rateTrend >= 0
+                ? "Scaling successfully"
+                : "Review call approach"}
+          </p>
+        </div>
       </div>
 
-      {/* Detail Modal */}
-      {selectedRecording && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#4A2C2A]/40 backdrop-blur-xl animate-in fade-in duration-300">
-          <div className="bg-[#FDFBF7] w-full max-w-4xl h-[80vh] rounded-[3rem] overflow-hidden shadow-2xl flex flex-col border border-white/50">
-            <div className="px-8 py-6 border-b border-[#F5F5DC] flex justify-between items-center bg-white/80">
-              <div className="flex items-center gap-5">
-                <div className="w-12 h-12 bg-[#8B4513] rounded-xl flex items-center justify-center"><Headphones className="w-6 h-6 text-white" /></div>
-                <div>
-                  <h2 className="text-xl font-medium text-[#3E2723]">Session Intelligence</h2>
-                  <p className="text-[#8D6E63] font-medium text-xs font-sans">{selectedRecording.studentName} • {new Date(selectedRecording.createdAt).toLocaleDateString()}</p>
-                </div>
-              </div>
-              <button onClick={() => setSelectedRecording(null)} className="w-10 h-10 bg-white border border-[#EFEBE9] rounded-xl flex items-center justify-center text-[#D2B48C] hover:text-red-500 hover:bg-red-50 transition-all shadow-sm"><X className="w-5 h-5" /></button>
-            </div>
+      {/* Legend */}
+      <div className="flex items-center gap-6 text-xs text-slate-400">
+        <span className="flex items-center gap-2">
+          <span className="w-3 h-3 rounded bg-blue-500/60 inline-block" />
+          Recordings uploaded (left axis)
+        </span>
+        <span className="flex items-center gap-2">
+          <span className="w-4 h-0.5 bg-emerald-500 inline-block rounded" />
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block -ml-2" />
+          Positive response % (right axis)
+        </span>
+      </div>
 
-            <div className="flex-1 overflow-y-auto p-10 space-y-10 custom-scrollbar">
-              {selectedRecording.type === "manual" ? (
-                <div className="bg-white border border-[#F5F5DC] rounded-[2rem] p-10 shadow-sm text-center space-y-4">
-                  <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto">
-                    <Phone className="w-10 h-10 text-red-600" />
-                  </div>
-                  <h3 className="text-2xl font-medium text-[#3E2723]">Manual Call Log</h3>
-                  <p className="text-[#8D6E63] font-medium">This report was manually logged by the student.</p>
-                  <div className="inline-block px-8 py-4 bg-[#FAF9F6] border border-[#F5F5DC] rounded-2xl text-xl font-bold text-[#8B4513]">
-                    {selectedRecording.manualStatus?.replace('_', ' ')}
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div className="bg-white border border-[#F5F5DC] rounded-[2rem] p-8 shadow-sm flex flex-col md:flex-row items-center gap-8">
-                    <Play className="w-10 h-10 text-[#8B4513] fill-[#8B4513] hidden md:block" />
-                    <div className="flex-1 w-full space-y-3">
-                      <p className="font-medium text-[#5D4037] text-lg">Playback Recording</p>
-                      <audio controls src={selectedRecording.publicUrl} className="w-full h-10 rounded-full" />
-                    </div>
-                  </div>
+      {/* Chart canvas */}
+      <div className="relative w-full" style={{ height: "300px" }}>
+        <canvas
+          ref={canvasRef}
+          role="img"
+          aria-label="Dual axis chart: upload volume as bars and positive response rate as line over time"
+        />
+      </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    <div className="space-y-4">
-                      <h4 className="flex items-center gap-2 text-lg font-medium text-[#3E2723]"><FileText className="w-5 h-5 text-[#8B4513]" /> Transcript</h4>
-                      <div className="bg-white p-6 rounded-[2rem] border border-[#F5F5DC] h-[300px] overflow-y-auto custom-scrollbar shadow-sm">
-                        <p className="text-[#5D4037] leading-relaxed text-sm font-medium whitespace-pre-wrap">{selectedRecording.transcriptClean || selectedRecording.transcriptRaw || "Transcript pending..."}</p>
-                      </div>
-                    </div>
-                    <div className="space-y-4">
-                      <h4 className="flex items-center gap-2 text-lg font-medium text-[#3E2723]"><BarChart2 className="w-5 h-5 text-[#8B4513]" /> AI Outcome</h4>
-                      <div className="bg-[#FFF9F0] p-6 rounded-[2rem] border border-[#F5F5DC] space-y-6 shadow-sm h-[300px]">
-                        {selectedRecording.analysis ? (
-                          <>
-                            <div>
-                              <span className="text-[10px] font-medium text-[#A1887F] uppercase tracking-widest">Code</span>
-                              <p className="text-2xl font-medium text-[#8B4513]">{selectedRecording.analysis.outcomeCode || "N/A"}</p>
-                            </div>
-                            <div>
-                              <span className="text-[10px] font-medium text-[#A1887F] uppercase tracking-widest">Summary</span>
-                              <p className="text-[#5D4037] font-medium text-sm leading-snug">{selectedRecording.analysis.summary || "Summary pending."}</p>
-                            </div>
-                            <div className="flex gap-3">
-                              <div className="flex-1 bg-white p-3 rounded-xl border border-[#F5F5DC] text-center">
-                                <p className="text-[8px] font-medium text-[#D2B48C] uppercase mb-1">Outcome</p>
-                                <p className="text-xs font-medium text-[#8B4513]">{selectedRecording.analysis.outcome || "N/A"}</p>
-                              </div>
-                              <div className="flex-1 bg-white p-3 rounded-xl border border-[#F5F5DC] text-center">
-                                <p className="text-[8px] font-medium text-[#D2B48C] uppercase mb-1">Confidence</p>
-                                <p className="text-xs font-medium text-[#8B4513] capitalize">{selectedRecording.analysis.confidence || "High"}</p>
-                              </div>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="h-full flex flex-col items-center justify-center text-center space-y-2">
-                            <BarChart2 className="w-10 h-10 text-[#D2B48C]" />
-                            <p className="text-[#A1887F] font-medium italic text-sm">AI Insight Pending</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div className="p-8 bg-white/80 border-t border-[#F5F5DC] flex justify-end">
-              <button onClick={() => setSelectedRecording(null)} className="px-10 py-4 bg-[#3E2723] text-white rounded-2xl font-medium hover:bg-black transition-all shadow-lg active:scale-95">Close</button>
-            </div>
-          </div>
+      {/* Day-by-day breakdown table */}
+      {data.length > 1 && (
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-700">
+                <th className="text-left py-2 pr-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  Period
+                </th>
+                <th className="text-right py-2 pr-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  Uploads
+                </th>
+                <th className="text-right py-2 pr-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  Positive
+                </th>
+                <th className="text-right py-2 pr-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  Negative
+                </th>
+                <th className="text-right py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  Rate
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((row, i) => (
+                <tr
+                  key={row.dateKey}
+                  className={`border-b border-slate-800 ${i % 2 === 0 ? "bg-slate-900/20" : ""}`}
+                >
+                  <td className="py-2.5 pr-4 text-slate-300 font-medium">
+                    {row.label}
+                  </td>
+                  <td className="py-2.5 pr-4 text-right text-blue-400 font-semibold">
+                    {row.uploads}
+                  </td>
+                  <td className="py-2.5 pr-4 text-right text-emerald-400">
+                    {row.positiveCount}
+                  </td>
+                  <td className="py-2.5 pr-4 text-right text-red-400">
+                    {row.negativeCount}
+                  </td>
+                  <td className="py-2.5 text-right">
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-bold ${
+                        row.positivePercentage >= 20
+                          ? "bg-emerald-500/10 text-emerald-400"
+                          : row.positivePercentage >= 10
+                            ? "bg-amber-500/10 text-amber-400"
+                            : "bg-red-500/10 text-red-400"
+                      }`}
+                    >
+                      {row.positivePercentage}%
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
+    </div>
+  );
+}
 
-      {selectedAnalytics && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#4A2C2A]/40 backdrop-blur-xl animate-in fade-in duration-300">
-          <div className="bg-[#FDFBF7] w-full max-w-2xl max-h-[90vh] rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col border border-white/50">
-            <div className="px-8 py-6 border-b border-[#F5F5DC] flex justify-between items-center bg-white/80 shrink-0">
-              <div className="flex items-center gap-4">
-                <div
-                  className={`w-12 h-12 rounded-xl flex items-center justify-center ${(selectedAnalytics.analysis?.areasOfImprovement?.overallCallQuality || "").toLowerCase() === "good"
-                      ? "bg-green-100 text-green-700"
-                      : (selectedAnalytics.analysis?.areasOfImprovement?.overallCallQuality || "").toLowerCase() === "average"
-                        ? "bg-orange-100 text-orange-700"
-                        : "bg-red-100 text-red-700"
-                    }`}
-                >
-                  <BarChart2 className="w-6 h-6" />
-                </div>
+// ─── Main Component ──────────────────────────────────────────────────────────
 
-                <div>
-                  <h2 className="text-xl font-medium text-[#3E2723]">
-                    Call Analytics
-                  </h2>
-                  <p className="text-[#8D6E63] font-medium text-xs">
-                    {selectedAnalytics.studentName} •{" "}
-                    {new Date(selectedAnalytics.createdAt).toLocaleDateString()}
-                  </p>
-                </div>
+export default function CallAnalysis({ reports }: CallAnalysisProps) {
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>("month");
+
+  const getOutcomeCategory = (
+    rec: RecordingReport
+  ): "positive" | "negative" | "neutral" => {
+    if (rec.type === "manual") {
+      const status = rec.manualStatus?.toLowerCase() || "";
+      if (status.includes("interested") || status.includes("callback"))
+        return "positive";
+      if (
+        status.includes("not_interested") ||
+        status.includes("declined")
+      )
+        return "negative";
+      return "neutral";
+    }
+
+    const outcome = rec.analysis?.outcome?.toLowerCase() || "";
+    const quality =
+      rec.analysis?.areasOfImprovement?.overallCallQuality?.toLowerCase() ||
+      "";
+
+    if (
+      outcome.includes("interested") ||
+      outcome.includes("positive") ||
+      outcome.includes("callback") ||
+      quality === "good" ||
+      quality === "excellent"
+    )
+      return "positive";
+
+    if (
+      outcome.includes("not interested") ||
+      outcome.includes("negative") ||
+      outcome.includes("rejected") ||
+      quality === "poor"
+    )
+      return "negative";
+
+    return "neutral";
+  };
+
+  const filteredReports = useMemo(() => {
+    if (!reports || reports.length === 0) return [];
+    const now = new Date();
+    const filterDate = new Date();
+
+    switch (timeFilter) {
+      case "today":
+        filterDate.setHours(0, 0, 0, 0);
+        break;
+      case "week":
+        filterDate.setDate(now.getDate() - 7);
+        filterDate.setHours(0, 0, 0, 0);
+        break;
+      case "month":
+        filterDate.setMonth(now.getMonth() - 1);
+        filterDate.setHours(0, 0, 0, 0);
+        break;
+      case "year":
+        filterDate.setFullYear(now.getFullYear() - 1);
+        filterDate.setHours(0, 0, 0, 0);
+        break;
+    }
+
+    return reports.filter((r) => new Date(r.createdAt) >= filterDate);
+  }, [reports, timeFilter]);
+
+  const dailyStats = useMemo(() => {
+    const statsMap: Record<string, DayStats> = {};
+
+    filteredReports.forEach((rec) => {
+      const dateKey = new Date(rec.createdAt).toISOString().split("T")[0];
+
+      if (!statsMap[dateKey]) {
+        statsMap[dateKey] = {
+          date: dateKey,
+          total: 0,
+          positive: 0,
+          negative: 0,
+          neutral: 0,
+          positivePercentage: 0,
+        };
+      }
+
+      statsMap[dateKey].total++;
+      statsMap[dateKey][getOutcomeCategory(rec)]++;
+    });
+
+    Object.values(statsMap).forEach((stat) => {
+      stat.positivePercentage =
+        stat.total > 0 ? Math.round((stat.positive / stat.total) * 100) : 0;
+    });
+
+    return Object.values(statsMap).sort((a, b) =>
+      a.date.localeCompare(b.date)
+    );
+  }, [filteredReports]);
+
+  const formatDate = (dateStr: string): string => {
+    const date = new Date(dateStr);
+    if (timeFilter === "today")
+      return date.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+      });
+    if (timeFilter === "year")
+      return date.toLocaleDateString("en-US", { month: "short" });
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
+  };
+
+  // ── Upload quality comparison data ──
+  const comparisonData = useMemo((): DayComparison[] => {
+    return dailyStats.map((day) => ({
+      label: formatDate(day.date),
+      dateKey: day.date,
+      uploads: day.total,
+      positiveCount: day.positive,
+      negativeCount: day.negative,
+      neutralCount: day.neutral,
+      positivePercentage: day.positivePercentage,
+    }));
+  }, [dailyStats]);
+
+  const studentStats = useMemo(() => {
+    const statsMap: Record<string, StudentStats> = {};
+
+    filteredReports.forEach((rec) => {
+      const key = rec.leadId;
+      if (!statsMap[key]) {
+        statsMap[key] = {
+          studentName: rec.studentName,
+          leadId: rec.leadId,
+          total: 0,
+          positive: 0,
+          negative: 0,
+          neutral: 0,
+          positivePercentage: 0,
+        };
+      }
+      statsMap[key].total++;
+      statsMap[key][getOutcomeCategory(rec)]++;
+    });
+
+    Object.values(statsMap).forEach((stat) => {
+      stat.positivePercentage =
+        stat.total > 0 ? (stat.positive / stat.total) * 100 : 0;
+    });
+
+    return Object.values(statsMap)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 8);
+  }, [filteredReports]);
+
+  const overallStats = useMemo(() => {
+    const total = filteredReports.length;
+    const positive = filteredReports.filter(
+      (r) => getOutcomeCategory(r) === "positive"
+    ).length;
+    const negative = filteredReports.filter(
+      (r) => getOutcomeCategory(r) === "negative"
+    ).length;
+    const neutral = filteredReports.filter(
+      (r) => getOutcomeCategory(r) === "neutral"
+    ).length;
+
+    const positivePercentage = total > 0 ? (positive / total) * 100 : 0;
+    const negativePercentage = total > 0 ? (negative / total) * 100 : 0;
+    const neutralPercentage = total > 0 ? (neutral / total) * 100 : 0;
+
+    const half = Math.floor(dailyStats.length / 2);
+    const previousPeriod = dailyStats.slice(0, half);
+    const currentPeriod = dailyStats.slice(half);
+
+    const prevAvg =
+      previousPeriod.length > 0
+        ? previousPeriod.reduce((sum, s) => sum + s.positivePercentage, 0) /
+          previousPeriod.length
+        : 0;
+
+    const currAvg =
+      currentPeriod.length > 0
+        ? currentPeriod.reduce((sum, s) => sum + s.positivePercentage, 0) /
+          currentPeriod.length
+        : 0;
+
+    return {
+      total,
+      positive,
+      negative,
+      neutral,
+      positivePercentage,
+      negativePercentage,
+      neutralPercentage,
+      trend: currAvg - prevAvg,
+    };
+  }, [filteredReports, dailyStats]);
+
+  const getTimeFilterLabel = () => {
+    const now = new Date();
+    switch (timeFilter) {
+      case "today":
+        return now.toLocaleDateString("en-US", {
+          month: "long",
+          day: "numeric",
+          year: "numeric",
+        });
+      case "week":
+        return "Last 7 Days";
+      case "month":
+        return now.toLocaleDateString("en-US", {
+          month: "long",
+          year: "numeric",
+        });
+      case "year":
+        return now.getFullYear().toString();
+    }
+  };
+
+  const maxStudentTotal = Math.max(...studentStats.map((s) => s.total), 1);
+
+  return (
+    <div className="min-h-screen bg-[#0f1419] p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
+
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+          <div>
+            <h1 className="text-4xl font-bold text-white mb-2">
+              Analytics Dashboard
+            </h1>
+            <p className="text-slate-400 font-medium">
+              Performance metrics and insights
+            </p>
+          </div>          
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="bg-[#1a1f2e] rounded-2xl p-6 border border-slate-700">
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
+                <Phone className="w-6 h-6 text-blue-400" />
               </div>
-
-              <button
-                onClick={() => setSelectedAnalytics(null)}
-                className="w-10 h-10 bg-white border border-[#EFEBE9] rounded-xl flex items-center justify-center text-[#D2B48C] hover:text-red-500 hover:bg-red-50 transition-all shadow-sm"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <Users className="w-5 h-5 text-slate-500" />
             </div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+              Total Calls
+            </p>
+            <p className="text-4xl font-bold text-white mb-1">
+              {overallStats.total}
+            </p>
+            <p className="text-sm text-slate-400 font-medium">
+              {getTimeFilterLabel()}
+            </p>
+          </div>
 
-            <div className="flex-1 overflow-y-auto p-8 space-y-6 bg-[#FFFDFB]">
-              <div className="bg-white border border-[#F5F5DC] rounded-[2rem] p-6 shadow-sm">
-                <p className="text-[11px] uppercase tracking-widest text-[#A1887F] font-medium mb-2">
-                  Overall Call Quality
-                </p>
-
-                <span
-                  className={`inline-flex rounded-full px-4 py-2 text-sm font-semibold capitalize ${(selectedAnalytics.analysis?.areasOfImprovement?.overallCallQuality || "").toLowerCase() === "good"
-                      ? "bg-green-50 text-green-700"
-                      : (selectedAnalytics.analysis?.areasOfImprovement?.overallCallQuality || "").toLowerCase() === "average"
-                        ? "bg-orange-50 text-orange-700"
-                        : "bg-red-50 text-red-700"
-                    }`}
-                >
-                  {selectedAnalytics.analysis?.areasOfImprovement?.overallCallQuality || "N/A"}
-                </span>
+          <div className="bg-[#1a1f2e] rounded-2xl p-6 border border-emerald-500/20">
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-12 h-12 bg-emerald-500/20 rounded-xl flex items-center justify-center">
+                <CheckCircle2 className="w-6 h-6 text-emerald-400" />
               </div>
-
-              <div className="bg-white border border-[#F5F5DC] rounded-[2rem] p-6 shadow-sm">
-                <p className="text-[11px] uppercase tracking-widest text-[#A1887F] font-medium mb-3">
-                  Student Response Feedback
-                </p>
-
-                <p className="text-sm leading-relaxed text-[#5D4037] font-medium">
-                  {selectedAnalytics.analysis?.areasOfImprovement?.studentResponseFeedback ||
-                    "No student response feedback available."}
-                </p>
-              </div>
-
-              {selectedAnalytics?.analysis?.areasOfImprovement?.issues?.length > 0 ? (
-                <div className="bg-white border border-red-100 rounded-[2rem] p-6 shadow-sm">
-                  <h4 className="text-lg font-medium text-[#3E2723] mb-4">Issues Found</h4>
-
-                  <div className="space-y-4">
-                    {selectedAnalytics.analysis.areasOfImprovement.issues.map(
-                      (issue: any, index: number) => (
-                        <div
-                          key={index}
-                          className="rounded-2xl border border-[#F5D7D7] bg-[#FFF8F8] p-4 space-y-2"
-                        >
-                          <p className="text-sm font-semibold text-red-700">
-                            {issue.category || "Issue"}
-                          </p>
-
-                          <p className="text-sm text-[#5D4037]">
-                            <span className="font-medium">Problem:</span> {issue.problem || "N/A"}
-                          </p>
-
-                          <p className="text-sm text-[#5D4037]">
-                            <span className="font-medium">Why it matters:</span>{" "}
-                            {issue.whyItMatters || "N/A"}
-                          </p>
-
-                          <p className="text-sm text-[#5D4037]">
-                            <span className="font-medium">Suggestion:</span>{" "}
-                            {issue.suggestion || "N/A"}
-                          </p>
-
-                          {issue.evidenceQuote && (
-                            <div className="rounded-xl bg-white border border-[#EFE7E2] px-3 py-2 text-xs text-[#8D6E63] italic">
-                              “{issue.evidenceQuote}”
-                            </div>
-                          )}
-                        </div>
-                      )
-                    )}
-                  </div>
+              {overallStats.trend > 0 ? (
+                <div className="flex items-center gap-1 text-emerald-400">
+                  <TrendingUp className="w-4 h-4" />
+                  <span className="text-xs font-bold">
+                    +{overallStats.trend.toFixed(1)}%
+                  </span>
                 </div>
-              ) : (
-                <div className="bg-white border border-green-100 rounded-[2rem] p-6 shadow-sm">
-                  <h4 className="text-lg font-medium text-[#3E2723] mb-2">Issues Found</h4>
-                  <p className="text-sm text-green-700">No specific issues found.</p>
+              ) : overallStats.trend < 0 ? (
+                <div className="flex items-center gap-1 text-red-400">
+                  <TrendingDown className="w-4 h-4" />
+                  <span className="text-xs font-bold">
+                    {overallStats.trend.toFixed(1)}%
+                  </span>
                 </div>
-              )}
+              ) : null}
             </div>
+            <p className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-2">
+              Positive
+            </p>
+            <p className="text-4xl font-bold text-emerald-400 mb-1">
+              {Math.round(overallStats.positivePercentage)}%
+            </p>
+            <p className="text-sm text-slate-400 font-medium">
+              {overallStats.positive} calls
+            </p>
+          </div>
+
+          <div className="bg-[#1a1f2e] rounded-2xl p-6 border border-red-500/20">
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center">
+                <XCircle className="w-6 h-6 text-red-400" />
+              </div>
+            </div>
+            <p className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-2">
+              Negative
+            </p>
+            <p className="text-4xl font-bold text-red-400 mb-1">
+              {Math.round(overallStats.negativePercentage)}%
+            </p>
+            <p className="text-sm text-slate-400 font-medium">
+              {overallStats.negative} calls
+            </p>
+          </div>
+
+          <div className="bg-[#1a1f2e] rounded-2xl p-6 border border-amber-500/20">
+            <div className="flex items-center justify-between mb-4">
+              <div className="w-12 h-12 bg-amber-500/20 rounded-xl flex items-center justify-center">
+                <Clock className="w-6 h-6 text-amber-400" />
+              </div>
+            </div>
+            <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-2">
+              Neutral
+            </p>
+            <p className="text-4xl font-bold text-amber-400 mb-1">
+              {Math.round(overallStats.neutralPercentage)}%
+            </p>
+            <p className="text-sm text-slate-400 font-medium">
+              {overallStats.neutral} calls
+            </p>
           </div>
         </div>
-      )}
+
+        {/* Upload Quality vs Positive Rate – FULL WIDTH */}
+        <div className="bg-[#1a1f2e] rounded-2xl p-8 border border-slate-700">
+          <div className="flex items-center gap-3 mb-8">
+            <div className="w-10 h-10 bg-indigo-500/20 rounded-xl flex items-center justify-center">
+              <Upload className="w-5 h-5 text-indigo-400" />
+            </div>
+            <div className="flex-1">
+              <h2 className="text-xl font-bold text-white">
+                Upload Volume vs Positive Response Rate
+              </h2>
+              <p className="text-sm text-slate-400">
+                Recordings uploaded (bars) against quality signal (line) — spot
+                when volume outpaces quality
+              </p>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-lg">
+              <Calendar className="w-4 h-4 text-indigo-400" />
+              <span className="text-sm font-semibold text-indigo-400">
+                {getTimeFilterLabel()}
+              </span>
+            </div>
+          </div>
+
+          <UploadQualityChart data={comparisonData} timeFilter={timeFilter} />
+        </div>        
+      </div>
     </div>
   );
 }
