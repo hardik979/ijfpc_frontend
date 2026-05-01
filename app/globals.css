@@ -309,6 +309,54 @@ body {
 [data-theme="dark"] .bg-\[\#FFF7ED\]              { background-color: var(--bg-accent)   !important; }
 [data-theme="dark"] .text-\[\#A86117\]            { color: var(--brand-text)             !important; }
 
+/* ── Resume builder playground (step 6) backgrounds ──────────────── */
+[data-theme="dark"] .bg-\[radial-gradient\(circle_at_top_left\,_rgba\(139\,92\,246\,0\.12\)\,_transparent_28\%\)\,linear-gradient\(180deg\,\#faf7ff_0\%\,\#ffffff_48\%\,\#f8fbff_100\%\)\] {
+  background: linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-secondary) 100%) !important;
+}
+[data-theme="dark"] .bg-white\/75,
+[data-theme="dark"] .bg-white\/80,
+[data-theme="dark"] .bg-white\/90 {
+  background-color: color-mix(in srgb, var(--bg-card) 85%, transparent) !important;
+}
+[data-theme="dark"] .bg-violet-50,
+[data-theme="dark"] .bg-violet-50\/40,
+[data-theme="dark"] .bg-violet-50\/60 {
+  background-color: rgba(139, 92, 246, 0.10) !important;
+}
+[data-theme="dark"] .border-violet-100,
+[data-theme="dark"] .border-violet-200 {
+  border-color: rgba(139, 92, 246, 0.25) !important;
+}
+[data-theme="dark"] .ring-violet-100 {
+  --tw-ring-color: rgba(139, 92, 246, 0.30) !important;
+}
+[data-theme="dark"] .text-gray-600,
+[data-theme="dark"] .text-gray-800 {
+  color: var(--text-secondary) !important;
+}
+[data-theme="dark"] .text-violet-700 {
+  color: #c4b5fd !important;
+}
+
+/* ── Resume builder page (Tailwind gray scale) ───────────────────── */
+[data-theme="dark"] .bg-\[\#F8F7FF\]           { background-color: var(--bg-primary) !important; }
+[data-theme="dark"] .bg-gray-50,
+[data-theme="dark"] .bg-gray-50\/80,
+[data-theme="dark"] .bg-gray-50\/60            { background-color: var(--bg-secondary) !important; }
+[data-theme="dark"] .bg-gray-100               { background-color: var(--bg-accent) !important; }
+[data-theme="dark"] .hover\:bg-gray-100:hover  { background-color: var(--bg-accent) !important; }
+[data-theme="dark"] .border-gray-50,
+[data-theme="dark"] .border-gray-100           { border-color: var(--border-muted) !important; }
+[data-theme="dark"] .text-gray-900             { color: var(--text-primary)   !important; }
+[data-theme="dark"] .text-gray-500             { color: var(--text-secondary) !important; }
+[data-theme="dark"] .text-gray-400             { color: var(--text-muted)     !important; }
+[data-theme="dark"] .text-gray-300             { color: var(--text-faint)     !important; }
+[data-theme="dark"] .text-violet-600           { color: #a5b4fc !important; }
+[data-theme="dark"] .text-violet-800           { color: #c7d2fe !important; }
+[data-theme="dark"] .from-violet-50            { --tw-gradient-from: rgba(139, 92, 246, 0.12) !important; }
+[data-theme="dark"] .to-purple-50              { --tw-gradient-to:   rgba(168, 85, 247, 0.10) !important; }
+[data-theme="dark"] .border-violet-100         { border-color: rgba(139, 92, 246, 0.25) !important; }
+
 /* ═══════════════════════════════════════════════════════════════════
    RECHARTS — DARK MODE
    All text elements forced to #ffffff for maximum readability.

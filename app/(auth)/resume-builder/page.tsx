@@ -12,6 +12,9 @@ import {
   CheckCircle2,
   FolderKanban,
   Palette,
+  Camera,
+  Trash2,
+  type LucideIcon,
 } from "lucide-react";
 import { BlobProvider } from "@react-pdf/renderer";
 
@@ -95,7 +98,7 @@ function StepIcon({
   done,
   gradient,
 }: {
-  Icon: any;
+  Icon: LucideIcon;
   active: boolean;
   done: boolean;
   gradient: string;
@@ -115,10 +118,10 @@ function StepIcon({
       className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all duration-300
       ${active
           ? `bg-gradient-to-br ${gradient} border-transparent shadow-lg scale-110`
-          : "bg-white border-gray-200"
+          : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
         }`}
     >
-      <Icon className={`w-5 h-5 ${active ? "text-white" : "text-gray-400"}`} />
+      <Icon className={`w-5 h-5 ${active ? "text-white" : "text-gray-400 dark:text-gray-500"}`} />
     </span>
   );
 }
@@ -127,7 +130,7 @@ function ProgressBar({ step, total }: { step: number; total: number }) {
   const pct = Math.round(((step - 1) / (total - 1)) * 100);
 
   return (
-    <div className="relative w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+    <div className="relative w-full h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
       <div
         className="absolute inset-y-0 left-0 bg-gradient-to-r from-violet-500 via-sky-500 to-teal-500 rounded-full transition-all duration-700 ease-out"
         style={{ width: `${pct}%` }}
@@ -145,7 +148,7 @@ function StepCard({
 }) {
   return (
     <div
-      className={`bg-white rounded-3xl border border-gray-100 shadow-[0_8px_48px_-8px_rgba(0,0,0,0.10)] transition-all duration-500 animate-in slide-in-from-right-6 fade-in-0 ${className}`}
+      className={`bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-[0_8px_48px_-8px_rgba(0,0,0,0.10)] dark:shadow-[0_8px_48px_-8px_rgba(0,0,0,0.5)] transition-all duration-500 animate-in slide-in-from-right-6 fade-in-0 ${className}`}
     >
       {children}
     </div>
@@ -157,26 +160,24 @@ function StepHeader({
   title,
   subtitle,
   gradient,
-  skillsInput
 }: {
-  icon: any;
+  icon: LucideIcon;
   title: string;
   subtitle?: string;
   gradient: string;
-  skillsInput?: string[];
 }) {
   return (
-    <div className="flex flex-col items-center text-center pb-6 mb-6 border-b border-gray-50">
+    <div className="flex flex-col items-center text-center pb-6 mb-6 border-b border-gray-50 dark:border-gray-800">
       <div
         className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center shadow-lg mb-4`}
       >
         <Icon className="w-7 h-7 text-white" />
       </div>
-      <h2 className="text-2xl font-bold text-gray-900 tracking-tight">
+      <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">
         {title}
       </h2>
       {subtitle && (
-        <p className="mt-1.5 text-sm text-gray-500 max-w-xs">{subtitle}</p>
+        <p className="mt-1.5 text-sm text-gray-500 dark:text-gray-400 max-w-xs">{subtitle}</p>
       )}
     </div>
   );
@@ -251,12 +252,17 @@ export default function ResumeBuilderPage() {
 
   const isFormStep = step >= 1 && step <= 5;
 
+  const photoForKey = resumeData.profileImage ?? (resumeData as any).photo ?? "";
   const finalDocKey = JSON.stringify({
     fullName: resumeData.fullName,
+    email: resumeData.email,
+    phone: resumeData.phone,
+    address: resumeData.address,
+    linkedin: resumeData.linkedin,
     role: (resumeData as any).role,
     jobRole: (resumeData as any).jobRole,
     summary: resumeData.summary,
-    profileImage: resumeData.profileImage ?? (resumeData as any).photo,
+    photoLen: typeof photoForKey === "string" ? photoForKey.length : 0,
     layout: (resumeData as any).layout,
     theme: (resumeData as any).theme,
     fontFamily: (resumeData as any).fontFamily,
@@ -264,22 +270,23 @@ export default function ResumeBuilderPage() {
     experience: resumeData.experience,
     education: (resumeData as any).education,
     skills: (resumeData as any).skills,
+    languages: (resumeData as any).languages,
     projects: (resumeData as any).projects,
   });
 
   const Navbar = (
-    <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-lg border-b border-gray-100">
+    <header className="sticky top-0 z-30 bg-white/80 dark:bg-gray-900/80 backdrop-blur-lg border-b border-gray-100 dark:border-gray-800">
       <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <span className="w-8 h-8 bg-gradient-to-br from-violet-500 to-purple-700 rounded-xl flex items-center justify-center shadow">
             <FileText className="w-4 h-4 text-white" />
           </span>
-          <span className="font-bold text-gray-900 tracking-tight">
+          <span className="font-bold text-gray-900 dark:text-gray-100 tracking-tight">
             Resume
           </span>
         </div>
 
-        <span className="text-xs font-medium text-gray-400">
+        <span className="text-xs font-medium text-gray-400 dark:text-gray-500">
           {step <= 7 ? `Step ${Math.min(step, 7)} of 7` : "Done"}
         </span>
       </div>
@@ -290,7 +297,7 @@ export default function ResumeBuilderPage() {
 
   if (step === 6) {
     return (
-      <div className="min-h-screen bg-[#F8F7FF]">
+      <div className="min-h-screen bg-[#F8F7FF] dark:bg-gray-950">
         <RestoreDraftDialog
           open={showRestore}
           onUse={acceptRestore}
@@ -371,10 +378,10 @@ export default function ResumeBuilderPage() {
                         <span
                           className={`text-[10px] font-semibold tracking-wide uppercase transition-colors
                           ${active
-                              ? "text-violet-600"
+                              ? "text-violet-600 dark:text-violet-400"
                               : done
-                                ? "text-gray-400"
-                                : "text-gray-300"
+                                ? "text-gray-400 dark:text-gray-500"
+                                : "text-gray-300 dark:text-gray-600"
                             }`}
                         >
                           {s.short}
@@ -386,7 +393,7 @@ export default function ResumeBuilderPage() {
                           className={`flex-1 h-px transition-colors duration-500
                           ${step > s.number
                               ? "bg-gradient-to-r from-violet-400 to-sky-300"
-                              : "bg-gray-150"
+                              : "bg-gray-150 dark:bg-gray-700"
                             }`}
                         />
                       )}
@@ -547,7 +554,7 @@ export default function ResumeBuilderPage() {
                 <span className="absolute right-10 bottom-0 w-24 h-24 rounded-full bg-white/5 pointer-events-none" />
               </div>
 
-              <div className="w-full rounded-3xl border border-gray-100 bg-white shadow-[0_8px_48px_-8px_rgba(0,0,0,0.10)] overflow-hidden">
+              <div className="w-full rounded-3xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-[0_8px_48px_-8px_rgba(0,0,0,0.10)] dark:shadow-[0_8px_48px_-8px_rgba(0,0,0,0.5)] overflow-hidden">
                 <BlobProvider
                   key={finalDocKey}
                   document={
@@ -566,11 +573,11 @@ export default function ResumeBuilderPage() {
                     if (loading) {
                       return (
                         <div
-                          className="flex flex-col items-center justify-center gap-3 bg-gray-50/80"
+                          className="flex flex-col items-center justify-center gap-3 bg-gray-50/80 dark:bg-gray-800/50"
                           style={{ height: "640px" }}
                         >
-                          <div className="h-9 w-9 animate-spin rounded-full border-4 border-violet-200 border-t-violet-600" />
-                          <span className="text-sm text-gray-400">
+                          <div className="h-9 w-9 animate-spin rounded-full border-4 border-violet-200 dark:border-violet-900 border-t-violet-600 dark:border-t-violet-400" />
+                          <span className="text-sm text-gray-400 dark:text-gray-500">
                             Preparing your resume…
                           </span>
                         </div>
@@ -580,7 +587,7 @@ export default function ResumeBuilderPage() {
                     if (error || !url) {
                       return (
                         <div
-                          className="flex items-center justify-center bg-red-50 text-sm text-red-500"
+                          className="flex items-center justify-center bg-red-50 dark:bg-red-950/30 text-sm text-red-500 dark:text-red-400"
                           style={{ height: "300px" }}
                         >
                           Preview failed — use the download button below.
@@ -599,15 +606,58 @@ export default function ResumeBuilderPage() {
                   }}
                 </BlobProvider>
 
-                <div className="border-t border-gray-100 bg-gray-50/60 px-6 py-4 flex items-center justify-between">
+                <div className="border-t border-gray-100 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-900/60 px-6 py-4 flex items-center justify-between gap-3 flex-wrap">
                   <button
                     onClick={handleBack}
-                      className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-100 transition-colors"
+                      className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                   >
-                    ← Back 
+                    ← Back
                   </button>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <label className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer">
+                      <Camera className="w-4 h-4" />
+                      {resumeData.profileImage || (resumeData as any).photo ? "Change photo" : "Add photo"}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = () => {
+                            const dataUrl = reader.result as string;
+                            setResumeData((prev) => ({
+                              ...prev,
+                              profileImage: dataUrl,
+                              profileImageRaw: dataUrl,
+                              photo: dataUrl,
+                            } as any));
+                          };
+                          reader.readAsDataURL(file);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+
+                    {(resumeData.profileImage || (resumeData as any).photo) && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setResumeData((prev) => ({
+                            ...prev,
+                            profileImage: undefined,
+                            profileImageRaw: undefined,
+                            photo: undefined,
+                          } as any))
+                        }
+                        className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-rose-200 dark:border-rose-900/50 text-rose-600 dark:text-rose-300 text-sm font-medium hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                        title="Remove photo"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                     <BlobProvider
                       document={
                         <ResumeDocumentRouter data={{ ...resumeData, profileImage: resumeData.profileImage || undefined }} />
@@ -639,8 +689,8 @@ export default function ResumeBuilderPage() {
         </div>
 
         <aside className="hidden lg:flex flex-col gap-4 sticky top-24">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">
               Your Progress
             </p>
 
@@ -656,8 +706,8 @@ export default function ResumeBuilderPage() {
                       ${done
                           ? `bg-gradient-to-br ${s.color} text-white shadow`
                           : active
-                            ? "bg-gray-100 text-gray-700 ring-2 ring-violet-400 ring-offset-1"
-                            : "bg-gray-100 text-gray-400"
+                            ? "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 ring-2 ring-violet-400 ring-offset-1 dark:ring-offset-gray-900"
+                            : "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500"
                         }`}
                     >
                       {done ? (
@@ -669,10 +719,10 @@ export default function ResumeBuilderPage() {
 
                     <span
                       className={`text-sm ${active
-                        ? "font-semibold text-gray-900"
+                        ? "font-semibold text-gray-900 dark:text-gray-100"
                         : done
-                          ? "text-gray-500"
-                          : "text-gray-300"
+                          ? "text-gray-500 dark:text-gray-400"
+                          : "text-gray-300 dark:text-gray-600"
                         }`}
                     >
                       {s.title}
@@ -684,15 +734,15 @@ export default function ResumeBuilderPage() {
           </div>
 
           {step <= 5 && (
-            <div className="bg-gradient-to-br from-violet-50 to-purple-50 rounded-2xl border border-violet-100 p-5">
+            <div className="bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-950/40 dark:to-purple-950/40 rounded-2xl border border-violet-100 dark:border-violet-900/50 p-5">
               <div className="flex items-center gap-1.5 mb-2">
-                <Sparkles className="w-4 h-4 text-violet-500" />
-                <span className="text-xs font-semibold text-violet-600 uppercase tracking-widest">
+                <Sparkles className="w-4 h-4 text-violet-500 dark:text-violet-400" />
+                <span className="text-xs font-semibold text-violet-600 dark:text-violet-300 uppercase tracking-widest">
                   Pro tip
                 </span>
               </div>
 
-              <p className="text-sm text-violet-800 leading-relaxed">
+              <p className="text-sm text-violet-800 dark:text-violet-200 leading-relaxed">
                 {PROGRESS_TIPS[(step - 1) % PROGRESS_TIPS.length]}
               </p>
             </div>
@@ -707,12 +757,12 @@ export default function ResumeBuilderPage() {
             ].map((stat) => (
               <div
                 key={stat.label}
-                className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 text-center"
+                className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm p-3 text-center"
               >
-                <p className="text-base font-bold text-gray-900">
+                <p className="text-base font-bold text-gray-900 dark:text-gray-100">
                   {stat.value}
                 </p>
-                <p className="text-[11px] text-gray-400 mt-0.5">
+                <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
                   {stat.label}
                 </p>
               </div>
@@ -722,8 +772,8 @@ export default function ResumeBuilderPage() {
       </main>
 
       {isFormStep && (
-        <div className="lg:hidden fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur border-t border-gray-100 px-4 py-3 flex items-center gap-2 text-xs text-violet-700 z-20">
-          <Sparkles className="w-3.5 h-3.5 text-violet-500 shrink-0" />
+        <div className="lg:hidden fixed bottom-0 inset-x-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur border-t border-gray-100 dark:border-gray-800 px-4 py-3 flex items-center gap-2 text-xs text-violet-700 dark:text-violet-300 z-20">
+          <Sparkles className="w-3.5 h-3.5 text-violet-500 dark:text-violet-400 shrink-0" />
           <span className="truncate">
             {PROGRESS_TIPS[(step - 1) % PROGRESS_TIPS.length]}
           </span>

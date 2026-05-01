@@ -41,10 +41,10 @@ type Step3Form = {
 };
 
 const inputCls =
-  "w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 outline-none transition-all duration-200 placeholder:text-gray-300 hover:border-violet-300 focus:border-violet-400 focus:ring-2 focus:ring-violet-100";
+  "w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm text-gray-900 dark:text-gray-100 outline-none transition-all duration-200 placeholder:text-gray-300 dark:placeholder:text-gray-500 hover:border-violet-300 dark:hover:border-violet-500 focus:border-violet-400 dark:focus:border-violet-400 focus:ring-2 focus:ring-violet-100 dark:focus:ring-violet-900/40";
 
 const textareaCls =
-  "w-full min-h-[94px] rounded-xl border border-gray-200 bg-white px-3.5 py-3 text-sm text-gray-900 outline-none transition-all duration-200 placeholder:text-gray-300 hover:border-violet-300 focus:border-violet-400 focus:ring-2 focus:ring-violet-100 resize-y";
+  "w-full min-h-[94px] rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-3 text-sm text-gray-900 dark:text-gray-100 outline-none transition-all duration-200 placeholder:text-gray-300 dark:placeholder:text-gray-500 hover:border-violet-300 dark:hover:border-violet-500 focus:border-violet-400 dark:focus:border-violet-400 focus:ring-2 focus:ring-violet-100 dark:focus:ring-violet-900/40 resize-y";
 
 function FieldLabel({
   icon: Icon,
@@ -54,8 +54,8 @@ function FieldLabel({
   children: React.ReactNode;
 }) {
   return (
-    <label className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-400 select-none">
-      <Icon className="h-3 w-3 text-violet-400" />
+    <label className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 select-none">
+      <Icon className="h-3 w-3 text-violet-400 dark:text-violet-300" />
       {children}
     </label>
   );
@@ -183,7 +183,7 @@ function ExperienceBullets({
           <button
             type="button"
             onClick={addBullet}
-            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-violet-600 transition hover:bg-violet-50"
+            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-violet-600 dark:text-violet-300 transition hover:bg-violet-50 dark:hover:bg-violet-950/40"
           >
             <Plus className="h-3.5 w-3.5" />
             Add Bullet
@@ -194,7 +194,7 @@ function ExperienceBullets({
       <div className="space-y-2.5">
         {safeBullets.map((_, bulletIndex) => (
           <div key={bulletIndex} className="flex items-start gap-2">
-            <div className="mt-3 h-2 w-2 shrink-0 rounded-full bg-violet-400" />
+            <div className="mt-3 h-2 w-2 shrink-0 rounded-full bg-violet-400 dark:bg-violet-500" />
 
             <textarea
               {...register(`experience.${index}.bullets.${bulletIndex}` as const)}
@@ -206,7 +206,7 @@ function ExperienceBullets({
             <button
               type="button"
               onClick={() => removeBullet(bulletIndex)}
-              className="mt-2 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-rose-100 bg-rose-50 text-rose-500 transition hover:border-rose-200 hover:bg-rose-100"
+              className="mt-2 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-rose-100 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 text-rose-500 dark:text-rose-300 transition hover:border-rose-200 dark:hover:border-rose-800 hover:bg-rose-100 dark:hover:bg-rose-950/50"
               aria-label={`Remove bullet ${bulletIndex + 1}`}
             >
               <Trash2 className="h-4 w-4" />
@@ -258,7 +258,7 @@ function ExperienceCard({
 
   return (
     <div
-      className={`relative rounded-2xl border bg-white p-5 ring-1 ${accent.ring} transition-all duration-300`}
+      className={`relative rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-5 ring-1 ${accent.ring} dark:ring-gray-800 transition-all duration-300`}
       style={{ boxShadow: "0 2px 16px rgba(0,0,0,.05)" }}
     >
       <div className="mb-5 flex items-start justify-between gap-4">
@@ -270,10 +270,10 @@ function ExperienceCard({
           </div>
 
           <div>
-            <p className="text-sm font-bold leading-none text-gray-800">
+            <p className="text-sm font-bold leading-none text-gray-800 dark:text-gray-100">
               Experience {index + 1}
             </p>
-            <p className="mt-1 text-[11px] text-gray-400">
+            <p className="mt-1 text-[11px] text-gray-400 dark:text-gray-500">
               {watched?.jobTitle || watched?.company
                 ? [watched?.jobTitle, watched?.company].filter(Boolean).join(" · ")
                 : "Add your role, dates, stack, and key achievements"}
@@ -285,7 +285,7 @@ function ExperienceCard({
           <button
             type="button"
             onClick={onRemove}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-rose-100 bg-rose-50 px-3 py-1.5 text-[11px] font-semibold text-rose-500 transition-all hover:border-rose-200 hover:bg-rose-100"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-rose-100 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 px-3 py-1.5 text-[11px] font-semibold text-rose-500 dark:text-rose-300 transition-all hover:border-rose-200 dark:hover:border-rose-800 hover:bg-rose-100 dark:hover:bg-rose-950/50"
           >
             <Trash2 className="h-3 w-3" />
             Remove
@@ -329,7 +329,7 @@ function ExperienceCard({
             disabled={!!watched?.isCurrent}
             className={`${inputCls} ${
               watched?.isCurrent
-                ? "cursor-not-allowed bg-gray-50 text-gray-400 opacity-70"
+                ? "cursor-not-allowed bg-gray-50 dark:bg-gray-800/60 text-gray-400 dark:text-gray-500 opacity-70"
                 : ""
             }`}
           />
@@ -343,11 +343,11 @@ function ExperienceCard({
               className="peer sr-only"
             />
 
-            <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-[10px] border-[3px] border-gray-300 bg-white transition-all duration-200 peer-checked:border-violet-600 peer-checked:bg-violet-600 peer-focus-visible:ring-4 peer-focus-visible:ring-violet-100">
+            <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-[10px] border-[3px] border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 transition-all duration-200 peer-checked:border-violet-600 peer-checked:bg-violet-600 peer-focus-visible:ring-4 peer-focus-visible:ring-violet-100 dark:peer-focus-visible:ring-violet-900/40">
               <Check className="h-4 w-4 text-white opacity-0 transition-opacity duration-200 peer-checked:opacity-100" />
             </span>
 
-            <span className="text-[15px] font-medium text-slate-700">
+            <span className="text-[15px] font-medium text-slate-700 dark:text-slate-200">
               I am currently working here
             </span>
           </label>
@@ -434,7 +434,7 @@ export default function ResumeFormStep3({
           : [defaultEntry()],
       });
     }
-  }, [initialExperience, reset]);
+  }, [initialExperience]);
 
   const [loading, setLoading] = useState(false);
   const [aiLoading, setAiLoading] = useState<number | null>(null);
@@ -544,19 +544,19 @@ if (Array.isArray(skillsInput)) {
       <button
         type="button"
         onClick={() => append(defaultEntry())}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-violet-200 bg-violet-50/40 px-4 py-3.5 text-sm font-semibold text-violet-600 transition-all duration-200 hover:border-violet-300 hover:bg-violet-50"
+        className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-violet-200 dark:border-violet-900/50 bg-violet-50/40 dark:bg-violet-950/20 px-4 py-3.5 text-sm font-semibold text-violet-600 dark:text-violet-300 transition-all duration-200 hover:border-violet-300 dark:hover:border-violet-700 hover:bg-violet-50 dark:hover:bg-violet-950/40"
       >
         <Plus className="h-4 w-4" />
         Add Another Experience
       </button>
 
-      <div className="h-px bg-gradient-to-r from-transparent via-violet-100 to-transparent" />
+      <div className="h-px bg-gradient-to-r from-transparent via-violet-100 dark:via-violet-900/50 to-transparent" />
 
       <div className="flex items-center justify-between gap-3">
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-600 transition-all duration-200 hover:border-gray-300 hover:bg-gray-50"
+          className="inline-flex items-center gap-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-5 py-2.5 text-sm font-semibold text-gray-600 dark:text-gray-200 transition-all duration-200 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
         >
           <ChevronLeft className="h-4 w-4" />
           Back

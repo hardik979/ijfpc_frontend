@@ -24,14 +24,14 @@ type ProjectEntry = {
 /* ── shared input class ─────────────────────────────────────── */
 const inputCls = (opts?: { error?: boolean; disabled?: boolean }) =>
   [
-    "w-full px-3.5 py-2.5 rounded-xl text-sm bg-white",
+    "w-full px-3.5 py-2.5 rounded-xl text-sm bg-white dark:bg-gray-800",
     "border transition-all duration-200 outline-none",
-    "placeholder:text-gray-300",
+    "placeholder:text-gray-300 dark:placeholder:text-gray-500",
     opts?.disabled
-      ? "border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed"
+      ? "border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 text-gray-300 dark:text-gray-600 cursor-not-allowed"
       : opts?.error
-      ? "border-rose-300 focus:ring-2 focus:ring-rose-100 text-gray-900"
-      : "border-gray-200 hover:border-violet-300 focus:border-violet-400 focus:ring-2 focus:ring-violet-100 text-gray-900",
+      ? "border-rose-300 dark:border-rose-900/60 focus:ring-2 focus:ring-rose-100 dark:focus:ring-rose-900/40 text-gray-900 dark:text-gray-100"
+      : "border-gray-200 dark:border-gray-700 hover:border-violet-300 dark:hover:border-violet-500 focus:border-violet-400 dark:focus:border-violet-400 focus:ring-2 focus:ring-violet-100 dark:focus:ring-violet-900/40 text-gray-900 dark:text-gray-100",
   ].join(" ");
 
 /* ── Field label ────────────────────────────────────────────── */
@@ -43,8 +43,8 @@ function FieldLabel({
   children: React.ReactNode;
 }) {
   return (
-    <label className="flex items-center gap-1.5 text-[10px] font-700 uppercase tracking-widest text-gray-400 mb-1.5 select-none">
-      <Icon className="w-3 h-3 text-violet-400" />
+    <label className="flex items-center gap-1.5 text-[10px] font-700 uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1.5 select-none">
+      <Icon className="w-3 h-3 text-violet-400 dark:text-violet-300" />
       {children}
     </label>
   );
@@ -85,7 +85,7 @@ function ProjectCard({
 
   return (
     <div
-      className={`relative rounded-2xl border-transparent border bg-white p-5 ring-1 ${accent.ring} transition-all duration-300`}
+      className={`relative rounded-2xl border-transparent border dark:border-gray-800 bg-white dark:bg-gray-900 p-5 ring-1 ${accent.ring} dark:ring-gray-800 transition-all duration-300`}
       style={{ boxShadow: "0 2px 16px rgba(0,0,0,.05)" }}
     >
       {/* Header */}
@@ -97,10 +97,10 @@ function ProjectCard({
             <FolderKanban className="w-[18px] h-[18px] text-white" />
           </div>
           <div>
-            <p className="text-sm font-bold text-gray-800 leading-none">
+            <p className="text-sm font-bold text-gray-800 dark:text-gray-100 leading-none">
               Project {index + 1}
             </p>
-            <p className="text-[11px] text-gray-400 mt-0.5">
+            <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
               Add project title, stack, link and resume bullet points
             </p>
           </div>
@@ -110,7 +110,7 @@ function ProjectCard({
           <button
             type="button"
             onClick={onRemove}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold border border-rose-100 bg-rose-50 text-rose-500 hover:bg-rose-100 hover:border-rose-200 transition-all shrink-0"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold border border-rose-100 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 text-rose-500 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-950/50 hover:border-rose-200 dark:hover:border-rose-800 transition-all shrink-0"
           >
             <Trash2 className="w-3 h-3" />
             Remove
@@ -157,7 +157,7 @@ function ProjectCard({
             <button
               type="button"
               onClick={() => appendBullet("")}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-violet-200 bg-violet-50 text-violet-600 hover:bg-violet-100 transition-all"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-violet-200 dark:border-violet-900/50 bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-950/60 transition-all"
             >
               <Plus className="w-3 h-3" />
               Add Bullet
@@ -167,7 +167,7 @@ function ProjectCard({
           <div className="space-y-2.5">
             {bulletFields.map((field, bulletIndex) => (
               <div key={field.id} className="flex items-start gap-2">
-                <div className="mt-3 text-violet-400 text-sm">•</div>
+                <span className="mt-4 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-400 dark:bg-violet-500" />
                 <input
                   {...register(`projects.${index}.bullets.${bulletIndex}`)}
                   placeholder="e.g. Built an interactive dashboard to track KPIs and improve reporting visibility."
@@ -177,7 +177,7 @@ function ProjectCard({
                   <button
                     type="button"
                     onClick={() => removeBullet(bulletIndex)}
-                    className="mt-1 flex items-center justify-center w-10 h-10 rounded-xl border border-rose-100 bg-rose-50 text-rose-500 hover:bg-rose-100 transition-all shrink-0"
+                    className="mt-1 flex items-center justify-center w-10 h-10 rounded-xl border border-rose-100 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 text-rose-500 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-950/50 transition-all shrink-0"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -264,21 +264,21 @@ export default function ResumeFormStep5({
       <button
         type="button"
         onClick={() => append(defaultProject())}
-        className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl border-2 border-dashed border-violet-200 bg-violet-50/40 text-violet-600 text-sm font-semibold hover:bg-violet-50 hover:border-violet-300 transition-all duration-200"
+        className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl border-2 border-dashed border-violet-200 dark:border-violet-900/50 bg-violet-50/40 dark:bg-violet-950/20 text-violet-600 dark:text-violet-300 text-sm font-semibold hover:bg-violet-50 dark:hover:bg-violet-950/40 hover:border-violet-300 dark:hover:border-violet-700 transition-all duration-200"
       >
         <Plus className="w-4 h-4" />
         Add Another Project
       </button>
 
       {/* Divider */}
-      <div className="h-px bg-gradient-to-r from-transparent via-violet-100 to-transparent" />
+      <div className="h-px bg-gradient-to-r from-transparent via-violet-100 dark:via-violet-900/50 to-transparent" />
 
       {/* Footer */}
       <div className="flex items-center justify-between">
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-all duration-200"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-200"
         >
           <ChevronLeft className="w-4 h-4" />
           Back

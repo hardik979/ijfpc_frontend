@@ -31,7 +31,7 @@ interface ResumeFormStep4Props {
 }
 
 const inputClass =
-  "w-full rounded-xl border border-gray-200 bg-white px-3.5 py-3 text-sm text-gray-900 outline-none transition-all duration-200 placeholder:text-gray-300 hover:border-violet-300 focus:border-violet-400 focus:ring-2 focus:ring-violet-100";
+  "w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-3 text-sm text-gray-900 dark:text-gray-100 outline-none transition-all duration-200 placeholder:text-gray-300 dark:placeholder:text-gray-500 hover:border-violet-300 dark:hover:border-violet-500 focus:border-violet-400 dark:focus:border-violet-400 focus:ring-2 focus:ring-violet-100 dark:focus:ring-violet-900/40";
 
 const steps = [
   { icon: User, label: "Personal Info", active: false },
@@ -110,8 +110,8 @@ export default function ResumeFormStep4({
     watchedSkills?.filter((skill) => skill?.value?.trim().length > 0).length || 0;
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(139,92,246,0.10),_transparent_35%),linear-gradient(180deg,#faf7ff_0%,#ffffff_45%,#f8faff_100%)]">
-      <div className="border-b border-violet-100/80 bg-white/75 backdrop-blur-xl">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(139,92,246,0.10),_transparent_35%),linear-gradient(180deg,#faf7ff_0%,#ffffff_45%,#f8faff_100%)] dark:bg-none dark:bg-gray-950">
+      <div className="border-b border-violet-100/80 dark:border-gray-800 bg-white/75 dark:bg-gray-900/75 backdrop-blur-xl">
         <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -122,7 +122,7 @@ export default function ResumeFormStep4({
                       "flex items-center gap-2 rounded-xl px-3 py-2 transition-all duration-200",
                       step.active
                         ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-[0_8px_22px_rgba(124,58,237,0.28)]"
-                        : "border border-gray-200 bg-white text-gray-400",
+                        : "border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500",
                     ].join(" ")}
                   >
                     <step.icon className="h-4 w-4" />
@@ -132,13 +132,13 @@ export default function ResumeFormStep4({
                   </div>
 
                   {idx < steps.length - 1 && (
-                    <div className="hidden h-[2px] w-6 rounded-full bg-gradient-to-r from-violet-200 to-indigo-200 sm:block" />
+                    <div className="hidden h-[2px] w-6 rounded-full bg-gradient-to-r from-violet-200 to-indigo-200 dark:from-violet-800 dark:to-indigo-800 sm:block" />
                   )}
                 </div>
               ))}
             </div>
 
-            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-violet-100 bg-violet-50 px-3 py-1.5 text-sm font-semibold text-violet-700">
+            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-violet-100 dark:border-violet-900/50 bg-violet-50 dark:bg-violet-950/40 px-3 py-1.5 text-sm font-semibold text-violet-700 dark:text-violet-300">
               <Sparkles className="h-4 w-4" />
               Step 4 of 4
             </div>
@@ -148,8 +148,8 @@ export default function ResumeFormStep4({
 
       <form onSubmit={handleSubmit(onSubmit)} className="px-4 py-6 sm:px-6 sm:py-8">
         <div className="mx-auto max-w-5xl">
-          <div className="overflow-hidden rounded-[28px] border border-violet-100 bg-white shadow-[0_12px_50px_rgba(88,28,135,0.08)]">
-            <div className="border-b border-violet-100 bg-gradient-to-r from-violet-50 via-white to-indigo-50 px-5 py-6 sm:px-7">
+          <div className="overflow-hidden rounded-[28px] border border-violet-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-[0_12px_50px_rgba(88,28,135,0.08)] dark:shadow-[0_12px_50px_rgba(0,0,0,0.5)]">
+            <div className="border-b border-violet-100 dark:border-gray-800 bg-gradient-to-r from-violet-50 via-white to-indigo-50 dark:from-violet-950/30 dark:via-gray-900 dark:to-indigo-950/30 px-5 py-6 sm:px-7">
               <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                 <div className="flex items-start gap-4">
                   <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 shadow-[0_10px_28px_rgba(124,58,237,0.35)]">
@@ -157,43 +157,43 @@ export default function ResumeFormStep4({
                   </div>
 
                   <div>
-                    <h2 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
+                    <h2 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-100 sm:text-3xl">
                       Key Skills
                     </h2>
-                    <p className="mt-1 max-w-2xl text-sm leading-6 text-gray-500">
+                    <p className="mt-1 max-w-2xl text-sm leading-6 text-gray-500 dark:text-gray-400">
                       Add the skills that define your profile best. These will be highlighted prominently in your resume summary section.
                     </p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 sm:min-w-[240px]">
-                  <div className="rounded-2xl border border-violet-100 bg-white px-4 py-3 text-center shadow-sm">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-gray-400">
+                  <div className="rounded-2xl border border-violet-100 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-center shadow-sm">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-gray-400 dark:text-gray-500">
                       Total Rows
                     </p>
-                    <p className="mt-1 text-2xl font-bold text-gray-900">{fields.length}</p>
+                    <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-100">{fields.length}</p>
                   </div>
-                  <div className="rounded-2xl border border-violet-100 bg-white px-4 py-3 text-center shadow-sm">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-gray-400">
+                  <div className="rounded-2xl border border-violet-100 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 text-center shadow-sm">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-gray-400 dark:text-gray-500">
                       Filled
                     </p>
-                    <p className="mt-1 text-2xl font-bold text-violet-700">{filledSkillsCount}</p>
+                    <p className="mt-1 text-2xl font-bold text-violet-700 dark:text-violet-300">{filledSkillsCount}</p>
                   </div>
                 </div>
               </div>
             </div>
 
             <div className="px-5 py-6 sm:px-7 sm:py-7">
-              <div className="mb-5 rounded-2xl border border-violet-100 bg-gradient-to-r from-violet-50 to-indigo-50 p-4">
+              <div className="mb-5 rounded-2xl border border-violet-100 dark:border-violet-900/40 bg-gradient-to-r from-violet-50 to-indigo-50 dark:from-violet-950/30 dark:to-indigo-950/30 p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <p className="text-sm font-bold text-gray-800">Skills Tips</p>
-                    <p className="mt-1 text-sm text-gray-500">
+                    <p className="text-sm font-bold text-gray-800 dark:text-gray-100">Skills Tips</p>
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                       Prefer role-relevant keywords like React.js, Node.js, SQL, Excel, Power BI, Python, MongoDB, Linux, ServiceNow, or Data Analysis.
                     </p>
                   </div>
 
-                  <div className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm font-semibold text-violet-700 shadow-sm">
+                  <div className="inline-flex items-center gap-2 rounded-xl bg-white dark:bg-gray-800 px-3 py-2 text-sm font-semibold text-violet-700 dark:text-violet-300 shadow-sm">
                     <CheckCircle2 className="h-4 w-4" />
                     Keep it concise
                   </div>
@@ -210,8 +210,8 @@ export default function ResumeFormStep4({
                       className={[
                         "group flex items-center gap-3 rounded-2xl border p-3.5 transition-all duration-200 sm:p-4",
                         hasValue
-                          ? "border-violet-200 bg-gradient-to-r from-violet-50/80 to-indigo-50/70 shadow-sm"
-                          : "border-gray-200 bg-white hover:border-violet-200 hover:bg-violet-50/40",
+                          ? "border-violet-200 dark:border-violet-900/50 bg-gradient-to-r from-violet-50/80 to-indigo-50/70 dark:from-violet-950/30 dark:to-indigo-950/30 shadow-sm"
+                          : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-violet-200 dark:hover:border-violet-900/50 hover:bg-violet-50/40 dark:hover:bg-violet-950/20",
                       ].join(" ")}
                     >
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 text-sm font-bold text-white shadow-md">
@@ -230,7 +230,7 @@ export default function ResumeFormStep4({
                         <button
                           type="button"
                           onClick={() => remove(index)}
-                          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-rose-100 bg-rose-50 text-rose-500 transition-all hover:border-rose-200 hover:bg-rose-100"
+                          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-rose-100 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 text-rose-500 dark:text-rose-300 transition-all hover:border-rose-200 dark:hover:border-rose-800 hover:bg-rose-100 dark:hover:bg-rose-950/50"
                           aria-label={`Remove skill ${index + 1}`}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -245,7 +245,7 @@ export default function ResumeFormStep4({
                 <button
                   type="button"
                   onClick={() => append({ value: "" })}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-violet-200 bg-violet-50/50 px-4 py-3.5 text-sm font-semibold text-violet-700 transition-all duration-200 hover:border-violet-300 hover:bg-violet-50"
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-violet-200 dark:border-violet-900/50 bg-violet-50/50 dark:bg-violet-950/20 px-4 py-3.5 text-sm font-semibold text-violet-700 dark:text-violet-300 transition-all duration-200 hover:border-violet-300 dark:hover:border-violet-700 hover:bg-violet-50 dark:hover:bg-violet-950/40"
                 >
                   <Plus className="h-4 w-4" />
                   Add Another Skill
@@ -253,11 +253,11 @@ export default function ResumeFormStep4({
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 border-t border-violet-100 bg-gray-50/60 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+            <div className="flex flex-col gap-3 border-t border-violet-100 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-900/60 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7">
               <button
                 type="button"
                 onClick={onBack}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-3 text-sm font-semibold text-gray-700 transition-all duration-200 hover:border-gray-300 hover:bg-gray-50"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-5 py-3 text-sm font-semibold text-gray-700 dark:text-gray-200 transition-all duration-200 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 <ChevronLeft className="h-4 w-4" />
                 Back

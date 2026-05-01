@@ -1288,6 +1288,11 @@ function CompactProTemplate({ data }: { data: ResumeData }) {
             )}
           </View>
         </View>
+        {hasLanguages(data) && (
+          <Section title="Languages" palette={palette}>
+            <LanguagesBlock data={data} palette={palette} />
+          </Section>
+        )}
       </Page>
     </Document>
   );
