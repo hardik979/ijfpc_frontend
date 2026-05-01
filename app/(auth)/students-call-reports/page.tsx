@@ -18,6 +18,8 @@ import Link from "next/link";
 import DailyCallReport from "@/components/reports/DailyCallReport";
 import CallAnalysis from "@/components/reports/CallAnalysis";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import InterviewSummaryPanel, { type ExternalInterviewRaw, type GroupSummary } from "@/components/reports/Interviewsummarypanel.js";
+ 
 
 interface RecordingReport {
   _id: string;
@@ -43,6 +45,9 @@ export default function StudentsCallReports() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"daily" | "analysis">("daily");
   const { getToken } = useAuth();
+
+  const [externalInterviews, setExternalInterviews] = useState<ExternalInterviewRaw[]>([]);
+  const [groupSummary, setGroupSummary] = useState<GroupSummary | null>(null);
 
   const [filterType, setFilterType] = useState<"day" | "week" | "month" | "year">("day");
   const [selectedDate, setSelectedDate] = useState(() => {
@@ -86,7 +91,11 @@ export default function StudentsCallReports() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      setReports(data.recordings || []);
+      setReports(data.recordings || [])
+      setExternalInterviews(data.externalInterviews || []);
+      setGroupSummary(data.groupSummary || null);
+ ;
+
     } catch (error) {
       console.error("Error fetching reports:", error);
     } finally {
@@ -295,7 +304,12 @@ export default function StudentsCallReports() {
         {/* Dynamic Section Content */}
         <div className="flex-1 overflow-hidden flex flex-col relative">
           {activeTab === "daily" ? (
-            <DailyCallReport reports={reports} selectedDate={getDisplayLabel()} />
+            <DailyCallReport
+                reports={reports} 
+                selectedDate={getDisplayLabel()} 
+                externalInterviews={externalInterviews}
+                groupSummary={groupSummary} 
+            />
           ) : (
             <CallAnalysis reports={reports} />
           )}

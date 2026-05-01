@@ -16,6 +16,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
 } from "lucide-react";
+import { useTheme } from "@/context/ThemeContext";
 
 interface RecordingReport {
   _id: string;
@@ -82,6 +83,7 @@ interface UploadQualityChartProps {
 function UploadQualityChart({ data, timeFilter }: UploadQualityChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<any>(null);
+  const { theme } = useTheme();
 
   useEffect(() => {
     if (!canvasRef.current || data.length === 0) return;
@@ -96,11 +98,10 @@ function UploadQualityChart({ data, timeFilter }: UploadQualityChartProps) {
       }
 
       const isDark =
-        window.matchMedia &&
-        window.matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.getAttribute("data-theme") === "dark";
 
       const gridColor = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)";
-      const labelColor = isDark ? "#888780" : "#5F5E5A";
+      const labelColor = isDark ? "#a8b4cc" : "#5D4037";
 
       const maxUploads = Math.max(...data.map((d) => d.uploads), 10);
       const yLeftMax = Math.ceil(maxUploads * 1.3 / 10) * 10;
@@ -131,7 +132,7 @@ function UploadQualityChart({ data, timeFilter }: UploadQualityChartProps) {
               backgroundColor: "rgba(16,185,129,0.08)",
               borderWidth: 2.5,
               pointBackgroundColor: "#10b981",
-              pointBorderColor: isDark ? "#1a1f2e" : "#fff",
+              pointBorderColor: isDark ? "#1c2333" : "#fff",
               pointBorderWidth: 2.5,
               pointRadius: 6,
               pointHoverRadius: 9,
@@ -150,11 +151,11 @@ function UploadQualityChart({ data, timeFilter }: UploadQualityChartProps) {
           plugins: {
             legend: { display: false },
             tooltip: {
-              backgroundColor: isDark ? "#1a1f2e" : "#ffffff",
-              borderColor: isDark ? "#334155" : "#e2e8f0",
+              backgroundColor: isDark ? "#1c2333" : "#ffffff",
+              borderColor: isDark ? "#2e3a55" : "#E9E2D6",
               borderWidth: 1,
-              titleColor: isDark ? "#e2e8f0" : "#1e293b",
-              bodyColor: isDark ? "#94a3b8" : "#475569",
+              titleColor: isDark ? "#f0f4ff" : "#2D1F16",
+              bodyColor: isDark ? "#a8b4cc" : "#5D4037",
               padding: 14,
               cornerRadius: 10,
               callbacks: {
@@ -229,11 +230,11 @@ function UploadQualityChart({ data, timeFilter }: UploadQualityChartProps) {
         chartRef.current = null;
       }
     };
-  }, [data]);
+  }, [data, theme]);
 
   if (data.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64 text-slate-500">
+      <div className="flex items-center justify-center h-64 text-[#9A8572]">
         <div className="text-center">
           <Upload className="w-10 h-10 mx-auto mb-3 opacity-30" />
           <p className="text-sm">No data for this period</p>
@@ -359,7 +360,7 @@ function UploadQualityChart({ data, timeFilter }: UploadQualityChartProps) {
                   ? "Quality Declining"
                   : "Stable"}
           </p>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-[#9A8572] mt-1">
             {uploadTrend > 0 && rateTrend < 0
               ? "Quantity outpacing quality"
               : uploadTrend > 0 && rateTrend >= 0
@@ -370,7 +371,7 @@ function UploadQualityChart({ data, timeFilter }: UploadQualityChartProps) {
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-6 text-xs text-slate-400">
+      <div className="flex items-center gap-6 text-xs text-[#7A6753]">
         <span className="flex items-center gap-2">
           <span className="w-3 h-3 rounded bg-blue-500/60 inline-block" />
           Recordings uploaded (left axis)
@@ -396,20 +397,20 @@ function UploadQualityChart({ data, timeFilter }: UploadQualityChartProps) {
         <div className="mt-4 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-700">
-                <th className="text-left py-2 pr-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              <tr className="border-b border-[#E9E2D6]">
+                <th className="text-left py-2 pr-4 text-xs font-semibold text-[#9A8572] uppercase tracking-wider">
                   Period
                 </th>
-                <th className="text-right py-2 pr-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                <th className="text-right py-2 pr-4 text-xs font-semibold text-[#9A8572] uppercase tracking-wider">
                   Uploads
                 </th>
-                <th className="text-right py-2 pr-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                <th className="text-right py-2 pr-4 text-xs font-semibold text-[#9A8572] uppercase tracking-wider">
                   Positive
                 </th>
-                <th className="text-right py-2 pr-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                <th className="text-right py-2 pr-4 text-xs font-semibold text-[#9A8572] uppercase tracking-wider">
                   Negative
                 </th>
-                <th className="text-right py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                <th className="text-right py-2 text-xs font-semibold text-[#9A8572] uppercase tracking-wider">
                   Rate
                 </th>
               </tr>
@@ -418,9 +419,9 @@ function UploadQualityChart({ data, timeFilter }: UploadQualityChartProps) {
               {data.map((row, i) => (
                 <tr
                   key={row.dateKey}
-                  className={`border-b border-slate-800 ${i % 2 === 0 ? "bg-slate-900/20" : ""}`}
+                  className={`border-b border-[#F3ECE2] ${i % 2 === 0 ? "bg-[#FBF8F3]" : ""}`}
                 >
-                  <td className="py-2.5 pr-4 text-slate-300 font-medium">
+                  <td className="py-2.5 pr-4 text-[#2D1F16] font-medium">
                     {row.label}
                   </td>
                   <td className="py-2.5 pr-4 text-right text-blue-400 font-semibold">
@@ -683,42 +684,42 @@ export default function CallAnalysis({ reports }: CallAnalysisProps) {
   const maxStudentTotal = Math.max(...studentStats.map((s) => s.total), 1);
 
   return (
-    <div className="min-h-screen bg-[#0f1419] p-6">
+    <div className="min-h-screen bg-[#FCFAF6] p-6">
       <div className="max-w-7xl mx-auto space-y-6">
 
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
           <div>
-            <h1 className="text-4xl font-bold text-white mb-2">
+            <h1 className="text-4xl font-bold text-[#2D1F16] mb-2">
               Analytics Dashboard
             </h1>
-            <p className="text-slate-400 font-medium">
+            <p className="text-[#7A6753] font-medium">
               Performance metrics and insights
             </p>
-          </div>          
+          </div>
         </div>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-[#1a1f2e] rounded-2xl p-6 border border-slate-700">
+          <div className="bg-white rounded-2xl p-6 border border-[#E9E2D6] shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
                 <Phone className="w-6 h-6 text-blue-400" />
               </div>
-              <Users className="w-5 h-5 text-slate-500" />
+              <Users className="w-5 h-5 text-[#9A8572]" />
             </div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+            <p className="text-xs font-semibold text-[#9A8572] uppercase tracking-wider mb-2">
               Total Calls
             </p>
-            <p className="text-4xl font-bold text-white mb-1">
+            <p className="text-4xl font-bold text-[#2D1F16] mb-1">
               {overallStats.total}
             </p>
-            <p className="text-sm text-slate-400 font-medium">
+            <p className="text-sm text-[#7A6753] font-medium">
               {getTimeFilterLabel()}
             </p>
           </div>
 
-          <div className="bg-[#1a1f2e] rounded-2xl p-6 border border-emerald-500/20">
+          <div className="bg-white rounded-2xl p-6 border border-emerald-500/20 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div className="w-12 h-12 bg-emerald-500/20 rounded-xl flex items-center justify-center">
                 <CheckCircle2 className="w-6 h-6 text-emerald-400" />
@@ -745,12 +746,12 @@ export default function CallAnalysis({ reports }: CallAnalysisProps) {
             <p className="text-4xl font-bold text-emerald-400 mb-1">
               {Math.round(overallStats.positivePercentage)}%
             </p>
-            <p className="text-sm text-slate-400 font-medium">
+            <p className="text-sm text-[#7A6753] font-medium">
               {overallStats.positive} calls
             </p>
           </div>
 
-          <div className="bg-[#1a1f2e] rounded-2xl p-6 border border-red-500/20">
+          <div className="bg-white rounded-2xl p-6 border border-red-500/20 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div className="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center">
                 <XCircle className="w-6 h-6 text-red-400" />
@@ -762,12 +763,12 @@ export default function CallAnalysis({ reports }: CallAnalysisProps) {
             <p className="text-4xl font-bold text-red-400 mb-1">
               {Math.round(overallStats.negativePercentage)}%
             </p>
-            <p className="text-sm text-slate-400 font-medium">
+            <p className="text-sm text-[#7A6753] font-medium">
               {overallStats.negative} calls
             </p>
           </div>
 
-          <div className="bg-[#1a1f2e] rounded-2xl p-6 border border-amber-500/20">
+          <div className="bg-white rounded-2xl p-6 border border-amber-500/20 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div className="w-12 h-12 bg-amber-500/20 rounded-xl flex items-center justify-center">
                 <Clock className="w-6 h-6 text-amber-400" />
@@ -779,23 +780,23 @@ export default function CallAnalysis({ reports }: CallAnalysisProps) {
             <p className="text-4xl font-bold text-amber-400 mb-1">
               {Math.round(overallStats.neutralPercentage)}%
             </p>
-            <p className="text-sm text-slate-400 font-medium">
+            <p className="text-sm text-[#7A6753] font-medium">
               {overallStats.neutral} calls
             </p>
           </div>
         </div>
 
         {/* Upload Quality vs Positive Rate – FULL WIDTH */}
-        <div className="bg-[#1a1f2e] rounded-2xl p-8 border border-slate-700">
+        <div className="bg-white rounded-2xl p-8 border border-[#E9E2D6] shadow-sm">
           <div className="flex items-center gap-3 mb-8">
             <div className="w-10 h-10 bg-indigo-500/20 rounded-xl flex items-center justify-center">
               <Upload className="w-5 h-5 text-indigo-400" />
             </div>
             <div className="flex-1">
-              <h2 className="text-xl font-bold text-white">
+              <h2 className="text-xl font-bold text-[#2D1F16]">
                 Upload Volume vs Positive Response Rate
               </h2>
-              <p className="text-sm text-slate-400">
+              <p className="text-sm text-[#7A6753]">
                 Recordings uploaded (bars) against quality signal (line) — spot
                 when volume outpaces quality
               </p>

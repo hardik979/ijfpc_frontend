@@ -70,9 +70,13 @@ import {
   normalizeDate,
 } from "@/utils/Dailycallreport.utils";
 
+import InterviewSummaryPanel, { type ExternalInterviewRaw, type GroupSummary } from "./Interviewsummarypanel";
+import ChartSection from "./Chartsection";
 interface DailyCallReportProps {
   reports: RecordingReport[];
   interviews?: InterviewRecord[];
+  externalInterviews?: ExternalInterviewRaw[];
+  groupSummary?: GroupSummary | null;
   selectedDate: string;
 }
 
@@ -93,11 +97,10 @@ const StarRating: React.FC<{ rating: number }> = ({ rating }) => {
       {stars.map((star) => (
         <Star
           key={star}
-          className={`w-4 h-4 transition-all ${
-            star <= normalizedRating
-              ? "fill-amber-400 text-amber-400"
-              : "fill-gray-200 text-gray-200"
-          }`}
+          className={`w-4 h-4 transition-all ${star <= normalizedRating
+            ? "fill-amber-400 text-amber-400"
+            : "fill-gray-200 text-gray-200"
+            }`}
         />
       ))}
     </div>
@@ -219,6 +222,8 @@ const InterviewMiniCard: React.FC<{ interview: InterviewRecord }> = ({
 export default function DailyCallReport({
   reports,
   interviews = [],
+  externalInterviews = [],
+  groupSummary = null,
   selectedDate,
 }: DailyCallReportProps) {
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
@@ -231,13 +236,64 @@ export default function DailyCallReport({
   const [sortKey, setSortKey] = useState<SortKey>("total");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
 
+  /* Local filters scoped to the Top Student Performance chart only */
+  const [perfChartDate, setPerfChartDate] = useState<string>("all");
+  const [perfPlacedOnly, setPerfPlacedOnly] = useState(false);
+
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
     else { setSortKey(key); setSortOrder("desc"); }
   };
 
+  /* ── Build InterviewRecord[] from externalInterviews when not provided directly ── */
+  const derivedInterviews = useMemo<InterviewRecord[]>(() => {
+    if (interviews && interviews.length > 0) return interviews;
+    const grouped = new Map<string, InterviewRecord>();
+    externalInterviews.forEach((ev) => {
+      const leadId = (ev as any).student || (ev as any).studentId || (ev as any).studentEmail || ev.studentName;
+      const key = `${leadId}__${ev.company}`;
+      const roundStatus: InterviewRecord["rounds"][number]["status"] =
+        ev.status === "cleared" || ev.status === "selected" || ev.status === "passed"
+          ? "cleared"
+          : ev.status === "failed" || ev.status === "rejected"
+          ? "failed"
+          : ev.status === "scheduled"
+          ? "scheduled"
+          : "pending";
+      const round = {
+        roundName: ev.round || `Round ${ev.roundNumber ?? 1}`,
+        time: ev.scheduledTime || "",
+        date: ev.scheduledDate || ev.scheduledAt || ev.createdAt,
+        status: roundStatus,
+      };
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          _id: ev._id,
+          leadId: String(leadId),
+          studentName: ev.studentName,
+          companyName: ev.company,
+          rounds: [round],
+          overallStatus: "in-progress",
+          createdAt: ev.createdAt,
+        });
+      } else {
+        grouped.get(key)!.rounds.push(round);
+      }
+    });
+    grouped.forEach((rec) => {
+      const last = rec.rounds[rec.rounds.length - 1];
+      rec.overallStatus =
+        last.status === "cleared"
+          ? "selected"
+          : last.status === "failed"
+          ? "rejected"
+          : "in-progress";
+    });
+    return Array.from(grouped.values());
+  }, [interviews, externalInterviews]);
+
   /* ── Interview map ── */
-  const interviewMap = useMemo(() => buildInterviewMap(interviews), [interviews]);
+  const interviewMap = useMemo(() => buildInterviewMap(derivedInterviews), [derivedInterviews]);
 
   /* ══════════════════════════════════════════════════════════════════════════
    * ANALYTICS
@@ -329,7 +385,7 @@ export default function DailyCallReport({
     const sentimentData = [
       { name: "Positive", value: positive, color: "#16a34a", percent: conversionRate },
       { name: "Negative", value: negative, color: "#dc2626", percent: negativeRate },
-      { name: "Neutral",  value: neutral,  color: "#d97706", percent: neutralRate },
+      { name: "Neutral", value: neutral, color: "#d97706", percent: neutralRate },
     ].filter((item) => item.value > 0);
 
     const performanceData = [...students]
@@ -345,9 +401,9 @@ export default function DailyCallReport({
 
     const qualityDistribution = [
       { quality: "Excellent", count: 0, color: "#16a34a" },
-      { quality: "Good",      count: 0, color: "#0ea5e9" },
-      { quality: "Average",   count: 0, color: "#f59e0b" },
-      { quality: "Poor",      count: 0, color: "#dc2626" },
+      { quality: "Good", count: 0, color: "#0ea5e9" },
+      { quality: "Average", count: 0, color: "#f59e0b" },
+      { quality: "Poor", count: 0, color: "#dc2626" },
     ];
     students.forEach((s) => {
       if (s.avgQualityScore >= 3.5) qualityDistribution[0].count++;
@@ -364,21 +420,85 @@ export default function DailyCallReport({
     };
   }, [reports]);
 
+  /* ── Unique dates available in current reports (for chart-local date picker) ── */
+  const perfAvailableDates = useMemo(() => {
+    const set = new Set<string>();
+    reports.forEach((r) => {
+      if (r.createdAt) set.add(r.createdAt.slice(0, 10));
+    });
+    return Array.from(set).sort((a, b) => b.localeCompare(a));
+  }, [reports]);
+
+  /* ── Top Student Performance: locally filtered performance data ── */
+  const perfPerformanceData = useMemo(() => {
+    const noLocal = perfChartDate === "all" && !perfPlacedOnly;
+    if (noLocal) return analytics.performanceData;
+
+    const filtered = reports.filter((r) => {
+      if (r.manualStatus === "DNP" || r.type === "manual") return false;
+      if (perfChartDate !== "all" && r.createdAt?.slice(0, 10) !== perfChartDate) return false;
+      return true;
+    });
+
+    const map = new Map<string, {
+      leadId: string; name: string; placed: boolean;
+      total: number; pos: number; neg: number; neutral: number;
+    }>();
+    filtered.forEach((r) => {
+      const s = classifySentiment(r);
+      if (!map.has(r.leadId)) {
+        map.set(r.leadId, {
+          leadId: r.leadId,
+          name: r.studentName || "Unknown Student",
+          placed: r.Placed || false,
+          total: 0, pos: 0, neg: 0, neutral: 0,
+        });
+      }
+      const st = map.get(r.leadId)!;
+      st.total++;
+      if (s === "pos") st.pos++;
+      else if (s === "neg") st.neg++;
+      else if (s === "neutral") st.neutral++;
+    });
+
+    let arr = Array.from(map.values());
+    if (perfPlacedOnly) arr = arr.filter((s) => s.placed);
+
+    return arr
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 8)
+      .map((s) => ({
+        name: s.name.split(" ")[0] || "User",
+        Positive: s.pos,
+        Neutral: s.neutral,
+        Negative: s.neg,
+        Total: s.total,
+        posPct: pct(s.pos, s.total),
+        neutralPct: pct(s.neutral, s.total),
+        negPct: pct(s.neg, s.total),
+      }));
+  }, [reports, perfChartDate, perfPlacedOnly, analytics.performanceData]);
+
   /* ── Sets for chart axis ticks ── */
   const placedStudents = useMemo<Set<string>>(
     () => new Set(analytics.students.filter((s) => s.placed).map((s) => s.name.split(" ")[0])),
     [analytics.students]
   );
 
-  const interviewStudents = useMemo<Set<string>>(
-    () =>
-      new Set(
-        analytics.students
-          .filter((s) => interviewMap.has(s.leadId))
-          .map((s) => s.name.split(" ")[0])
-      ),
-    [analytics.students, interviewMap]
-  );
+  const interviewStudents = useMemo<Set<string>>(() => {
+    const interviewEmails = new Set(
+      Array.from(interviewMap.values())
+        .flat()
+        .map((iv) => iv.studentEmail?.toLowerCase().trim())
+        .filter(Boolean)
+    );
+
+    return new Set(
+      analytics.students
+        .filter((s) => interviewEmails.has(s.email?.toLowerCase().trim()))
+        .map((s) => s.name.split(" ")[0])
+    );
+  }, [analytics.students, interviewMap]);
 
   /* ── Sorted students ── */
   const sortedStudents = useMemo(() => {
@@ -386,15 +506,15 @@ export default function DailyCallReport({
     const dir = sortOrder === "asc" ? 1 : -1;
     list.sort((a, b) => {
       switch (sortKey) {
-        case "name":       return a.name.localeCompare(b.name) * dir;
-        case "total":      return (a.total - b.total) * dir;
+        case "name": return a.name.localeCompare(b.name) * dir;
+        case "total": return (a.total - b.total) * dir;
         case "avgDuration": return (a.avgDurationSeconds - b.avgDurationSeconds) * dir;
-        case "positive":   return (a.pos - b.pos) * dir;
-        case "neutral":    return (a.neutral - b.neutral) * dir;
-        case "negative":   return (a.neg - b.neg) * dir;
-        case "followUps":  return (a.followUps - b.followUps) * dir;
+        case "positive": return (a.pos - b.pos) * dir;
+        case "neutral": return (a.neutral - b.neutral) * dir;
+        case "negative": return (a.neg - b.neg) * dir;
+        case "followUps": return (a.followUps - b.followUps) * dir;
         case "conversion": return (a.conversionRate - b.conversionRate) * dir;
-        case "quality":    return (a.avgQualityScore - b.avgQualityScore) * dir;
+        case "quality": return (a.avgQualityScore - b.avgQualityScore) * dir;
         default: return 0;
       }
     });
@@ -436,14 +556,25 @@ export default function DailyCallReport({
   const topIssue = commonFeedback.length > 0 ? commonFeedback[0] : null;
   const selectedStudent = analytics.students.find((s) => s.leadId === selectedStudentId);
   const selectedStudentInterviews = selectedStudentId ? (interviewMap.get(selectedStudentId) ?? []) : [];
+  const getStudentInterviewsByEmail = (email?: string) => {
+    if (!email) return [];
+
+    return Array.from(interviewMap.values())
+      .flat()
+      .filter(
+        (iv) =>
+          iv.studentEmail?.toLowerCase().trim() ===
+          email.toLowerCase().trim()
+      );
+  };
 
   /* ── CSV Export ── */
   const downloadCSV = () => {
     const headers = [
-      "Student Name","Email","Phone","Placement Status","Interview Status",
-      "Total Calls","Manual Logs","Unique Numbers","Positive","Positive %",
-      "Neutral","Neutral %","Negative","Negative %","Follow Ups",
-      "Conversion Rate %","Quality Score","Quality Rating","Avg Duration","Total Talk Time",
+      "Student Name", "Email", "Phone", "Placement Status", "Interview Status",
+      "Total Calls", "Manual Logs", "Unique Numbers", "Positive", "Positive %",
+      "Neutral", "Neutral %", "Negative", "Negative %", "Follow Ups",
+      "Conversion Rate %", "Quality Score", "Quality Rating", "Avg Duration", "Total Talk Time",
     ];
     const rows = sortedStudents.map((s) => {
       const ivs = interviewMap.get(s.leadId) ?? [];
@@ -585,6 +716,31 @@ export default function DailyCallReport({
           />
         </div>
 
+        {/* ═══════════════════ LEGEND ═══════════════════ */}
+        <div className="rounded-[1.5rem] sm:rounded-[2rem] border border-[#EEE2D2] bg-white p-4 sm:p-6 shadow-sm">
+          <h3 className="text-base sm:text-lg font-semibold text-[#2D1F16]">
+            How to Read This Dashboard
+          </h3>
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+            <div className="rounded-2xl bg-green-50 p-4 border border-green-200">
+              <p className="font-semibold text-green-800">Positive</p>
+              <p className="mt-1 text-sm text-green-700 leading-relaxed">Resume requested, clear progress, successful response</p>
+            </div>
+            <div className="rounded-2xl bg-red-50 p-4 border border-red-200">
+              <p className="font-semibold text-red-800">Negative</p>
+              <p className="mt-1 text-sm text-red-700 leading-relaxed">Not interested, wrong number, invalid, no answer, dead call</p>
+            </div>
+            <div className="rounded-2xl bg-amber-50 p-4 border border-amber-200">
+              <p className="font-semibold text-amber-800">Neutral</p>
+              <p className="mt-1 text-sm text-amber-700 leading-relaxed">Information shared, callback requested, still open</p>
+            </div>
+            <div className="rounded-2xl bg-[#FFF7ED] p-4 border border-orange-200">
+              <p className="font-semibold text-[#A86117]">Manual Logs</p>
+              <p className="mt-1 text-sm text-[#A86117] leading-relaxed">Student manually entered outcome like DNP or invalid number</p>
+            </div>
+          </div>
+        </div>
+
         {/* ═══════════════════ OVERALL DISTRIBUTION BAR ═══════════════════ */}
         <div className={cardBase}>
           <div className="mb-5 flex items-center justify-between flex-wrap gap-3">
@@ -621,31 +777,15 @@ export default function DailyCallReport({
           />
         </div>
 
-        {/* ═══════════════════ QUALITY DISTRIBUTION & METRICS ═══════════════════ */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className={cardBase}>
-            <h3 className="text-lg font-bold text-[#2D1F16] mb-4 flex items-center gap-2">
-              <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
-              A.I. Call Quality Distribution
-            </h3>
-            <div className="h-[290px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={analytics.qualityDistribution} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#F0E9DF" />
-                  <XAxis type="number" tick={{ fontSize: 11 }} />
-                  <YAxis dataKey="quality" type="category" tick={{ fontSize: 11 }} width={80} />
-                  <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #eee2d0" }} />
-                  <Bar dataKey="count" radius={[0, 8, 8, 0]}>
-                    {analytics.qualityDistribution.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                    <LabelList dataKey="count" position="right" style={{ fontSize: 12, fontWeight: 700 }} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
+        {/* ═══════════════════ CHART SECTION (filterable analytics) ═══════════════════ */}
+        <ChartSection
+          reports={reports}
+          interviews={derivedInterviews}
+          availableDates={Array.from(new Set(reports.map((r) => r.createdAt))).sort((a, b) => b.localeCompare(a))}
+        />
 
+        {/* ═══════════════════ KEY METRICS ═══════════════════ 
+        <div className="grid grid-cols-1 gap-6">
           <div className={cardBase}>
             <h3 className="text-lg font-bold text-[#2D1F16] mb-4 flex items-center gap-2">
               <Zap className="w-5 h-5 text-purple-600" />
@@ -725,9 +865,10 @@ export default function DailyCallReport({
               </div>
             </div>
           </div>
-        </div>
+        </div>*/}
 
-        {/* ═══════════════════ CHARTS ═══════════════════ */}
+        {/* CHARTS section removed — covered by ChartSection above */}
+        {false && (
         <div className="grid grid-cols-1 xl:grid-cols-5 gap-4 sm:gap-6">
           {/* Sentiment Pie */}
           <div className="xl:col-span-2 rounded-[1.5rem] sm:rounded-[2rem] border border-[#E9E2D6] bg-white p-4 sm:p-6 shadow-lg">
@@ -799,18 +940,60 @@ export default function DailyCallReport({
                     )}
                   </div>
                 </div>
-                <div className="shrink-0 rounded-xl border border-[#E5D9C6] bg-[#FAF5EC] px-3 py-2 shadow-sm flex items-center gap-2">
-                  <Calendar className="w-3.5 h-3.5 text-[#8B4513]" />
-                  <span className="text-xs font-bold text-[#3E2723]">{selectedDate}</span>
+                <div className="shrink-0 flex flex-wrap items-center gap-2">
+                  <div className="relative inline-flex items-center rounded-xl border border-[#E5D9C6] bg-[#FAF5EC] pl-7 pr-2 py-1.5 shadow-sm">
+                    <Calendar className="absolute left-2 top-2 w-3.5 h-3.5 text-[#8B4513] pointer-events-none" />
+                    <input
+                      type="date"
+                      value={perfChartDate === "all" ? "" : perfChartDate}
+                      min={perfAvailableDates[perfAvailableDates.length - 1]}
+                      max={perfAvailableDates[0]}
+                      onChange={(e) =>
+                        setPerfChartDate(e.target.value || "all")
+                      }
+                      className="bg-transparent text-xs font-bold text-[#3E2723] focus:outline-none cursor-pointer"
+                    />
+                    {perfChartDate !== "all" && (
+                      <button
+                        onClick={() => setPerfChartDate("all")}
+                        title="Clear date"
+                        className="ml-1 rounded p-0.5 hover:bg-[#E5D9C6]"
+                      >
+                        <X className="w-3 h-3 text-[#8B4513]" />
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setPerfPlacedOnly((v) => !v)}
+                    className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold border transition-all ${
+                      perfPlacedOnly
+                        ? "bg-amber-600 text-white border-transparent shadow-md"
+                        : "bg-white text-amber-700 border-[#E9E2D6] hover:border-amber-400"
+                    }`}
+                  >
+                    <Briefcase size={12} strokeWidth={2.5} />
+                    Placed only
+                  </button>
+                  {(perfChartDate !== "all" || perfPlacedOnly) && (
+                    <button
+                      onClick={() => {
+                        setPerfChartDate("all");
+                        setPerfPlacedOnly(false);
+                      }}
+                      className="text-xs font-semibold text-[#8B4513] hover:underline px-2 py-2"
+                    >
+                      Reset
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
 
             <div className="h-[280px] sm:h-[320px] lg:h-[340px]">
-              {analytics.performanceData.length > 0 ? (
+              {perfPerformanceData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
-                    data={analytics.performanceData}
+                    data={perfPerformanceData}
                     margin={{ top: 25, right: 10, left: 10, bottom: 10 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="#F0E9DF" />
@@ -841,7 +1024,7 @@ export default function DailyCallReport({
                     />
                     <Legend wrapperStyle={{ fontSize: "12px", fontWeight: 600 }} />
                     <Bar dataKey="Positive" stackId="a" fill="#16a34a" />
-                    <Bar dataKey="Neutral"  stackId="a" fill="#d97706" />
+                    <Bar dataKey="Neutral" stackId="a" fill="#d97706" />
                     <Bar dataKey="Negative" stackId="a" fill="#dc2626" radius={[6, 6, 0, 0]}>
                       <LabelList
                         dataKey="Total" position="top"
@@ -864,31 +1047,7 @@ export default function DailyCallReport({
             </div>
           </div>
         </div>
-
-        {/* ═══════════════════ LEGEND ═══════════════════ */}
-        <div className="rounded-[1.5rem] sm:rounded-[2rem] border border-[#EEE2D2] bg-white p-4 sm:p-6 shadow-sm">
-          <h3 className="text-base sm:text-lg font-semibold text-[#2D1F16]">
-            How to Read This Dashboard
-          </h3>
-          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
-            <div className="rounded-2xl bg-green-50 p-4 border border-green-200">
-              <p className="font-semibold text-green-800">Positive</p>
-              <p className="mt-1 text-sm text-green-700 leading-relaxed">Resume requested, clear progress, successful response</p>
-            </div>
-            <div className="rounded-2xl bg-red-50 p-4 border border-red-200">
-              <p className="font-semibold text-red-800">Negative</p>
-              <p className="mt-1 text-sm text-red-700 leading-relaxed">Not interested, wrong number, invalid, no answer, dead call</p>
-            </div>
-            <div className="rounded-2xl bg-amber-50 p-4 border border-amber-200">
-              <p className="font-semibold text-amber-800">Neutral</p>
-              <p className="mt-1 text-sm text-amber-700 leading-relaxed">Information shared, callback requested, still open</p>
-            </div>
-            <div className="rounded-2xl bg-[#FFF7ED] p-4 border border-orange-200">
-              <p className="font-semibold text-[#A86117]">Manual Logs</p>
-              <p className="mt-1 text-sm text-[#A86117] leading-relaxed">Student manually entered outcome like DNP or invalid number</p>
-            </div>
-          </div>
-        </div>
+        )}        
 
         {/* ═══════════════════ MOBILE CARDS ═══════════════════ */}
         <div className="md:hidden space-y-4">
@@ -898,7 +1057,7 @@ export default function DailyCallReport({
           </div>
           {sortedStudents.length > 0 ? (
             sortedStudents.map((s, index) => {
-              const studentInterviews = interviewMap.get(s.leadId) ?? [];
+              const studentInterviews = getStudentInterviewsByEmail(s.email);
               const latestIv = getLatestInterview(studentInterviews);
               return (
                 <div
@@ -995,14 +1154,14 @@ export default function DailyCallReport({
               <thead className="bg-gradient-to-r from-[#FBF8F3] to-[#F5F1EA]">
                 <tr>
                   <SortableHeader label="Student" sortKey="name" currentSort={sortKey} currentOrder={sortOrder} onSort={handleSort} align="left" className="pl-6" />
-                  <SortableHeader label="Total"    sortKey="total"       currentSort={sortKey} currentOrder={sortOrder} onSort={handleSort} />
-                  <SortableHeader label="Avg Dur"  sortKey="avgDuration" currentSort={sortKey} currentOrder={sortOrder} onSort={handleSort} />
-                  <SortableHeader label="Positive" sortKey="positive"    currentSort={sortKey} currentOrder={sortOrder} onSort={handleSort} />
-                  <SortableHeader label="Neutral"  sortKey="neutral"     currentSort={sortKey} currentOrder={sortOrder} onSort={handleSort} />
-                  <SortableHeader label="Negative" sortKey="negative"    currentSort={sortKey} currentOrder={sortOrder} onSort={handleSort} />
-                  <SortableHeader label="Follow-up" sortKey="followUps"  currentSort={sortKey} currentOrder={sortOrder} onSort={handleSort} />
-                  <SortableHeader label="Quality"  sortKey="conversion"  currentSort={sortKey} currentOrder={sortOrder} onSort={handleSort} />
-                  <SortableHeader label="Rating"   sortKey="quality"     currentSort={sortKey} currentOrder={sortOrder} onSort={handleSort} />
+                  <SortableHeader label="Total" sortKey="total" currentSort={sortKey} currentOrder={sortOrder} onSort={handleSort} />
+                  <SortableHeader label="Avg Dur" sortKey="avgDuration" currentSort={sortKey} currentOrder={sortOrder} onSort={handleSort} />
+                  <SortableHeader label="Positive" sortKey="positive" currentSort={sortKey} currentOrder={sortOrder} onSort={handleSort} />
+                  <SortableHeader label="Neutral" sortKey="neutral" currentSort={sortKey} currentOrder={sortOrder} onSort={handleSort} />
+                  <SortableHeader label="Negative" sortKey="negative" currentSort={sortKey} currentOrder={sortOrder} onSort={handleSort} />
+                  <SortableHeader label="Follow-up" sortKey="followUps" currentSort={sortKey} currentOrder={sortOrder} onSort={handleSort} />
+                  <SortableHeader label="Quality" sortKey="conversion" currentSort={sortKey} currentOrder={sortOrder} onSort={handleSort} />
+                  <SortableHeader label="Rating" sortKey="quality" currentSort={sortKey} currentOrder={sortOrder} onSort={handleSort} />
                   {/* Static interview column — no sort needed */}
                   <th className="px-4 py-4 text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9A7B5A]">
                     Interview
@@ -1013,7 +1172,7 @@ export default function DailyCallReport({
               <tbody className="divide-y divide-[#F7F0E6]">
                 {sortedStudents.length > 0 ? (
                   sortedStudents.map((s, index) => {
-                    const studentInterviews = interviewMap.get(s.leadId) ?? [];
+                    const studentInterviews = getStudentInterviewsByEmail(s.email);
                     const latestIv = getLatestInterview(studentInterviews);
                     const ivMeta = latestIv ? getInterviewStatusMeta(latestIv.overallStatus) : null;
 
@@ -1246,9 +1405,9 @@ export default function DailyCallReport({
                   <div className="space-y-4">
                     {[
                       { label: "Average Quality Score", value: `${selectedStudent.avgQualityScore.toFixed(1)}/4.0` },
-                      { label: "Average Call Duration",  value: formatDuration(selectedStudent.avgDurationSeconds) },
-                      { label: "Total Talk Time",        value: formatDuration(selectedStudent.totalDurationSeconds) },
-                      { label: "Unique Phone Numbers",   value: String(selectedStudent.uniqueNumbers) },
+                      { label: "Average Call Duration", value: formatDuration(selectedStudent.avgDurationSeconds) },
+                      { label: "Total Talk Time", value: formatDuration(selectedStudent.totalDurationSeconds) },
+                      { label: "Unique Phone Numbers", value: String(selectedStudent.uniqueNumbers) },
                     ].map((item) => (
                       <div key={item.label} className="flex items-center justify-between p-3 bg-[#FAF9F6] rounded-xl">
                         <span className="text-sm font-medium text-[#5D4037]">{item.label}</span>
@@ -1296,7 +1455,7 @@ export default function DailyCallReport({
                   <table className="min-w-full border-collapse">
                     <thead className="bg-[#FBF8F3]">
                       <tr>
-                        {["Sr","Date & Time","Outcome","Duration","Quality","Status","Summary","Feedback","Action"].map((h) => (
+                        {["Sr", "Date & Time", "Outcome", "Duration", "Quality", "Status", "Summary", "Feedback", "Action"].map((h) => (
                           <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-[#9A7B5A]">
                             {h}
                           </th>
@@ -1330,20 +1489,18 @@ export default function DailyCallReport({
                               </span>
                             </td>
                             <td className="px-4 py-4">
-                              <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold capitalize ${
-                                quality === "excellent" ? "bg-green-50 text-green-700 border border-green-200"
-                                : quality === "good"    ? "bg-blue-50 text-blue-700 border border-blue-200"
-                                : quality === "average" ? "bg-amber-50 text-amber-700 border border-amber-200"
-                                : quality === "poor"    ? "bg-red-50 text-red-700 border border-red-200"
-                                : "bg-gray-50 text-gray-700 border border-gray-200"
-                              }`}>
+                              <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold capitalize ${quality === "excellent" ? "bg-green-50 text-green-700 border border-green-200"
+                                : quality === "good" ? "bg-blue-50 text-blue-700 border border-blue-200"
+                                  : quality === "average" ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                    : quality === "poor" ? "bg-red-50 text-red-700 border border-red-200"
+                                      : "bg-gray-50 text-gray-700 border border-gray-200"
+                                }`}>
                                 {quality}
                               </span>
                             </td>
                             <td className="px-4 py-4">
-                              <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${
-                                call.status === "DONE" ? "bg-green-50 text-green-700" : "bg-orange-50 text-orange-700"
-                              }`}>
+                              <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${call.status === "DONE" ? "bg-green-50 text-green-700" : "bg-orange-50 text-orange-700"
+                                }`}>
                                 {call.status}
                               </span>
                             </td>
@@ -1450,8 +1607,8 @@ export default function DailyCallReport({
                   <div className="space-y-4">
                     {[
                       { label: "Outcome Code", value: selectedRecording.analysis?.outcomeCode || "N/A" },
-                      { label: "Outcome",       value: selectedRecording.analysis?.outcome || "N/A" },
-                      { label: "Confidence",    value: selectedRecording.analysis?.confidence || "N/A" },
+                      { label: "Outcome", value: selectedRecording.analysis?.outcome || "N/A" },
+                      { label: "Confidence", value: selectedRecording.analysis?.confidence || "N/A" },
                     ].map((item) => (
                       <div key={item.label}>
                         <span className="text-xs font-medium text-blue-700 uppercase tracking-widest">{item.label}</span>
@@ -1493,12 +1650,11 @@ export default function DailyCallReport({
                     <Star className="w-5 h-5 text-[#8B4513]" /> Call Quality Analysis
                   </h4>
                   <div className="bg-gradient-to-br from-amber-50 to-amber-100 p-6 rounded-[2rem] border border-amber-200 shadow-sm">
-                    <p className={`text-3xl font-bold mt-2 capitalize ${
-                      selectedRecording.analysis?.areasOfImprovement?.overallCallQuality === "excellent" ? "text-green-700"
-                      : selectedRecording.analysis?.areasOfImprovement?.overallCallQuality === "good"    ? "text-blue-700"
-                      : selectedRecording.analysis?.areasOfImprovement?.overallCallQuality === "average" ? "text-amber-700"
-                      : "text-red-700"
-                    }`}>
+                    <p className={`text-3xl font-bold mt-2 capitalize ${selectedRecording.analysis?.areasOfImprovement?.overallCallQuality === "excellent" ? "text-green-700"
+                      : selectedRecording.analysis?.areasOfImprovement?.overallCallQuality === "good" ? "text-blue-700"
+                        : selectedRecording.analysis?.areasOfImprovement?.overallCallQuality === "average" ? "text-amber-700"
+                          : "text-red-700"
+                      }`}>
                       {selectedRecording.analysis?.areasOfImprovement?.overallCallQuality || "N/A"}
                     </p>
                     {selectedRecording.analysis?.areasOfImprovement?.studentResponseFeedback && (
@@ -1554,7 +1710,7 @@ export default function DailyCallReport({
                     <table className="min-w-full text-sm text-left">
                       <thead className="bg-[#F8F5EF] text-[#8D6E63] uppercase text-xs tracking-wider">
                         <tr>
-                          {["Student Name","Outcome","Duration","Call Quality","Date","Time"].map((h) => (
+                          {["Student Name", "Outcome", "Duration", "Call Quality", "Date", "Time"].map((h) => (
                             <th key={h} className="px-6 py-4">{h}</th>
                           ))}
                         </tr>
@@ -1573,13 +1729,12 @@ export default function DailyCallReport({
                                 </span>
                               </td>
                               <td className="px-4 py-3">
-                                <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold capitalize ${
-                                  quality === "excellent" ? "bg-green-50 text-green-700"
-                                  : quality === "good"   ? "bg-blue-50 text-blue-700"
-                                  : quality === "average"? "bg-amber-50 text-amber-700"
-                                  : quality === "poor"   ? "bg-red-50 text-red-700"
-                                  : "bg-gray-50 text-gray-600"
-                                }`}>
+                                <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold capitalize ${quality === "excellent" ? "bg-green-50 text-green-700"
+                                  : quality === "good" ? "bg-blue-50 text-blue-700"
+                                    : quality === "average" ? "bg-amber-50 text-amber-700"
+                                      : quality === "poor" ? "bg-red-50 text-red-700"
+                                        : "bg-gray-50 text-gray-600"
+                                  }`}>
                                   {quality}
                                 </span>
                               </td>
@@ -1674,6 +1829,15 @@ export default function DailyCallReport({
           </div>
         </div>
       )}
+
+      {/* ═══════════════════ INTERVIEW & GROUP SUMMARY ═══════════════════ */}
+      <div className="text-center py-10">
+        <InterviewSummaryPanel
+          externalInterviews={externalInterviews}
+          groupSummary={groupSummary}
+          selectedDate={selectedDate}
+        />
+        </div>
 
       <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar { width: 10px; height: 10px; }

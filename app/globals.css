@@ -411,3 +411,12 @@ body {
   color: #ffffff !important;
   border-color: #2e3a55 !important;
 }
+
+/* ── Indigo support for Avg Call Duration card ───────────────────── */
+[data-theme="dark"] .from-indigo-50   { --tw-gradient-from: rgba(99, 102, 241, 0.12) !important; }
+[data-theme="dark"] .to-indigo-50     { --tw-gradient-to:   rgba(99, 102, 241, 0.06) !important; }
+[data-theme="dark"] .bg-indigo-100    { background-color: rgba(99, 102, 241, 0.18) !important; }
+[data-theme="dark"] .border-indigo-200 { border-color: rgba(99, 102, 241, 0.30) !important; }
+[data-theme="dark"] .text-indigo-700  { color: #818cf8 !important; }
+[data-theme="dark"] .text-indigo-900  { color: #c7d2fe !important; }
+[data-theme="dark"] .text-indigo-600  { color: #a5b4fc !important; }

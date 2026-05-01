@@ -77,6 +77,8 @@ export interface InterviewRecord {
   overallStatus: "in-progress" | "selected" | "rejected" | "completed";
   createdAt: string | { $date: string };
   updatedAt?: string | { $date: string };
+  student?: string;
+  studentEmail?:string;
 }
 
 /** Normalize mongo extended JSON dates to ISO string */
@@ -93,11 +95,17 @@ export const buildInterviewMap = (
   interviews: InterviewRecord[]
 ): Map<string, InterviewRecord[]> => {
   const map = new Map<string, InterviewRecord[]>();
+
   interviews.forEach((iv) => {
-    const existing = map.get(iv.leadId) ?? [];
+    const key = iv.leadId || iv.student;
+
+    if (!key) return;
+
+    const existing = map.get(key) ?? [];
     existing.push(iv);
-    map.set(iv.leadId, existing);
+    map.set(key, existing);
   });
+
   return map;
 };
 
