@@ -581,13 +581,11 @@ export default function ChartSection({
       else if (s.avgQualityScore > 0) qualityDist[3].count++;
     });
 
-    /* Interview status breakdown */
+    /* Interview status breakdown — use full interviews prop, not just students with calls */
     const interviewStatusCounts: Record<string, number> = {};
-    interviewStudents.forEach((s) => {
-      s.interviews.forEach((iv) => {
-        interviewStatusCounts[iv.overallStatus] =
-          (interviewStatusCounts[iv.overallStatus] ?? 0) + 1;
-      });
+    interviews.forEach((iv) => {
+      interviewStatusCounts[iv.overallStatus] =
+        (interviewStatusCounts[iv.overallStatus] ?? 0) + 1;
     });
     const interviewChartData = Object.entries(interviewStatusCounts).map(
       ([status, count]) => {
@@ -596,12 +594,12 @@ export default function ChartSection({
       }
     );
 
-    /* Company-wise interviews */
+    /* Company-wise interviews — same: use full interviews prop */
     const companyMap = new Map<string, number>();
-    interviewStudents.forEach((s) => {
-      s.interviews.forEach((iv) => {
-        companyMap.set(iv.companyName, (companyMap.get(iv.companyName) ?? 0) + 1);
-      });
+    interviews.forEach((iv) => {
+      const name = (iv.companyName ?? "").trim();
+      if (!name || name === "-") return;
+      companyMap.set(name, (companyMap.get(name) ?? 0) + 1);
     });
     const companyChartData = Array.from(companyMap.entries())
       .map(([company, count]) => ({ company, count }))
@@ -666,38 +664,7 @@ export default function ChartSection({
         </div>
       </div>
 
-      {/* ═══════════════════ QUICK STATS ROW ═══════════════════ */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="rounded-2xl border border-[#E9E2D6] bg-white p-4 shadow-sm">
-          <p className="text-[10px] uppercase tracking-widest text-[#9A7B5A] font-semibold">Total Calls</p>
-          <p className="text-2xl font-black text-[#2D1F16]">{agg.totalCalls}</p>
-          <div className="mt-2">
-            <PercentBar
-              positive={agg.pos} neutral={agg.neutral}
-              negative={agg.neg} total={agg.totalCalls}
-              showLabels={false} height="h-1.5"
-            />
-          </div>
-        </div>
-        <div className="rounded-2xl border border-green-100 bg-green-50 p-4 shadow-sm">
-          <p className="text-[10px] uppercase tracking-widest text-green-700 font-semibold">Total Talk Time</p>
-          <p className="text-2xl font-black text-green-900">{formatDuration(agg.totalDur)}</p>
-          <p className="text-[10px] text-green-600 mt-1 font-medium">Across {filteredStudents.length} students</p>
-        </div>
-        <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 shadow-sm">
-          <p className="text-[10px] uppercase tracking-widest text-amber-700 font-semibold">Placed</p>
-          <p className="text-2xl font-black text-amber-900">{agg.placedStudents.length}</p>
-          <p className="text-[10px] text-amber-600 mt-1 font-medium">
-            {pct(agg.placedStudents.length, filteredStudents.length)}% of students
-          </p>
-        </div>
-        <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 shadow-sm">
-          <p className="text-[10px] uppercase tracking-widest text-blue-700 font-semibold">Interviews</p>
-          <p className="text-2xl font-black text-blue-900">{agg.interviewStudents.length}</p>
-          <p className="text-[10px] text-blue-600 mt-1 font-medium">Students with interviews</p>
-        </div>
-      </div>
-
+     
       {/* ═══════════════════ SENTIMENT + PERFORMANCE CHARTS ═══════════════════ */}
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-4 sm:gap-6">
         {/* Sentiment Pie */}
@@ -799,7 +766,7 @@ export default function ChartSection({
                     allowDecimals={false}
                     tick={{ fontSize: 11 }}
                     label={{
-                      value: "Recordings",
+                      value: "Uploaded Recordings Quantity",
                       angle: -90,
                       position: "insideLeft",
                       style: { textAnchor: "middle", fontSize: 11, fill: "#7A6753" },
@@ -872,9 +839,9 @@ export default function ChartSection({
             <Building2 className="w-5 h-5 text-blue-600" />
             Interview Pipeline
           </h3>
-          {agg.interviewStudents.length > 0 ? (
+          {interviews.length > 0 ? (
             <>
-              {/* Status breakdown */}
+              {/* Status breakdown 
               {agg.interviewChartData.length > 0 && (
                 <div className="mb-4">
                   <p className="text-xs font-semibold text-[#9A7B5A] uppercase tracking-widest mb-2">
@@ -895,7 +862,7 @@ export default function ChartSection({
                     })}
                   </div>
                 </div>
-              )}
+              )}*/}
 
               {/* Company breakdown */}
               {agg.companyChartData.length > 0 && (
@@ -903,16 +870,36 @@ export default function ChartSection({
                   <p className="text-xs font-semibold text-[#9A7B5A] uppercase tracking-widest mb-2">
                     By Company
                   </p>
-                  <div className="h-[160px]">
+                  <div className="h-[200px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
                         data={agg.companyChartData}
-                        margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
+                        margin={{ top: 20, right: 20, left: 0, bottom: 20 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" stroke="#EEF2FF" />
-                        <XAxis dataKey="company" tick={{ fontSize: 10 }} />
-                        <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
-                        <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #bfdbfe" }} />
+                        <XAxis
+                          dataKey="company"
+                          tick={{ fontSize: 10, fill: "#5D4037" }}
+                          interval={0}
+                          angle={-20}
+                          textAnchor="end"
+                          height={50}
+                        />
+                        <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#5D4037" }} />
+                        <Tooltip
+                          cursor={{ fill: "rgba(59,130,246,0.08)" }}
+                          contentStyle={{
+                            borderRadius: 12,
+                            border: "1px solid #bfdbfe",
+                            background: "#ffffff",
+                            boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                            padding: "8px 12px",
+                          }}
+                          labelStyle={{ fontWeight: 700, color: "#1e293b", marginBottom: 4 }}
+                          itemStyle={{ color: "#1d4ed8", fontWeight: 600 }}
+                          formatter={(value: number) => [`${value} interview${value === 1 ? "" : "s"}`, "Count"]}
+                          labelFormatter={(label: string) => label}
+                        />
                         <Bar dataKey="count" fill="#3b82f6" radius={[6, 6, 0, 0]}>
                           <LabelList
                             dataKey="count" position="top"
@@ -1002,4 +989,4 @@ export default function ChartSection({
       )}
     </div>
   );
-}
+};
