@@ -84,7 +84,7 @@ export default function EditableResumePreview({
 
   return (
     <div
-      className="origin-top rounded-[20px] border border-violet-100 bg-white shadow-[0_20px_70px_rgba(76,29,149,0.12)]"
+      className="origin-top rounded-[20px] border border-violet-100 dark:border-gray-800 bg-white shadow-[0_20px_70px_rgba(76,29,149,0.12)] dark:shadow-[0_20px_70px_rgba(0,0,0,0.5)]"
       style={{
         width: 794,
         minHeight: 1123,

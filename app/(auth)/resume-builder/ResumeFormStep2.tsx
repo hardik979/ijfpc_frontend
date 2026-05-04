@@ -37,10 +37,10 @@ type Step2Form = {
 };
 
 const inputCls =
-  "w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 outline-none transition-all duration-200 placeholder:text-gray-300 hover:border-violet-300 focus:border-violet-400 focus:ring-2 focus:ring-violet-100";
+  "w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm text-gray-900 dark:text-gray-100 outline-none transition-all duration-200 placeholder:text-gray-300 dark:placeholder:text-gray-500 hover:border-violet-300 dark:hover:border-violet-500 focus:border-violet-400 dark:focus:border-violet-400 focus:ring-2 focus:ring-violet-100 dark:focus:ring-violet-900/40";
 
 const textareaCls =
-  "w-full min-h-[94px] rounded-xl border border-gray-200 bg-white px-3.5 py-3 text-sm text-gray-900 outline-none transition-all duration-200 placeholder:text-gray-300 hover:border-violet-300 focus:border-violet-400 focus:ring-2 focus:ring-violet-100 resize-y";
+  "w-full min-h-[94px] rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-3 text-sm text-gray-900 dark:text-gray-100 outline-none transition-all duration-200 placeholder:text-gray-300 dark:placeholder:text-gray-500 hover:border-violet-300 dark:hover:border-violet-500 focus:border-violet-400 dark:focus:border-violet-400 focus:ring-2 focus:ring-violet-100 dark:focus:ring-violet-900/40 resize-y";
 
 function FieldLabel({
   icon: Icon,
@@ -50,8 +50,8 @@ function FieldLabel({
   children: React.ReactNode;
 }) {
   return (
-    <label className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-400 select-none">
-      <Icon className="h-3 w-3 text-violet-400" />
+    <label className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 select-none">
+      <Icon className="h-3 w-3 text-violet-400 dark:text-violet-300" />
       {children}
     </label>
   );
@@ -142,9 +142,9 @@ function YearPicker({
   if (disabled) {
     return (
       <div
-        className={`${inputCls} flex items-center gap-2 cursor-not-allowed bg-gray-50 text-gray-400 opacity-70`}
+        className={`${inputCls} flex items-center gap-2 cursor-not-allowed bg-gray-50 dark:bg-gray-800/60 text-gray-400 dark:text-gray-500 opacity-70`}
       >
-        <Calendar className="h-3.5 w-3.5 shrink-0 text-gray-300" />
+        <Calendar className="h-3.5 w-3.5 shrink-0 text-gray-300 dark:text-gray-600" />
         <span className="italic">Present</span>
       </div>
     );
@@ -172,17 +172,17 @@ function YearPicker({
           type="button"
           tabIndex={-1}
           onClick={() => setOpen((o) => !o)}
-          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-violet-400 transition-colors hover:text-violet-600"
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-violet-400 dark:text-violet-300 transition-colors hover:text-violet-600 dark:hover:text-violet-200"
         >
           <Calendar className="h-3.5 w-3.5" />
         </button>
       </div>
 
       {open && (
-        <div className="absolute z-50 mt-1.5 w-full overflow-hidden rounded-2xl border border-violet-100 bg-white shadow-[0_8px_32px_rgba(0,0,0,0.12)]">
-          <div className="flex items-center gap-2 border-b border-violet-100 bg-gradient-to-r from-violet-50 to-indigo-50 px-3.5 py-2.5">
-            <Calendar className="h-3.5 w-3.5 shrink-0 text-violet-500" />
-            <p className="text-[10px] font-bold uppercase tracking-widest text-violet-600">
+        <div className="absolute z-50 mt-1.5 w-full overflow-hidden rounded-2xl border border-violet-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-[0_8px_32px_rgba(0,0,0,0.12)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
+          <div className="flex items-center gap-2 border-b border-violet-100 dark:border-gray-800 bg-gradient-to-r from-violet-50 to-indigo-50 dark:from-violet-950/30 dark:to-indigo-950/30 px-3.5 py-2.5">
+            <Calendar className="h-3.5 w-3.5 shrink-0 text-violet-500 dark:text-violet-300" />
+            <p className="text-[10px] font-bold uppercase tracking-widest text-violet-600 dark:text-violet-300">
               Select year
             </p>
           </div>
@@ -202,7 +202,7 @@ function YearPicker({
                   "w-full px-4 py-2.5 text-left text-sm font-semibold transition-all duration-100",
                   String(yr) === value
                     ? "bg-violet-600 text-white"
-                    : "text-gray-700 hover:bg-violet-50 hover:text-violet-700",
+                    : "text-gray-700 dark:text-gray-200 hover:bg-violet-50 dark:hover:bg-violet-950/40 hover:text-violet-700 dark:hover:text-violet-300",
                 ].join(" ")}
               >
                 {yr}
@@ -288,7 +288,7 @@ function EducationHighlights({
           <button
             type="button"
             onClick={addHighlight}
-            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-violet-600 transition hover:bg-violet-50"
+            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-violet-600 dark:text-violet-300 transition hover:bg-violet-50 dark:hover:bg-violet-950/40"
           >
             <Plus className="h-3.5 w-3.5" />
             Add Bullet
@@ -299,7 +299,7 @@ function EducationHighlights({
       <div className="space-y-2.5">
         {safeHighlights.map((_, highlightIndex) => (
           <div key={highlightIndex} className="flex items-start gap-2">
-            <div className="mt-3 h-2 w-2 shrink-0 rounded-full bg-violet-400" />
+            <div className="mt-3 h-2 w-2 shrink-0 rounded-full bg-violet-400 dark:bg-violet-500" />
 
             <textarea
               {...register(`education.${index}.highlights.${highlightIndex}` as const)}
@@ -311,7 +311,7 @@ function EducationHighlights({
             <button
               type="button"
               onClick={() => removeHighlight(highlightIndex)}
-              className="mt-2 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-rose-100 bg-rose-50 text-rose-500 transition hover:border-rose-200 hover:bg-rose-100"
+              className="mt-2 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-rose-100 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 text-rose-500 dark:text-rose-300 transition hover:border-rose-200 dark:hover:border-rose-800 hover:bg-rose-100 dark:hover:bg-rose-950/50"
               aria-label={`Remove highlight ${highlightIndex + 1}`}
             >
               <Trash2 className="h-4 w-4" />
@@ -361,7 +361,7 @@ function EducationCard({
 
   return (
     <div
-      className={`relative rounded-2xl border bg-white p-5 ring-1 ${accent.ring} transition-all duration-300`}
+      className={`relative rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-5 ring-1 ${accent.ring} dark:ring-gray-800 transition-all duration-300`}
       style={{ boxShadow: "0 2px 16px rgba(0,0,0,.05)" }}
     >
       <div className="mb-5 flex items-start justify-between gap-4">
@@ -373,10 +373,10 @@ function EducationCard({
           </div>
 
           <div>
-            <p className="text-sm font-bold leading-none text-gray-800">
+            <p className="text-sm font-bold leading-none text-gray-800 dark:text-gray-100">
               Education {index + 1}
             </p>
-            <p className="mt-1 text-[11px] text-gray-400">
+            <p className="mt-1 text-[11px] text-gray-400 dark:text-gray-500">
               {watched?.degree || watched?.institution
                 ? [watched?.degree, watched?.institution].filter(Boolean).join(" · ")
                 : "Add your qualification, institution, academic years, and highlights"}
@@ -388,7 +388,7 @@ function EducationCard({
           <button
             type="button"
             onClick={onRemove}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-rose-100 bg-rose-50 px-3 py-1.5 text-[11px] font-semibold text-rose-500 transition-all hover:border-rose-200 hover:bg-rose-100"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-rose-100 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 px-3 py-1.5 text-[11px] font-semibold text-rose-500 dark:text-rose-300 transition-all hover:border-rose-200 dark:hover:border-rose-800 hover:bg-rose-100 dark:hover:bg-rose-950/50"
           >
             <Trash2 className="h-3 w-3" />
             Remove
@@ -455,11 +455,11 @@ function EducationCard({
               className="peer sr-only"
             />
 
-            <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-[10px] border-[3px] border-gray-300 bg-white transition-all duration-200 peer-checked:border-violet-600 peer-checked:bg-violet-600 peer-focus-visible:ring-4 peer-focus-visible:ring-violet-100">
+            <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-[10px] border-[3px] border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 transition-all duration-200 peer-checked:border-violet-600 peer-checked:bg-violet-600 peer-focus-visible:ring-4 peer-focus-visible:ring-violet-100 dark:peer-focus-visible:ring-violet-900/40">
               <Check className="h-4 w-4 text-white opacity-0 transition-opacity duration-200 peer-checked:opacity-100" />
             </span>
 
-            <span className="text-[15px] font-medium text-slate-700">
+            <span className="text-[15px] font-medium text-slate-700 dark:text-slate-200">
               I am currently studying here
             </span>
           </label>
@@ -534,7 +534,7 @@ export default function ResumeFormStep2({
           : [defaultEntry()],
       });
     }
-  }, [initialEducation, reset]);
+  }, [initialEducation]);
 
   const onSubmit = (data: Step2Form) => {
     setLoading(true);
@@ -625,19 +625,19 @@ export default function ResumeFormStep2({
       <button
         type="button"
         onClick={() => append(defaultEntry())}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-violet-200 bg-violet-50/40 px-4 py-3.5 text-sm font-semibold text-violet-600 transition-all duration-200 hover:border-violet-300 hover:bg-violet-50"
+        className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-violet-200 dark:border-violet-900/50 bg-violet-50/40 dark:bg-violet-950/20 px-4 py-3.5 text-sm font-semibold text-violet-600 dark:text-violet-300 transition-all duration-200 hover:border-violet-300 dark:hover:border-violet-700 hover:bg-violet-50 dark:hover:bg-violet-950/40"
       >
         <Plus className="h-4 w-4" />
         Add Another Degree
       </button>
 
-      <div className="h-px bg-gradient-to-r from-transparent via-violet-100 to-transparent" />
+      <div className="h-px bg-gradient-to-r from-transparent via-violet-100 dark:via-violet-900/50 to-transparent" />
 
       <div className="flex items-center justify-between gap-3">
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-600 transition-all duration-200 hover:border-gray-300 hover:bg-gray-50"
+          className="inline-flex items-center gap-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-5 py-2.5 text-sm font-semibold text-gray-600 dark:text-gray-200 transition-all duration-200 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
         >
           <ChevronLeft className="h-4 w-4" />
           Back

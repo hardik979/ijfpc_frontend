@@ -76,25 +76,25 @@ function Field({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-gray-500 select-none">
-        <Icon className="w-3.5 h-3.5 text-violet-400" />
+      <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400 select-none">
+        <Icon className="w-3.5 h-3.5 text-violet-400 dark:text-violet-300" />
         {label}
         {required && <span className="ml-0.5 text-rose-400">*</span>}
       </label>
       {children}
-      {error && <p className="text-[11px] font-medium text-rose-500">{error}</p>}
+      {error && <p className="text-[11px] font-medium text-rose-500 dark:text-rose-400">{error}</p>}
     </div>
   );
 }
 
 const inputCls = (hasError?: boolean) =>
   [
-    "w-full px-3.5 py-2.5 rounded-xl text-sm text-gray-900 bg-white",
+    "w-full px-3.5 py-2.5 rounded-xl text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800",
     "border transition-all duration-200 outline-none",
-    "placeholder:text-gray-300",
+    "placeholder:text-gray-300 dark:placeholder:text-gray-500",
     hasError
-      ? "border-rose-300 focus:ring-2 focus:ring-rose-200"
-      : "border-gray-200 hover:border-violet-300 focus:border-violet-400 focus:ring-2 focus:ring-violet-100",
+      ? "border-rose-300 dark:border-rose-900/60 focus:ring-2 focus:ring-rose-200 dark:focus:ring-rose-900/40"
+      : "border-gray-200 dark:border-gray-700 hover:border-violet-300 dark:hover:border-violet-500 focus:border-violet-400 dark:focus:border-violet-400 focus:ring-2 focus:ring-violet-100 dark:focus:ring-violet-900/40",
   ].join(" ");
 
 export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
@@ -282,11 +282,11 @@ export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
         <div className="flex flex-col gap-3">
           <div className="relative">
             {profileImage ? (
-              <div className="group relative">
+              <div className="group relative aspect-square w-full overflow-hidden rounded-2xl border-2 border-violet-200 dark:border-violet-900/50">
                 <img
                   src={profileImage}
                   alt="Profile"
-                  className="aspect-square w-full rounded-2xl object-cover ring-2 ring-violet-200 ring-offset-2"
+                  className="absolute inset-0 h-full w-full object-cover"
                 />
                 <button
                   type="button"
@@ -294,17 +294,17 @@ export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
                     setValue("profileImage", null as any);
                     setValue("profileImageRaw", null as any);
                   }}
-                  className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-rose-500 text-white shadow-md opacity-0 transition-opacity group-hover:opacity-100"
+                  className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-rose-500 text-white shadow-md opacity-0 transition-opacity group-hover:opacity-100"
                 >
                   <X className="h-3 w-3" />
                 </button>
               </div>
             ) : (
-              <div className="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-violet-200 bg-gradient-to-br from-violet-50 to-indigo-50">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-100">
-                  <Camera className="h-5 w-5 text-violet-400" />
+              <div className="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-violet-200 dark:border-violet-900/50 bg-gradient-to-br from-violet-50 to-indigo-50 dark:from-violet-950/30 dark:to-indigo-950/30">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-100 dark:bg-violet-900/40">
+                  <Camera className="h-5 w-5 text-violet-400 dark:text-violet-300" />
                 </div>
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-violet-400">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-violet-400 dark:text-violet-300">
                   No photo
                 </p>
               </div>
@@ -318,8 +318,8 @@ export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
             className={[
               "relative flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border-2 border-dashed px-3 py-3 transition-all duration-200",
               isDragging
-                ? "scale-[1.02] border-violet-500 bg-violet-50"
-                : "border-gray-200 bg-gray-50 hover:border-violet-300 hover:bg-violet-50/50",
+                ? "scale-[1.02] border-violet-500 bg-violet-50 dark:bg-violet-950/40"
+                : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 hover:border-violet-300 dark:hover:border-violet-500 hover:bg-violet-50/50 dark:hover:bg-violet-950/30",
             ].join(" ")}
           >
             <input
@@ -328,14 +328,14 @@ export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
               className="absolute inset-0 cursor-pointer opacity-0"
               onChange={(e) => handleFile(e.target.files?.[0])}
             />
-            <Upload className="h-4 w-4 text-violet-400" />
-            <span className="text-[11px] font-semibold text-gray-500">
+            <Upload className="h-4 w-4 text-violet-400 dark:text-violet-300" />
+            <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400">
               {isDragging ? "Drop here" : "Upload photo"}
             </span>
           </label>
 
           {showCropper && rawPhotoSrc && (
-            <div className="overflow-hidden rounded-xl border border-violet-200 shadow-lg">
+            <div className="overflow-hidden rounded-xl border border-violet-200 dark:border-violet-900/50 shadow-lg">
               <div className="relative h-48 bg-gray-900">
                 <Cropper
                   image={rawPhotoSrc}
@@ -350,8 +350,8 @@ export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
                   onCropComplete={(_, px) => setCroppedAreaPixels(px)}
                 />
               </div>
-              <div className="flex items-center gap-2 bg-white px-3 py-2.5">
-                <ZoomIn className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+              <div className="flex items-center gap-2 bg-white dark:bg-gray-900 px-3 py-2.5">
+                <ZoomIn className="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-gray-500" />
                 <input
                   type="range"
                   min={1}
@@ -364,7 +364,7 @@ export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
                 <button
                   type="button"
                   onClick={() => setShowCropper(false)}
-                  className="rounded-lg border border-gray-200 px-2.5 py-1 text-[11px] font-semibold text-gray-500 hover:bg-gray-50"
+                  className="rounded-lg border border-gray-200 dark:border-gray-700 px-2.5 py-1 text-[11px] font-semibold text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
                 >
                   Cancel
                 </button>
@@ -379,7 +379,7 @@ export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
             </div>
           )}
 
-          <p className="text-center text-[10px] font-medium text-gray-400">
+          <p className="text-center text-[10px] font-medium text-gray-400 dark:text-gray-500">
             Optional but recommended
           </p>
         </div>
@@ -513,7 +513,7 @@ export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
                           "inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-all duration-200",
                           selected
                             ? "border-violet-500 bg-violet-600 text-white shadow-md"
-                            : "border-gray-200 bg-white text-gray-700 hover:border-violet-300 hover:bg-violet-50",
+                            : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:border-violet-300 dark:hover:border-violet-500 hover:bg-violet-50 dark:hover:bg-violet-950/30",
                         ].join(" ")}
                       >
                         {selected && <CheckCircle2 className="h-4 w-4" />}
@@ -528,14 +528,14 @@ export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
                     {languages.map((lang) => (
                       <span
                         key={lang}
-                        className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700"
+                        className="inline-flex items-center rounded-full border border-violet-200 dark:border-violet-900/50 bg-violet-50 dark:bg-violet-950/40 px-3 py-1 text-xs font-semibold text-violet-700 dark:text-violet-300"
                       >
                         {lang}
                       </span>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-gray-400 dark:text-gray-500">
                     Select one or more languages.
                   </p>
                 )}
@@ -545,12 +545,12 @@ export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
         </div>
       </div>
 
-      <div className="h-px bg-gradient-to-r from-transparent via-violet-100 to-transparent" />
+      <div className="h-px bg-gradient-to-r from-transparent via-violet-100 dark:via-violet-900/50 to-transparent" />
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-gray-500">
-            <Sparkles className="h-3.5 w-3.5 text-violet-400" />
+          <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400">
+            <Sparkles className="h-3.5 w-3.5 text-violet-400 dark:text-violet-300" />
             Professional Summary
             <span className="ml-0.5 text-rose-400">*</span>
           </label>
@@ -558,7 +558,7 @@ export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
           <div className="flex items-center gap-2">
             <span
               className={`text-[11px] font-semibold ${
-                charCount > MAX_SUMMARY_LENGTH ? "text-rose-500" : "text-gray-400"
+                charCount > MAX_SUMMARY_LENGTH ? "text-rose-500 dark:text-rose-400" : "text-gray-400 dark:text-gray-500"
               }`}
             >
               {charCount}/{MAX_SUMMARY_LENGTH}
@@ -603,7 +603,7 @@ export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
             className={[inputCls(!!errors.summary), "resize-none leading-relaxed"].join(" ")}
           />
           {errors.summary && (
-            <p className="mt-1 text-[11px] font-medium text-rose-500">
+            <p className="mt-1 text-[11px] font-medium text-rose-500 dark:text-rose-400">
               {errors.summary.message}
             </p>
           )}
@@ -637,14 +637,14 @@ export default function ResumeFormStep1({ onNext, initial }: Step1Props) {
             )}
           </button>
 
-          <p className="text-[11px] text-gray-400">
+          <p className="text-[11px] text-gray-400 dark:text-gray-500">
             Fill name, role, and domain first for better AI summary.
           </p>
         </div>
       </div>
 
-      <div className="flex items-center justify-between border-t border-gray-100 pt-2">
-        <p className="text-[11px] text-gray-400">
+      <div className="flex items-center justify-between border-t border-gray-100 dark:border-gray-800 pt-2">
+        <p className="text-[11px] text-gray-400 dark:text-gray-500">
           Fields marked <span className="font-bold text-rose-400">*</span> are required
         </p>
 
