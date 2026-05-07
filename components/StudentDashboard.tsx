@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 
 const API_LMS_URL = process.env.NEXT_PUBLIC_LMS_URL;
 
@@ -41,6 +41,7 @@ interface StudentInfo {
   zone?: string;
   joinedMonth?: string;
   batch?: string;
+  isPlaced?: boolean;
 }
 
 interface PaymentDetail {
@@ -309,6 +310,7 @@ function Modal({ isOpen, onClose, title, children }: {
 
 export default function StudentDashboard() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const clerkId = searchParams.get("clerkId");
 
   const now = new Date();
@@ -322,6 +324,37 @@ export default function StudentDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [attendanceError, setAttendanceError] = useState<string | null>(null);
   const [activeModal, setActiveModal] = useState<ModalType>(null);
+  const [isPlaced, setIsPlaced] = useState<boolean>(false);
+  const [placementUpdating, setPlacementUpdating] = useState(false);
+  const [placementMessage, setPlacementMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setIsPlaced(Boolean(data?.student?.isPlaced));
+  }, [data?.student?._id, data?.student?.isPlaced]);
+
+  const updatePlacementStatus = async (next: boolean) => {
+    if (!data?.student?._id) return;
+    try {
+      setPlacementUpdating(true);
+      setPlacementMessage(null);
+      const res = await fetch(
+        `${API_LMS_URL}/api/users/student-placement-status`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ _id: data.student._id, isPlaced: next }),
+        }
+      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.message || "Update failed");
+      setIsPlaced(next);
+      setPlacementMessage(json?.message || "Updated successfully");
+    } catch (err: any) {
+      setPlacementMessage(err.message || "Failed to update placement status");
+    } finally {
+      setPlacementUpdating(false);
+    }
+  };
 
   const years = Array.from({ length: 5 }, (_, i) => now.getFullYear() - 2 + i);
 
@@ -658,6 +691,12 @@ export default function StudentDashboard() {
       <div className="mx-auto w-full max-w-7xl px-4 pb-12 pt-8 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
+          <button
+            onClick={() => router.back()}
+            className="mb-4 inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/60 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+          >
+            ← Back
+          </button>
           <div className="mb-6">
             <h1 className="mb-2 text-4xl font-bold tracking-tight text-white">
               Student Dashboard
@@ -724,7 +763,38 @@ export default function StudentDashboard() {
           <div className="space-y-8">
             {/* Student Info */}
             <div className="rounded-2xl border border-slate-700/50 bg-gradient-to-br from-slate-800/60 to-slate-800/40 p-6 backdrop-blur-sm">
-              <h2 className="mb-4 text-lg font-semibold text-white">Student Information</h2>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-lg font-semibold text-white">Student Information</h2>
+                <div className="flex items-center gap-3">
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                      isPlaced
+                        ? "bg-emerald-500/20 text-emerald-300"
+                        : "bg-slate-600/40 text-slate-300"
+                    }`}
+                  >
+                    {isPlaced ? "Placed" : "Not Placed"}
+                  </span>
+                  <button
+                    onClick={() => updatePlacementStatus(!isPlaced)}
+                    disabled={placementUpdating || !data.student?._id}
+                    className={`rounded-lg px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                      isPlaced
+                        ? "bg-rose-600 hover:bg-rose-700"
+                        : "bg-emerald-600 hover:bg-emerald-700"
+                    }`}
+                  >
+                    {placementUpdating
+                      ? "Updating..."
+                      : isPlaced
+                        ? "Mark as Not Placed"
+                        : "Mark as Placed"}
+                  </button>
+                </div>
+              </div>
+              {placementMessage && (
+                <p className="mb-3 text-sm text-slate-300">{placementMessage}</p>
+              )}
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <InfoCard label="Full Name" value={data.student?.fullName} />
                 <InfoCard label="Email" value={data.student?.email} />
@@ -881,7 +951,7 @@ export default function StudentDashboard() {
             </div>
 
             {/* Payment Details */}
-            <div>
+            {/* <div>
               <h2 className="mb-4 text-xl font-semibold text-white">Payment Details</h2>
               {paymentDetails.length === 0 ? (
                 <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-10 text-center text-slate-400">
@@ -939,7 +1009,7 @@ export default function StudentDashboard() {
                   ))}
                 </div>
               )}
-            </div>
+            </div> */}
           </div>
         ) : (
           <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-16 text-center backdrop-blur-sm">
