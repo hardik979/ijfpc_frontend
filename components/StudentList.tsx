@@ -163,8 +163,6 @@ const StudentsListPage = () => {
     [allEnrolledStudents]
   );
 
-
-
   // ────────────────────────────────────────────
   // displayStudents for the "ALL" drill-down view
   // Filters + client-side pagination
@@ -662,7 +660,7 @@ const StudentsListPage = () => {
         })
       );
     } catch {}
-    router.push(`/fee-dashboard/student-full-info?clerkId=${clerkId}`);
+    router.push(`/student-full-info?clerkId=${clerkId}`);
   };
 
   const handleApplySearch = (value: string) => {
@@ -719,7 +717,7 @@ const StudentsListPage = () => {
         {/* ── Cards ── */}
         {!selectedCourseId && (
           <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            <button
+            {/* <button
               onClick={() => {
                 setSelectedCourseId("ALL");
                 setPlacedFilter("all");
@@ -741,7 +739,7 @@ const StudentsListPage = () => {
                   students
                 </span>
               </p>
-            </button>
+            </button> */}
 
             <button
               onClick={() => {
@@ -767,7 +765,7 @@ const StudentsListPage = () => {
               </p>
             </button>
 
-            <button
+            {/* <button
               onClick={() => {
                 setSelectedCourseId("ALL");
                 setPlacedFilter("placed");
@@ -789,7 +787,7 @@ const StudentsListPage = () => {
                   placed
                 </span>
               </p>
-            </button>
+            </button> */}
 
             {courses.map((c) => (
               <button
@@ -1092,9 +1090,9 @@ const StudentsListPage = () => {
                         <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[#9a92c9]">
                           Batch
                         </th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[#9a92c9]">
+                        {/* <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[#9a92c9]">
                           Fee Plan
-                        </th>
+                        </th> */}
                         <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[#9a92c9]">
                           Zone
                         </th>
@@ -1164,7 +1162,7 @@ const StudentsListPage = () => {
                                 {batchCode || "—"}
                               </td>
 
-                              <td className="px-6 py-5">
+                              {/* <td className="px-6 py-5">
                                 <span
                                   className={`${pill} ${feeBadge(
                                     student.feePlan
@@ -1172,7 +1170,7 @@ const StudentsListPage = () => {
                                 >
                                   {student.feePlan || "N/A"}
                                 </span>
-                              </td>
+                              </td> */}
 
                               <td className="px-6 py-5">
                                 <span

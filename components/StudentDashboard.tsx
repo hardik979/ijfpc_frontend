@@ -10,6 +10,26 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December",
 ];
 
+interface MockAttempt {
+  _id: string;
+  callId?: string;
+  interviewType?: string;
+  date?: string | null;
+  status?: "PASS" | "FAIL" | string;
+  feedback?: string;
+  startedAt?: string | null;
+  endedAt?: string | null;
+  createdAt?: string | null;
+  durationSeconds?: number;
+  endedReason?: string | null;
+  successEvaluation?: string;
+  result?: string;
+  correctAnswers?: number;
+  totalQuestions?: number;
+  percentage?: number;
+  summary?: string;
+}
+
 interface QuizEntry {
   _id: string;
   totalMarksPossible: number;
@@ -85,6 +105,7 @@ interface ApiResponse {
   };
   mockInterviewData?: {
     stats?: Stats;
+    attempts?: MockAttempt[];
   };
   callRecordingData?: any;
 }
@@ -324,6 +345,7 @@ export default function StudentDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [attendanceError, setAttendanceError] = useState<string | null>(null);
   const [activeModal, setActiveModal] = useState<ModalType>(null);
+  const [feedbackPopup, setFeedbackPopup] = useState<string | null>(null);
   const [isPlaced, setIsPlaced] = useState<boolean>(false);
   const [placementUpdating, setPlacementUpdating] = useState(false);
   const [placementMessage, setPlacementMessage] = useState<string | null>(null);
@@ -378,6 +400,12 @@ export default function StudentDashboard() {
     );
   }, [data]);
 
+  const mockAttempts = useMemo<MockAttempt[]>(() => {
+    return Array.isArray(data?.mockInterviewData?.attempts)
+      ? (data!.mockInterviewData!.attempts as MockAttempt[])
+      : [];
+  }, [data]);
+
   const Mockstatus = useMemo(() => {
     return (
       data?.mockInterviewData?.stats || {
@@ -404,26 +432,56 @@ export default function StudentDashboard() {
     };
   }, [data]);
 
-  const attendanceStats = useMemo((): AttendanceStats => {
-    if (!attendanceData.length) {
-      return {
-        totalDays: 0,
-        presentDays: 0,
-        absentDays: 0,
-        attendanceRate: 0,
-      };
+  const presentDateSet = useMemo(() => {
+    const set = new Set<string>();
+    attendanceData.forEach((r) => {
+      if (r.status?.toLowerCase() === "present") {
+        set.add(r.date.split("T")[0]);
+      }
+    });
+    return set;
+  }, [attendanceData]);
+
+  const computedAbsentDates = useMemo<string[]>(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let start: Date | null = null;
+    let end: Date | null = null;
+
+    if (month && year) {
+      start = new Date(year, month - 1, 1);
+      const monthEnd = new Date(year, month, 0);
+      end = monthEnd.getTime() < today.getTime() ? monthEnd : today;
+    } else {
+      const sortedPresent = [...presentDateSet].sort();
+      if (!sortedPresent.length) return [];
+      start = new Date(sortedPresent[0] + "T00:00:00");
+      end = today;
     }
 
-    const uniqueDates = new Set(
-      attendanceData.map((record) => record.date.split("T")[0])
-    );
-    const totalDays = uniqueDates.size;
-    const presentDays = attendanceData.filter(
-      (r) => r.status?.toLowerCase() === "present"
-    ).length;
-    const absentDays = attendanceData.filter(
-      (r) => r.status?.toLowerCase() === "absent"
-    ).length;
+    if (!start || !end || start.getTime() > end.getTime()) return [];
+
+    const absents: string[] = [];
+    const cursor = new Date(start);
+    while (cursor.getTime() <= end.getTime()) {
+      const day = cursor.getDay();
+      if (day !== 0) {
+        const yyyy = cursor.getFullYear();
+        const mm = String(cursor.getMonth() + 1).padStart(2, "0");
+        const dd = String(cursor.getDate()).padStart(2, "0");
+        const key = `${yyyy}-${mm}-${dd}`;
+        if (!presentDateSet.has(key)) absents.push(key);
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return absents;
+  }, [presentDateSet, month, year]);
+
+  const attendanceStats = useMemo((): AttendanceStats => {
+    const presentDays = presentDateSet.size;
+    const absentDays = computedAbsentDates.length;
+    const totalDays = presentDays + absentDays;
     const attendanceRate =
       totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0;
 
@@ -439,7 +497,7 @@ export default function StudentDashboard() {
       firstRecord: sortedRecords[0]?.date,
       lastRecord: sortedRecords[sortedRecords.length - 1]?.date,
     };
-  }, [attendanceData]);
+  }, [attendanceData, presentDateSet, computedAbsentDates]);
 
   const paymentDetails = useMemo(() => {
     return Array.isArray(data?.paymentDetails) ? data.paymentDetails : [];
@@ -588,9 +646,13 @@ export default function StudentDashboard() {
     [attendanceData]
   );
 
-  const absentRecords = useMemo(() =>
-    attendanceData.filter(r => r.status?.toLowerCase() === "absent"),
-    [attendanceData]
+  const absentRecords = useMemo<AttendanceRecord[]>(() =>
+    computedAbsentDates.map((d) => ({
+      _id: `absent-${d}`,
+      date: d,
+      status: "absent",
+    })),
+    [computedAbsentDates]
   );
 
   const renderModalContent = () => {
@@ -680,6 +742,194 @@ export default function StudentDashboard() {
             )}
           </div>
         );
+
+      case "mock-attempts":
+      case "mock-pass":
+      case "mock-fail": {
+        const filtered =
+          activeModal === "mock-pass"
+            ? mockAttempts.filter((m) => m.status === "PASS")
+            : activeModal === "mock-fail"
+              ? mockAttempts.filter((m) => m.status === "FAIL")
+              : mockAttempts;
+
+        return (
+          <div className="space-y-3">
+            {filtered.length === 0 ? (
+              <p className="text-center text-slate-400 py-8">No mock interviews found</p>
+            ) : (
+              filtered.map((item, i) => {
+                const when = item.date || item.createdAt || item.startedAt;
+                const isPass = item.status === "PASS";
+                return (
+                  <div key={item._id} className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+                    <div className="flex items-start justify-between gap-4 mb-3">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-700 text-sm font-semibold text-white">
+                          {i + 1}
+                        </span>
+                        <div>
+                          <p className="font-semibold text-white">{formatDate(when)}</p>
+                          <p className="text-sm text-slate-400">{formatTime(when)}</p>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                            isPass
+                              ? "bg-emerald-500/20 text-emerald-300"
+                              : "bg-rose-500/20 text-rose-300"
+                          }`}
+                        >
+                          {item.status || "—"}
+                        </span>
+                        {typeof item.percentage === "number" && item.totalQuestions ? (
+                          <span className="text-xs text-slate-400">
+                            {item.correctAnswers}/{item.totalQuestions} ({item.percentage}%)
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="mb-1 text-xs font-medium uppercase tracking-wider text-slate-400">
+                        Feedback Summary
+                      </p>
+                      <p className="whitespace-pre-wrap text-sm text-slate-200">
+                        {item.feedback || item.summary || "No summary available"}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        );
+      }
+
+      case "calls-total":
+      case "calls-positive":
+      case "calls-negative":
+      case "calls-neutral": {
+        const isPositive = (o: string) =>
+          ["INTERESTED", "SUCCESS", "RESUME_REQUESTED"].some((k) => o.includes(k));
+        const isNegative = (o: string) =>
+          ["NOT_INTERESTED", "DISCONNECTED", "WRONG_NUMBER", "REJECTED", "NO_OPENING", "INVALID_NUMBER", "DNP"].some((k) => o.includes(k));
+
+        const days = (Callrecordingstatus?.byDay ?? []) as any[];
+        const filteredDays = days
+          .map((day) => {
+            const attempts = (day.attempts as any[]).filter((a) => {
+              if (activeModal === "calls-total") return true;
+              const o = ((a.outcome || a.outcomeCode || "") + "").toUpperCase();
+              const t = (a.type || "").toLowerCase();
+              if (activeModal === "calls-positive") return isPositive(o);
+              if (activeModal === "calls-negative") return t === "manual" || isNegative(o);
+              if (activeModal === "calls-neutral")
+                return !isPositive(o) && !isNegative(o) && t !== "manual";
+              return true;
+            });
+            return { ...day, attempts, totalAttempts: attempts.length };
+          })
+          .filter((d) => d.attempts.length > 0);
+
+        if (filteredDays.length === 0) {
+          return <p className="text-center text-slate-400 py-8">No call recordings found</p>;
+        }
+
+        return (
+          <div className="space-y-4">
+            {filteredDays.map((day) => (
+              <div
+                key={day.date}
+                className="overflow-hidden rounded-xl border border-slate-700/50 bg-slate-800/40"
+              >
+                <div className="flex items-center justify-between border-b border-slate-700 bg-slate-800/80 px-5 py-3">
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Date</p>
+                    <h3 className="mt-0.5 text-base font-semibold text-white">
+                      {new Date(day.date).toLocaleDateString("en-IN", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </h3>
+                  </div>
+                  <span className="rounded-full bg-blue-500/20 px-3 py-1 text-xs font-semibold text-blue-300">
+                    {day.totalAttempts} {day.totalAttempts === 1 ? "Attempt" : "Attempts"}
+                  </span>
+                </div>
+                <div className="divide-y divide-slate-700/50">
+                  {(day.attempts as any[]).map((a) => {
+                    const outcome = ((a.outcome || a.outcomeCode || "") + "").toString();
+                    const lower = outcome.toUpperCase();
+                    const tone = isPositive(lower)
+                      ? "bg-emerald-500/20 text-emerald-300"
+                      : isNegative(lower)
+                        ? "bg-rose-500/20 text-rose-300"
+                        : "bg-amber-500/20 text-amber-300";
+                    return (
+                      <div key={a.recordingId} className="p-5 space-y-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="inline-flex h-7 min-w-[2rem] items-center justify-center rounded-full bg-slate-700 px-2 text-xs font-bold text-white">
+                            #{a.attemptNumber}
+                          </span>
+                          <span className="text-xs text-slate-400">
+                            {new Date(a.time).toLocaleTimeString("en-IN", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                          {a.durationLabel && (
+                            <span className="text-xs text-slate-400">• {a.durationLabel}</span>
+                          )}
+                          {outcome && (
+                            <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${tone}`}>
+                              {outcome.replace(/_/g, " ")}
+                            </span>
+                          )}
+                          {a.followUpRequired && (
+                            <span className="rounded-full bg-purple-500/20 px-2.5 py-0.5 text-[11px] font-semibold text-purple-300">
+                              Follow-up
+                            </span>
+                          )}
+                        </div>
+
+                        <div>
+                          <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Summary</p>
+                          <p className="mt-1 whitespace-pre-wrap text-sm text-slate-200">
+                            {a.summary || "—"}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Feedback</p>
+                          <p className="mt-1 whitespace-pre-wrap text-sm text-slate-200">
+                            {a.studentResponseFeedback || "—"}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-slate-400">Recording</p>
+                          {a.publicUrl ? (
+                            <audio
+                              controls
+                              preload="none"
+                              src={a.publicUrl}
+                              className="w-full"
+                            />
+                          ) : (
+                            <p className="text-sm text-slate-500">No recording available</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      }
 
       default:
         return null;
@@ -798,7 +1048,7 @@ export default function StudentDashboard() {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <InfoCard label="Full Name" value={data.student?.fullName} />
                 <InfoCard label="Email" value={data.student?.email} />
-                <InfoCard label="Fee Plan" value={data.student?.feePlan} />
+                {/* <InfoCard label="Fee Plan" value={data.student?.feePlan} /> */}
                 <InfoCard label="Joined" value={data.student?.joinedMonth} />
                 <InfoCard label="Batch" value={data.student?.batch} />
                 <InfoCard
@@ -897,6 +1147,7 @@ export default function StudentDashboard() {
                   sub="Interview sessions"
                   accent="#f97316"
                   icon={<svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>}
+                  onClick={() => setActiveModal("mock-attempts")}
                 />
                 <ClickableStatCard
                   label="Passed"
@@ -904,6 +1155,7 @@ export default function StudentDashboard() {
                   sub={`Success rate: ${Mockstatus?.passRate ?? 0}%`}
                   accent="#10b981"
                   icon={<svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+                  onClick={() => setActiveModal("mock-pass")}
                 />
                 <ClickableStatCard
                   label="Failed"
@@ -911,6 +1163,7 @@ export default function StudentDashboard() {
                   sub={`Fail rate: ${Mockstatus?.failRate ?? 0}%`}
                   accent="#ef4444"
                   icon={<svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+                  onClick={() => setActiveModal("mock-fail")}
                 />
               </div>
             </div>
@@ -924,6 +1177,7 @@ export default function StudentDashboard() {
                   value={Callrecordingstatus?.stats?.total ?? 0}
                   sub="All recorded calls"
                   accent="#3b82f6"
+                  onClick={() => setActiveModal("calls-total")}
                   icon={<svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>}
                 />
                 <ClickableStatCard
@@ -931,6 +1185,7 @@ export default function StudentDashboard() {
                   value={Callrecordingstatus.stats?.positive ?? 0}
                   sub="Resume requested"
                   accent="#10b981"
+                  onClick={() => setActiveModal("calls-positive")}
                   icon={<svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" /></svg>}
                 />
                 <ClickableStatCard
@@ -938,6 +1193,7 @@ export default function StudentDashboard() {
                   value={Callrecordingstatus.stats?.negative ?? 0}
                   sub="Rejected calls"
                   accent="#ef4444"
+                  onClick={() => setActiveModal("calls-negative")}
                   icon={<svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018a2 2 0 01.485.06l3.76.94m-7 10v5a2 2 0 002 2h.096c.5 0 .905-.405.905-.904 0-.715.211-1.413.608-2.008L17 13V4m-7 10h2m5-10h2a2 2 0 012 2v6a2 2 0 01-2 2h-2.5" /></svg>}
                 />
                 <ClickableStatCard
@@ -945,9 +1201,11 @@ export default function StudentDashboard() {
                   value={Callrecordingstatus.stats?.neutral ?? 0}
                   sub="In progress"
                   accent="#f59e0b"
+                  onClick={() => setActiveModal("calls-neutral")}
                   icon={<svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
                 />
               </div>
+
             </div>
 
             {/* Payment Details */}
@@ -1034,11 +1292,47 @@ export default function StudentDashboard() {
               activeModal === "attendance-absent" ? "Absent Days" :
                 activeModal === "quiz-attempts" ? "All Quiz Attempts" :
                   activeModal === "quiz-days" ? "Quiz Activity Days" :
-                    ""
+                    activeModal === "mock-attempts" ? "All Mock Interview Attempts" :
+                      activeModal === "mock-pass" ? "Passed Mock Interviews" :
+                        activeModal === "mock-fail" ? "Failed Mock Interviews" :
+                          activeModal === "calls-total" ? "All HR Call Recordings" :
+                            activeModal === "calls-positive" ? "Positive Calls" :
+                              activeModal === "calls-negative" ? "Negative Calls" :
+                                activeModal === "calls-neutral" ? "Neutral Calls" :
+                                  ""
         }
       >
         {renderModalContent()}
       </Modal>
+
+      {feedbackPopup !== null && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setFeedbackPopup(null)}
+        >
+          <div
+            className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-700 bg-slate-800 px-5 py-3">
+              <h3 className="text-sm font-semibold text-white">Student Feedback</h3>
+              <button
+                type="button"
+                onClick={() => setFeedbackPopup(null)}
+                className="rounded-full p-1 text-slate-400 hover:bg-slate-700 hover:text-white"
+                aria-label="Close"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-5">
+              <p className="whitespace-pre-wrap text-sm text-slate-200">{feedbackPopup}</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
