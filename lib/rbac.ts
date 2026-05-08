@@ -5,6 +5,7 @@ export const ROLES = {
   FOUNDER: "FOUNDER",
   INTERVIEWER: "INTERVIEWER",
   CALLING_STAFF: "CALLING_STAFF",
+  STUDENT_MANAGEMENT:"STUDENT_MANAGEMENT"
 } as const;
 
 export type Role = (typeof ROLES)[keyof typeof ROLES];
@@ -28,6 +29,9 @@ export const ACCESS: Record<string, readonly Role[]> = {
     ROLES.FEE_STAFF,
   ],
   "/resume-builder": [ROLES.SUPER_ADMIN, ROLES.CALLING_STAFF],
+  "/studentOverview":[ROLES.STUDENT_MANAGEMENT],
+  "/student-full-info":[ROLES.STUDENT_MANAGEMENT]
+
 } as const;
 
 export function isAllowed(pathname: string, role?: string) {

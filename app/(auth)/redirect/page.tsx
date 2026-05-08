@@ -39,6 +39,9 @@ export default function RedirectAfterLogin() {
       case ROLES.FOUNDER:
         router.replace("/founder");
         break;
+      case ROLES.STUDENT_MANAGEMENT:
+          router.replace("/studentOverview")
+          break;
       default:
         router.replace("/unauthorized");
     }
