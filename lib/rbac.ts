@@ -27,6 +27,7 @@ export const ACCESS: Record<string, readonly Role[]> = {
     ROLES.SUPER_ADMIN,
     ROLES.CALLING_STAFF,
     ROLES.FEE_STAFF,
+    ROLES.STUDENT_MANAGEMENT,
   ],
   "/resume-builder": [ROLES.SUPER_ADMIN, ROLES.CALLING_STAFF],
   "/studentOverview":[ROLES.STUDENT_MANAGEMENT],
