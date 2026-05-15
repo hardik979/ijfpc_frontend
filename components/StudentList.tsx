@@ -721,6 +721,13 @@ const StudentsListPage = () => {
           >
             Update Students Zone
           </button>
+
+           <button
+            onClick={() => { router.push('/students-call-reports') }}
+            className="shrink-0 rounded-xl border border-[#312a63] bg-[#0f0b24] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#1b1640]"
+          >
+            Call Recording Annalysiss Dashboard
+          </button>
         </div>
 
        
