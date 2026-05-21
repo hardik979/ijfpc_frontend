@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Eye, X } from "lucide-react";
+import { Search, Eye, X, GraduationCap, BarChart3 } from "lucide-react";
+import AcademicResults from "./AcademicResults";
+import ZoneStudentAnalytics from "./ZoneStudentAnalytics";
 import {
   Bar,
   BarChart,
@@ -12,6 +14,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import Link from "next/link";
 
 interface BatchHistoryItem {
   _id: string;
@@ -86,6 +89,77 @@ const feeBadge = (feePlan?: string) => {
   return "bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-500/30";
 };
 
+const shortCourseName = (title?: string) => {
+  if (!title) return "—";
+  const words = title.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return words.map((w) => w[0]).join("").toUpperCase().slice(0, 3);
+};
+
+const courseThemes = [
+  {
+    grad: "from-sky-600/25 to-sky-900/20",
+    border: "border-sky-500/40",
+    hover: "hover:border-sky-400",
+    text: "text-sky-300",
+    badge: "bg-sky-500/20 text-sky-200 ring-1 ring-sky-500/30",
+  },
+  {
+    grad: "from-emerald-600/25 to-emerald-900/20",
+    border: "border-emerald-500/40",
+    hover: "hover:border-emerald-400",
+    text: "text-emerald-300",
+    badge: "bg-emerald-500/20 text-emerald-200 ring-1 ring-emerald-500/30",
+  },
+  {
+    grad: "from-violet-600/25 to-violet-900/20",
+    border: "border-violet-500/40",
+    hover: "hover:border-violet-400",
+    text: "text-violet-300",
+    badge: "bg-violet-500/20 text-violet-200 ring-1 ring-violet-500/30",
+  },
+  {
+    grad: "from-orange-600/25 to-orange-900/20",
+    border: "border-orange-500/40",
+    hover: "hover:border-orange-400",
+    text: "text-orange-300",
+    badge: "bg-orange-500/20 text-orange-200 ring-1 ring-orange-500/30",
+  },
+];
+
+const zoneThemes: Record<string,{ ring: string; text: string; bg: string; hover: string }>
+ = {
+  blue: {
+    ring: "border-blue-500/40",
+    text: "text-blue-300",
+    bg: "from-blue-600/20 to-blue-900/10",
+    hover: "hover:border-blue-400",
+  },
+  yellow: {
+    ring: "border-yellow-500/40",
+    text: "text-yellow-300",
+    bg: "from-yellow-600/20 to-yellow-900/10",
+    hover: "hover:border-yellow-400",
+  },
+  green: {
+    ring: "border-emerald-500/40",
+    text: "text-emerald-300",
+    bg: "from-emerald-600/20 to-emerald-900/10",
+    hover: "hover:border-emerald-400",
+  },
+};
+
+const zoneOrder = (zone?: string) => {
+  const z = (zone || "").toLowerCase();
+  if (z === "blue") return 0;
+  if (z === "yellow") return 1;
+  if (z === "green") return 2;
+  return 3;
+};
+
+const sortByZone = (list: Student[]) =>
+  [...list].sort((a, b) => zoneOrder(a.zone) - zoneOrder(b.zone));
+
 const safeDate = (val?: string) => {
   if (!val) return "—";
   const d = new Date(val);
@@ -101,6 +175,7 @@ const StudentsListPage = () => {
   const router = useRouter();
   const searchBoxRef = useRef<HTMLDivElement | null>(null);
 
+  const [showAcademicResults, setShowAcademicResults] = useState(false);
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -123,22 +198,20 @@ const StudentsListPage = () => {
   const [searchDraft, setSearchDraft] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
 
-  const [searchSuggestions, setSearchSuggestions] = useState<
-    StudentSuggestion[]
-  >([]);
+  const [searchSuggestions, setSearchSuggestions] = useState<StudentSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestionLoading, setSuggestionLoading] = useState(false);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
-  const [placementUpdatingId, setPlacementUpdatingId] = useState<
-    string | null
-  >(null);
-  const [placedFilter, setPlacedFilter] = useState<
-    "all" | "placed" | "notplaced"
-  >("all");
+  const [placementUpdatingId, setPlacementUpdatingId] = useState<string | null>(null);
+  const [placedFilter, setPlacedFilter] = useState<"all" | "placed" | "notplaced">("all");
+  const [zoneFilter, setZoneFilter] = useState<string>("all");
+  const [courseFilter, setCourseFilter] = useState<string>("all");
   const [placementUnlocked, setPlacementUnlocked] = useState(false);
 
   // Whether we are in the "ALL students" drill-down view (any of the 3 top cards)
   const isAllView = selectedCourseId === "ALL";
+  // Active students view = ALL view filtered to not-placed (entered via "Active Students" card)
+  const isActiveView = isAllView && placedFilter === "notplaced";
 
   // ────────────────────────────────────────────
   // Derived counts from the single enrolled fetch
@@ -152,6 +225,18 @@ const StudentsListPage = () => {
           Array.isArray(s.purchasedCourses) &&
           s.purchasedCourses.length > 0
       ).length,
+    [allEnrolledStudents]
+  );
+
+  const activeStudentsBase = useMemo(
+    () =>
+      allEnrolledStudents.filter(
+        (s) =>
+          s.isRealUser !== true &&
+          s.isPlaced !== true &&
+          Array.isArray(s.purchasedCourses) &&
+          s.purchasedCourses.length > 0
+      ),
     [allEnrolledStudents]
   );
 
@@ -184,6 +269,21 @@ const StudentsListPage = () => {
     }
     // "all" → show all enrolled (purchasedCourses not empty is already guaranteed by the API)
 
+    if (isActiveView) {
+      if (zoneFilter !== "all") {
+        list = list.filter(
+          (s) => (s.zone || "").toLowerCase() === zoneFilter.toLowerCase()
+        );
+      }
+      if (courseFilter !== "all") {
+        list = list.filter(
+          (s) =>
+            Array.isArray(s.purchasedCourses) &&
+            s.purchasedCourses.some((c) => String(c) === courseFilter)
+        );
+      }
+    }
+
     if (appliedSearch.trim()) {
       const q = appliedSearch.trim().toLowerCase();
       list = list.filter(
@@ -192,9 +292,8 @@ const StudentsListPage = () => {
           (s.email || "").toLowerCase().includes(q)
       );
     }
-
-    return list;
-  }, [isAllView, allEnrolledStudents, placedFilter, appliedSearch]);  
+    return sortByZone(list);
+  }, [isAllView, isActiveView, allEnrolledStudents, placedFilter, zoneFilter, courseFilter, appliedSearch]);
 
   const allViewTotal = filteredAllStudents.length;
   const allViewTotalPages = Math.max(1, Math.ceil(allViewTotal / limit));
@@ -219,6 +318,32 @@ const StudentsListPage = () => {
   const displayTotalPages = isAllView
     ? allViewTotalPages
     : Math.max(1, Math.ceil(total / limit));
+
+  // Zone counts for the current drill-down list
+  const zoneCounts = useMemo(() => {
+    const source: Student[] = isAllView
+      ? filteredAllStudents
+      : (() => {
+          let list = courseStudents;
+          if (appliedSearch.trim()) {
+            const q = appliedSearch.trim().toLowerCase();
+            list = list.filter(
+              (s) =>
+                (s.fullName || "").toLowerCase().includes(q) ||
+                (s.email || "").toLowerCase().includes(q)
+            );
+          }
+          return list;
+        })();
+    const counts = { blue: 0, yellow: 0, green: 0 };
+    source.forEach((s) => {
+      const z = (s.zone || "").toLowerCase();
+      if (z === "blue") counts.blue += 1;
+      else if (z === "yellow") counts.yellow += 1;
+      else if (z === "green") counts.green += 1;
+    });
+    return counts;
+  }, [isAllView, filteredAllStudents, courseStudents, appliedSearch]);
 
   // ────────────────────────────────────────────
   // Placement toggle — update both local states
@@ -305,9 +430,10 @@ const StudentsListPage = () => {
           );
         }
 
+        const sorted = sortByZone(filtered);
         const start = (page - 1) * limit;
-        setStudents(filtered.slice(start, start + limit));
-        setTotal(filtered.length);
+        setStudents(sorted.slice(start, start + limit));
+        setTotal(sorted.length);
         return;
       }
 
@@ -523,7 +649,7 @@ const StudentsListPage = () => {
         }
         sessionStorage.removeItem("studentsListState");
       }
-    } catch {}
+    } catch { }
 
     getCourses();
     fetchAllEnrolledStudents();
@@ -549,7 +675,7 @@ const StudentsListPage = () => {
           setAllStudentsForChart(chartList);
           setTotalStudents(
             Number(j.total || 0) -
-              ((Array.isArray(j.data) ? j.data.length : 0) - chartList.length)
+            ((Array.isArray(j.data) ? j.data.length : 0) - chartList.length)
           );
         }
       } catch (e) {
@@ -659,7 +785,7 @@ const StudentsListPage = () => {
           searchDraft,
         })
       );
-    } catch {}
+    } catch { }
     router.push(`/student-full-info?clerkId=${clerkId}`);
   };
 
@@ -722,15 +848,35 @@ const StudentsListPage = () => {
             Update Students Zone
           </button>
 
-           <button
+          <button
             onClick={() => { router.push('/students-call-reports') }}
             className="shrink-0 rounded-xl border border-[#312a63] bg-[#0f0b24] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#1b1640]"
           >
             Call Recording Annalysiss Dashboard
           </button>
+
+          <button
+            onClick={() => setShowAcademicResults((v) => !v)}
+            className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-[#312a63] bg-[#0f0b24] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#1b1640]"
+          >
+            <GraduationCap className="h-4 w-4" />
+            {showAcademicResults ? "Hide Academic Results" : "Academic Results"}
+          </button>
+
+          <Link
+            href="/communication-analytics"
+            className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-[#312a63] bg-[#0f0b24] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#1b1640]"
+          >
+            <BarChart3 className="h-4 w-4" />
+            Communication Analytics
+          </Link>
         </div>
 
-       
+        {showAcademicResults && (
+          <div className="mb-6 overflow-hidden rounded-2xl border border-[#312a63] bg-white shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
+            <AcademicResults />
+          </div>
+        )}
 
         {/* ── Cards ── */}
         {!selectedCourseId && (
@@ -783,7 +929,11 @@ const StudentsListPage = () => {
               </p>
             </button>
 
-            {/* <button
+            <div className="sm:col-span-2 xl:col-span-2">
+              <ZoneStudentAnalytics />
+            </div>
+
+            <button
               onClick={() => {
                 setSelectedCourseId("ALL");
                 setPlacedFilter("placed");
@@ -805,34 +955,52 @@ const StudentsListPage = () => {
                   placed
                 </span>
               </p>
-            </button> */}
+            </button>
+            {courses.map((c, idx) => {
+              const theme = courseThemes[idx % courseThemes.length];
+              const count = activeStudentsBase.filter(
+                (s) =>
+                  Array.isArray(s.purchasedCourses) &&
+                  s.purchasedCourses.some(
+                    (p) => String(p) === String(c._id)
+                  )
+              ).length;
+              const isSelected = courseFilter === c._id;
+              return (
+                <button
+                  key={c._id}
+                  onClick={() => {
+                    // setCourseFilter(isSelected ? "all" : c._id);
+                    // setPage(1);
+                    setSelectedCourseId(c._id);
+                    setPlacedFilter("all");
+                    setPage(1);
+                    setSearchDraft("");
+                    setAppliedSearch("");
+                  }}
 
-            {courses.map((c) => (
-              <button
-                key={c._id}
-                onClick={() => {
-                  setSelectedCourseId(c._id);
-                  setPlacedFilter("all");
-                  setPage(1);
-                  setSearchDraft("");
-                  setAppliedSearch("");
-                }}
-                className="rounded-2xl border border-[#312a63] bg-[#120f2d] p-6 text-left shadow-[0_10px_30px_rgba(0,0,0,0.25)] transition hover:border-[#8b5cf6] hover:bg-[#1a1538]"
-              >
-                <p className="text-sm font-medium uppercase tracking-wider text-[#9a92c9]">
-                  Course
-                </p>
-                <p className="mt-2 truncate text-xl font-semibold text-white">
-                  {c.title || "Untitled Course"}
-                </p>
-                <p className="mt-4 text-3xl font-bold text-[#8b5cf6]">
-                  {courseCounts[c._id] ?? 0}
-                  <span className="ml-2 text-sm font-medium text-[#a8a0d6]">
-                    students
-                  </span>
-                </p>
-              </button>
-            ))}
+                  className={`rounded-2xl border ${theme.border} ${theme.hover} bg-gradient-to-br ${theme.grad} p-5 text-left shadow-[0_10px_30px_rgba(0,0,0,0.25)] transition ${isSelected ? "ring-2 ring-white/20" : ""
+                    }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <span
+                      className={`inline-flex h-8 w-8 items-center justify-center rounded-full ${theme.badge} text-xs font-bold`}
+                    >
+                      {shortCourseName(c.title)}
+                    </span>
+                    <span className={`text-3xl font-bold ${theme.text}`}>
+                      {count}
+                    </span>
+                  </div>
+                  <p className="mt-3 truncate text-lg font-semibold text-white">
+                    {c.title || "Untitled Course"}
+                  </p>
+                  <p className="mt-1 text-xs text-[#a8a0d6]">
+                    {isSelected ? "Filter applied · tap to clear" : "Tap to filter"}
+                  </p>
+                </button>
+              );
+            })}
           </div>
         )}
 
@@ -901,16 +1069,16 @@ const StudentsListPage = () => {
                 className="rounded-xl border border-[#312a63] bg-[#0f0b24] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#1b1640]"
               >
                 ← Back to Courses
-              </button>             
+              </button>
               <p className="text-lg font-semibold text-white">
                 {isAllView
                   ? placedFilter === "placed"
                     ? "Placed Students"
                     : placedFilter === "notplaced"
-                    ? "Active Students"
-                    : "All Enrolled Students"
+                      ? "Active Students"
+                      : "All Enrolled Students"
                   : courses.find((c) => c._id === selectedCourseId)?.title ||
-                    "Course"}
+                  "Course"}
                 <span className="ml-2 text-sm font-normal text-[#a8a0d6]">
                   (
                   {isAllView
@@ -919,6 +1087,31 @@ const StudentsListPage = () => {
                   )
                 </span>
               </p>
+            </div>
+
+            {/* ── Zone counts ── */}
+            <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="rounded-2xl border border-blue-500/40 bg-gradient-to-br from-blue-600/20 to-blue-900/10 p-5">
+                <p className="text-sm font-medium uppercase tracking-wider text-[#9a92c9]">Blue Zone</p>
+                <p className="mt-2 text-3xl font-bold text-blue-300">
+                  {zoneCounts.blue}
+                  <span className="ml-2 text-sm font-medium text-[#a8a0d6]">students</span>
+                </p>
+              </div>
+              <div className="rounded-2xl border border-yellow-500/40 bg-gradient-to-br from-yellow-600/20 to-yellow-900/10 p-5">
+                <p className="text-sm font-medium uppercase tracking-wider text-[#9a92c9]">Yellow Zone</p>
+                <p className="mt-2 text-3xl font-bold text-yellow-300">
+                  {zoneCounts.yellow}
+                  <span className="ml-2 text-sm font-medium text-[#a8a0d6]">students</span>
+                </p>
+              </div>
+              <div className="rounded-2xl border border-emerald-500/40 bg-gradient-to-br from-emerald-600/20 to-emerald-900/10 p-5">
+                <p className="text-sm font-medium uppercase tracking-wider text-[#9a92c9]">Green Zone</p>
+                <p className="mt-2 text-3xl font-bold text-emerald-300">
+                  {zoneCounts.green}
+                  <span className="ml-2 text-sm font-medium text-[#a8a0d6]">students</span>
+                </p>
+              </div>
             </div>
 
             {/* ── Search / Filter bar ── */}
@@ -987,11 +1180,10 @@ const StudentsListPage = () => {
                                   onClick={() =>
                                     handleSuggestionClick(student)
                                   }
-                                  className={`flex w-full items-center justify-between px-4 py-3 text-left transition ${
-                                    activeSuggestionIndex === index
+                                  className={`flex w-full items-center justify-between px-4 py-3 text-left transition ${activeSuggestionIndex === index
                                       ? "bg-[#1c1642] text-white"
                                       : "hover:bg-[#1c1642] hover:text-white"
-                                  }`}
+                                    }`}
                                 >
                                   <div className="min-w-0">
                                     <p className="truncate font-medium text-white">
@@ -1018,7 +1210,40 @@ const StudentsListPage = () => {
                 </div>
 
                 <div className="flex gap-3">
-                  {isAllView && (
+                  {isActiveView && (
+                    <>
+                      <select
+                        value={zoneFilter}
+                        onChange={(e) => {
+                          setZoneFilter(e.target.value);
+                          setPage(1);
+                        }}
+                        className="rounded-xl border border-[#312a63] bg-[#0f0b24] px-4 py-3 text-white outline-none focus:border-[#8b5cf6]"
+                      >
+                        <option value="all">All Zones</option>
+                        <option value="blue">Blue</option>
+                        <option value="yellow">Yellow</option>
+                        <option value="green">Green</option>
+                      </select>
+                      <select
+                        value={courseFilter}
+                        onChange={(e) => {
+                          setCourseFilter(e.target.value);
+                          setPage(1);
+                        }}
+                        className="rounded-xl border border-[#312a63] bg-[#0f0b24] px-4 py-3 text-white outline-none focus:border-[#8b5cf6]"
+                      >
+                        <option value="all">All Courses</option>
+                        {courses.map((c) => (
+                          <option key={c._id} value={c._id}>
+                            {c.title || "Untitled Course"}
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                  )}
+
+                  {isAllView && !isActiveView && (
                     <select
                       value={placedFilter}
                       onChange={(e) => {
@@ -1031,7 +1256,6 @@ const StudentsListPage = () => {
                     >
                       <option value="all">All Enrolled</option>
                       <option value="placed">Placed</option>
-                      <option value="notplaced">Not Placed</option>
                     </select>
                   )}
 
@@ -1075,6 +1299,8 @@ const StudentsListPage = () => {
                       setSearchSuggestions([]);
                       setShowSuggestions(false);
                       setActiveSuggestionIndex(-1);
+                      setZoneFilter("all");
+                      setCourseFilter("all");
                       setPage(1);
                     }}
                     className="rounded-xl border border-[#312a63] bg-[#0f0b24] px-5 py-3 font-medium text-white transition hover:bg-[#1b1640]"
@@ -1105,9 +1331,9 @@ const StudentsListPage = () => {
                         <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[#9a92c9]">
                           Student
                         </th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[#9a92c9]">
+                        {/* <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[#9a92c9]">
                           Batch
-                        </th>
+                        </th> */}
                         {/* <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[#9a92c9]">
                           Fee Plan
                         </th> */}
@@ -1140,8 +1366,8 @@ const StudentsListPage = () => {
                         displayStudents.map((student) => {
                           const batchCode = student.batchHistory?.length
                             ? student.batchHistory[
-                                student.batchHistory.length - 1
-                              ]?.to
+                              student.batchHistory.length - 1
+                            ]?.to
                             : "—";
                           return (
                             <tr
@@ -1176,9 +1402,9 @@ const StudentsListPage = () => {
                                 </div>
                               </td>
 
-                              <td className="px-6 py-5 text-white">
+                              {/* <td className="px-6 py-5 text-white">
                                 {batchCode || "—"}
-                              </td>
+                              </td> */}
 
                               {/* <td className="px-6 py-5">
                                 <span
@@ -1207,11 +1433,10 @@ const StudentsListPage = () => {
                               <td className="px-6 py-5">
                                 <div className="flex items-center gap-2">
                                   <span
-                                    className={`${pill} ${
-                                      student.isPlaced
+                                    className={`${pill} ${student.isPlaced
                                         ? "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30"
                                         : "bg-slate-500/15 text-slate-300 ring-1 ring-slate-500/30"
-                                    }`}
+                                      }`}
                                   >
                                     {student.isPlaced
                                       ? "Placed"
@@ -1233,17 +1458,16 @@ const StudentsListPage = () => {
                                         ? "Tick 'Allow placement edit' to enable"
                                         : ""
                                     }
-                                    className={`rounded-lg px-3 py-1.5 text-xs font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                                      student.isPlaced
+                                    className={`rounded-lg px-3 py-1.5 text-xs font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${student.isPlaced
                                         ? "bg-rose-600 hover:bg-rose-700"
                                         : "bg-emerald-600 hover:bg-emerald-700"
-                                    }`}
+                                      }`}
                                   >
                                     {placementUpdatingId === student._id
                                       ? "..."
                                       : student.isPlaced
-                                      ? "Unmark"
-                                      : "Mark Placed"}
+                                        ? "Unmark"
+                                        : "Mark Placed"}
                                   </button>
                                 </div>
                               </td>
@@ -1313,11 +1537,10 @@ const StudentsListPage = () => {
                         <button
                           key={pageNumber}
                           onClick={() => handlePageChange(pageNumber)}
-                          className={`h-10 min-w-10 rounded-lg px-3 text-sm font-medium transition ${
-                            page === pageNumber
+                          className={`h-10 min-w-10 rounded-lg px-3 text-sm font-medium transition ${page === pageNumber
                               ? "bg-[#8b5cf6] text-white"
                               : "border border-[#312a63] bg-[#0f0b24] text-white hover:bg-[#1b1640]"
-                          }`}
+                            }`}
                         >
                           {pageNumber}
                         </button>
@@ -1337,6 +1560,8 @@ const StudentsListPage = () => {
             )}
           </>
         )}
+
+        
       </div>
     </div>
   );

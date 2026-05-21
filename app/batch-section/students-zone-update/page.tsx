@@ -24,6 +24,8 @@ interface Student {
   feePlan: string;
   joinedMonth: string;
   zone: string;
+  isPlaced?: boolean;
+  purchasedCourses?: any[];
 }
 
 type ZoneOption = "blue" | "green" | "yellow";
@@ -70,13 +72,12 @@ const ZONE_META: Record<
 
 const StudentsZoneUpdatePage: React.FC = () => {
   const router = useRouter();
-  const [students, setStudents] = useState<Student[]>([]);
+  const [allStudents, setAllStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
 
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [total, setTotal] = useState(0);
 
   const [searchDraft, setSearchDraft] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
@@ -91,9 +92,42 @@ const StudentsZoneUpdatePage: React.FC = () => {
     message: string;
   } | null>(null);
 
+  const filteredStudents = useMemo(() => {
+    let list = allStudents.filter(
+      (s) =>
+        s.isPlaced !== true &&
+        Array.isArray(s.purchasedCourses) &&
+        s.purchasedCourses.length > 0
+    );
+
+    if (appliedZone) {
+      list = list.filter(
+        (s) => (s.zone || "").toLowerCase() === appliedZone
+      );
+    }
+
+    if (appliedSearch.trim()) {
+      const q = appliedSearch.trim().toLowerCase();
+      list = list.filter(
+        (s) =>
+          (s.fullName || "").toLowerCase().includes(q) ||
+          (s.email || "").toLowerCase().includes(q)
+      );
+    }
+
+    return list;
+  }, [allStudents, appliedSearch, appliedZone]);
+
+  const total = filteredStudents.length;
+
   const totalPages = useMemo(
     () => Math.max(1, Math.ceil(total / limit)),
     [total, limit]
+  );
+
+  const students = useMemo(
+    () => filteredStudents.slice((page - 1) * limit, page * limit),
+    [filteredStudents, page, limit]
   );
 
   const allOnPageSelected =
@@ -102,25 +136,29 @@ const StudentsZoneUpdatePage: React.FC = () => {
   const fetchStudents = async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams();
-      params.set("page", String(page));
-      params.set("limit", String(limit));
-      if (appliedSearch.trim()) params.set("search", appliedSearch.trim());
-      if (appliedZone) params.set("zone", appliedZone);
-
       const res = await fetch(
-        `${API_LMS_URL}/api/users/get-student-list?${params.toString()}`,
-        { method: "GET", headers: { "Content-Type": "application/json" } }
+        `${API_LMS_URL}/api/users/active-placement-students?status=all`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": process.env.NEXT_PUBLIC_STUDENT_INFO_API_KEY || "",
+          },
+          cache: "no-store",
+        }
       );
       const json = await res.json();
       if (!res.ok) throw new Error(json?.message || "Failed to load students");
 
-      setStudents(Array.isArray(json?.data) ? (json.data as Student[]) : []);
-      setTotal(Number(json?.total || 0));
+      const enrolled: Student[] = Array.isArray(json?.students)
+        ? json.students
+        : [];
+      setAllStudents(
+        enrolled.filter((s: any) => s.isRealUser !== true)
+      );
     } catch (err) {
       console.error(err);
-      setStudents([]);
-      setTotal(0);
+      setAllStudents([]);
     } finally {
       setLoading(false);
     }
@@ -128,8 +166,7 @@ const StudentsZoneUpdatePage: React.FC = () => {
 
   useEffect(() => {
     fetchStudents();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, limit, appliedSearch, appliedZone]);
+  }, []);
 
   useEffect(() => {
     if (!toast) return;
