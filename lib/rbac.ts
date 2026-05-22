@@ -1,5 +1,6 @@
 export const ROLES = {
   SUPER_ADMIN: "SUPER_ADMIN",
+  ADMIN : "ADMIN",
   FEE_STAFF: "FEE_STAFF",
   PLACEMENT_STAFF: "PLACEMENT_STAFF",
   FOUNDER: "FOUNDER",
@@ -12,11 +13,12 @@ export type Role = (typeof ROLES)[keyof typeof ROLES];
 
 export const ACCESS: Record<string, readonly Role[]> = {
   // REAL URL PATHS (no /(auth))
-  "/fee-dashboard": [ROLES.SUPER_ADMIN, ROLES.FOUNDER, ROLES.INTERVIEWER],
+  "/fee-dashboard": [ROLES.SUPER_ADMIN, ROLES.FOUNDER, ROLES.INTERVIEWER,ROLES.ADMIN],
   "/interview-reporting": [ROLES.SUPER_ADMIN, ROLES.INTERVIEWER],
   "/post-placement-student-creation": [
     ROLES.SUPER_ADMIN,
     ROLES.PLACEMENT_STAFF,
+    ROLES?.ADMIN
   ],
   "/fee-dashboard/student-full-info": [ROLES.SUPER_ADMIN, ROLES.FOUNDER],
   "/fee-dashboard/studentOverview": [ROLES.SUPER_ADMIN, ROLES.FOUNDER],
@@ -30,8 +32,9 @@ export const ACCESS: Record<string, readonly Role[]> = {
     ROLES.STUDENT_MANAGEMENT,
   ],
   "/resume-builder": [ROLES.SUPER_ADMIN, ROLES.CALLING_STAFF],
-  "/studentOverview":[ROLES.STUDENT_MANAGEMENT],
-  "/student-full-info":[ROLES.STUDENT_MANAGEMENT]
+  "/studentOverview":[ROLES.STUDENT_MANAGEMENT, ROLES?.ADMIN],
+  "/student-full-info":[ROLES.STUDENT_MANAGEMENT, ROLES?.ADMIN]
+
 
 } as const;
 

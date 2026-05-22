@@ -15,6 +15,7 @@ export default async function Layout({
   const ALLOWED_ROLES: readonly Role[] = [
     ROLES.PLACEMENT_STAFF,
     ROLES.SUPER_ADMIN,
+    ROLES.ADMIN,
   ];
 
   if (!role || !ALLOWED_ROLES.includes(role)) {
