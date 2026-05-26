@@ -66,6 +66,27 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December",
 ];
 
+const STRENGTH_OPTIONS = [
+  "Good communication flow",
+  "Clear pronunciation and voice clarity",
+  "Confident speaking style",
+  "Good understanding of interview questions",
+];
+
+const IMPROVEMENT_OPTIONS = [
+  "Needs to improve fluency",
+  "Needs better sentence formation",
+  "Needs more confidence while speaking",
+  "Needs to reduce hesitation and pauses",
+];
+
+const PRACTICE_TASK_OPTIONS = [
+  "Practice daily self-introduction",
+  "Practice HR interview questions",
+  "Record and review speaking practice",
+  "Practice explaining technical projects/skills",
+];
+
 const remarkColor: Record<RemarkEnum, string> = {
   Good: "#10b981",
   Average: "#f59e0b",
@@ -551,13 +572,18 @@ export default function StudentCommunicationRemarksPage() {
                   <CheckCircle2 className="h-4 w-4" />
                   Area of Strength
                 </label>
-                <textarea
-                  rows={3}
+                <select
                   value={areaOfStrength}
                   onChange={(e) => setAreaOfStrength(e.target.value)}
-                  placeholder="What did the student do well? (e.g., confident pronunciation, good listening skills)"
-                  className="w-full rounded-xl border border-[#312a63] bg-[#0f0b24] p-4 text-white outline-none placeholder:text-[#8f87bf] focus:border-emerald-400"
-                />
+                  className="w-full rounded-xl border border-[#312a63] bg-[#0f0b24] p-4 text-white outline-none focus:border-emerald-400"
+                >
+                  <option value="">Select an area of strength</option>
+                  {STRENGTH_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="rounded-2xl border border-[#312a63] bg-[#120f2d] p-5 shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
@@ -565,13 +591,18 @@ export default function StudentCommunicationRemarksPage() {
                   <TrendingUp className="h-4 w-4" />
                   Area of Improvement
                 </label>
-                <textarea
-                  rows={3}
+                <select
                   value={areaOfImprovement}
                   onChange={(e) => setAreaOfImprovement(e.target.value)}
-                  placeholder="Where can the student grow? (e.g., grammar, fluency, vocabulary)"
-                  className="w-full rounded-xl border border-[#312a63] bg-[#0f0b24] p-4 text-white outline-none placeholder:text-[#8f87bf] focus:border-amber-400"
-                />
+                  className="w-full rounded-xl border border-[#312a63] bg-[#0f0b24] p-4 text-white outline-none focus:border-amber-400"
+                >
+                  <option value="">Select an area of improvement</option>
+                  {IMPROVEMENT_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="rounded-2xl border border-[#312a63] bg-[#120f2d] p-5 shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
@@ -579,13 +610,18 @@ export default function StudentCommunicationRemarksPage() {
                   <ClipboardList className="h-4 w-4" />
                   Practice Task
                 </label>
-                <textarea
-                  rows={3}
+                <select
                   value={practiceTask}
                   onChange={(e) => setPracticeTask(e.target.value)}
-                  placeholder="Suggested homework / next step for the student"
-                  className="w-full rounded-xl border border-[#312a63] bg-[#0f0b24] p-4 text-white outline-none placeholder:text-[#8f87bf] focus:border-[#8b5cf6]"
-                />
+                  className="w-full rounded-xl border border-[#312a63] bg-[#0f0b24] p-4 text-white outline-none focus:border-[#8b5cf6]"
+                >
+                  <option value="">Select a practice task</option>
+                  {PRACTICE_TASK_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">

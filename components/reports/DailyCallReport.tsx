@@ -301,7 +301,7 @@ export default function DailyCallReport({
   const analytics = useMemo(() => {
     let totalCalls = reports.length;
     let positive = 0, neutral = 0, negative = 0, manualLogs = 0, followUps = 0;
-    let totalDurationSeconds = 0, callsWithDuration = 0;
+    let totalDurationSeconds = 0, callsWithDuration = 0, cvsShared = 0;
 
     const studentStats: Record<string, {
       leadId: string; name: string; phone: string; email: string;
@@ -321,6 +321,12 @@ export default function DailyCallReport({
       else if (sentiment === "neg") negative++;
       else neutral++;
       if (r.analysis?.followUpRequired) followUps++;
+
+      const codeUpper = (r.analysis?.outcomeCode || "").toUpperCase();
+      const outcomeUpper = (r.analysis?.outcome || "").toUpperCase();
+      if (codeUpper.includes("RESUME_REQUESTED") || outcomeUpper.includes("RESUME_REQUESTED")) {
+        cvsShared++;
+      }
 
       const durationSeconds = getCallDurationSeconds(r);
       if (durationSeconds > 0) {
@@ -416,7 +422,7 @@ export default function DailyCallReport({
       totalCalls, totalStudents, positive, negative, neutral, manualLogs,
       followUps, conversionRate, negativeRate, neutralRate, students,
       sentimentData, performanceData, totalDurationSeconds, avgDurationSeconds,
-      callsWithDuration, qualityDistribution,
+      callsWithDuration, qualityDistribution, cvsShared,
     };
   }, [reports]);
 
@@ -650,7 +656,7 @@ export default function DailyCallReport({
         </div>
 
         {/* ═══════════════════ KPI CARDS ═══════════════════ */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4 sm:gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-7 gap-4 sm:gap-5">
           <KpiCard
             label="Total Calls"
             value={analytics.totalCalls}
@@ -682,9 +688,9 @@ export default function DailyCallReport({
             onClick={() => setSelectedMetric("totalDuration")}
           />
           <KpiCard
-            label="Positive"
+            label="Good"
             value={analytics.positive}
-            percent={analytics.conversionRate}
+            // percent={analytics.conversionRate}
             subtitle={`${analytics.conversionRate}% of total calls`}
             icon={<TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-green-700" />}
             iconBg="bg-green-50"
@@ -693,9 +699,9 @@ export default function DailyCallReport({
             onClick={() => setSelectedMetric("positive")}
           />
           <KpiCard
-            label="Neutral"
+            label="Average"
             value={analytics.neutral}
-            percent={analytics.neutralRate}
+            // percent={analytics.neutralRate}
             subtitle={`${analytics.neutralRate}% of total calls`}
             icon={<MinusCircle className="h-5 w-5 sm:h-6 sm:w-6 text-amber-700" />}
             iconBg="bg-amber-50"
@@ -704,9 +710,18 @@ export default function DailyCallReport({
             onClick={() => setSelectedMetric("neutral")}
           />
           <KpiCard
-            label="Negative"
+            label="CVs Shared"
+            value={analytics.cvsShared}
+            subtitle={`${pct(analytics.cvsShared, analytics.totalCalls)}% of total calls`}
+            icon={<FileText className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-700" />}
+            iconBg="bg-emerald-50"
+            valueColor="text-emerald-700"
+            borderHover="hover:border-emerald-600"
+          />
+          <KpiCard
+            label="Poor"
             value={analytics.negative}
-            percent={analytics.negativeRate}
+            // percent={analytics.negativeRate}
             subtitle={`${analytics.negativeRate}% of total calls`}
             icon={<TrendingDown className="h-5 w-5 sm:h-6 sm:w-6 text-red-700" />}
             iconBg="bg-red-50"
@@ -723,15 +738,15 @@ export default function DailyCallReport({
           </h3>
           <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
             <div className="rounded-2xl bg-green-50 p-4 border border-green-200">
-              <p className="font-semibold text-green-800">Positive</p>
+              <p className="font-semibold text-green-800">Good</p>
               <p className="mt-1 text-sm text-green-700 leading-relaxed">Resume requested, clear progress, successful response</p>
             </div>
             <div className="rounded-2xl bg-red-50 p-4 border border-red-200">
-              <p className="font-semibold text-red-800">Negative</p>
+              <p className="font-semibold text-red-800">Poor</p>
               <p className="mt-1 text-sm text-red-700 leading-relaxed">Not interested, wrong number, invalid, no answer, dead call</p>
             </div>
             <div className="rounded-2xl bg-amber-50 p-4 border border-amber-200">
-              <p className="font-semibold text-amber-800">Neutral</p>
+              <p className="font-semibold text-amber-800">Average</p>
               <p className="mt-1 text-sm text-amber-700 leading-relaxed">Information shared, callback requested, still open</p>
             </div>
             <div className="rounded-2xl bg-[#FFF7ED] p-4 border border-orange-200">
@@ -758,15 +773,15 @@ export default function DailyCallReport({
             <div className="flex items-center gap-4 text-xs flex-wrap">
               <div className="flex items-center gap-1.5">
                 <div className="w-4 h-4 rounded-full bg-green-600 shadow-md" />
-                <span className="font-semibold text-[#5D4037]">Positive {analytics.conversionRate}%</span>
+                <span className="font-semibold text-[#5D4037]">Good {analytics.conversionRate}%</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-4 h-4 rounded-full bg-amber-500 shadow-md" />
-                <span className="font-semibold text-[#5D4037]">Neutral {analytics.neutralRate}%</span>
+                <span className="font-semibold text-[#5D4037]">Average {analytics.neutralRate}%</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-4 h-4 rounded-full bg-red-600 shadow-md" />
-                <span className="font-semibold text-[#5D4037]">Negative {analytics.negativeRate}%</span>
+                <span className="font-semibold text-[#5D4037]">Poor {analytics.negativeRate}%</span>
               </div>
             </div>
           </div>

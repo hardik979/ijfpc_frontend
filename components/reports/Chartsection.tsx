@@ -542,11 +542,20 @@ export default function ChartSection({
     const interviewStudents = filteredStudents.filter((s) => s.hasInterview);
     const placedStudents = filteredStudents.filter((s) => s.placed);
 
+    /* CVs shared = calls whose outcomeCode/outcome contains RESUME_REQUESTED */
+    const cvsShared = filteredStudents.reduce((acc, s) => {
+      return acc + s.calls.filter((c) => {
+        const code = (c.analysis?.outcomeCode || "").toUpperCase();
+        const out = (c.analysis?.outcome || "").toUpperCase();
+        return code.includes("RESUME_REQUESTED") || out.includes("RESUME_REQUESTED");
+      }).length;
+    }, 0);
+
     /* Sentiment donut */
     const sentimentData = [
-      { name: "Positive", value: pos, color: "#16a34a", percent: pct(pos, totalCalls) },
-      { name: "Negative", value: neg, color: "#dc2626", percent: pct(neg, totalCalls) },
-      { name: "Neutral",  value: neutral, color: "#d97706", percent: pct(neutral, totalCalls) },
+      { name: "Good", value: pos, color: "#16a34a", percent: pct(pos, totalCalls) },
+      { name: "Poor", value: neg, color: "#dc2626", percent: pct(neg, totalCalls) },
+      { name: "Average",  value: neutral, color: "#d97706", percent: pct(neutral, totalCalls) },
     ].filter((d) => d.value > 0);
 
     /* Bar chart: top 8 by total */
@@ -607,7 +616,7 @@ export default function ChartSection({
       .slice(0, 8);
 
     return {
-      totalCalls, pos, neg, neutral, totalDur,
+      totalCalls, pos, neg, neutral, totalDur, cvsShared,
       conversionRate: pct(pos, totalCalls),
       negativeRate: pct(neg, totalCalls),
       neutralRate: pct(neutral, totalCalls),
@@ -643,7 +652,7 @@ export default function ChartSection({
           </div>
           <div className="h-px flex-1 bg-[#F0E8DC]" />
           <span className="text-xs text-[#8A7968]">
-            Showing <strong className="text-[#8B4513]">{filteredStudents.length}</strong> students · <strong className="text-[#8B4513]">{agg.totalCalls}</strong> calls
+            Showing <strong className="text-[#8B4513]">{filteredStudents.length}</strong> students · <strong className="text-[#8B4513]">{agg.totalCalls}</strong> calls · <strong className="text-emerald-700">{agg.cvsShared}</strong> CVs shared
           </span>
         </div>
 
@@ -776,7 +785,7 @@ export default function ChartSection({
                     contentStyle={{ borderRadius: 12, border: "1px solid #eee2d0" }}
                     formatter={(value: number, name: string, props: any) => {
                       const d = props.payload;
-                      const pctVal = name === "Positive" ? d.posPct : name === "Neutral" ? d.neutralPct : d.negPct;
+                      const pctVal = name === "Good" ? d.posPct : name === "Average" ? d.neutralPct : d.negPct;
                       return [`${value} calls (${pctVal}%)`, name];
                     }}
                     labelFormatter={(label: string, payload: any) =>
@@ -784,9 +793,9 @@ export default function ChartSection({
                     }
                   />
                   <Legend wrapperStyle={{ fontSize: "12px", fontWeight: 600 }} />
-                  <Bar dataKey="Positive" stackId="a" fill="#16a34a" />
-                  <Bar dataKey="Neutral"  stackId="a" fill="#d97706" />
-                  <Bar dataKey="Negative" stackId="a" fill="#dc2626" radius={[6, 6, 0, 0]}>
+                  <Bar dataKey="Positive" name="Good"    stackId="a" fill="#16a34a" />
+                  <Bar dataKey="Neutral"  name="Average" stackId="a" fill="#d97706" />
+                  <Bar dataKey="Negative" name="Poor"    stackId="a" fill="#dc2626" radius={[6, 6, 0, 0]}>
                     <LabelList
                       dataKey="Total" position="top"
                       style={{ fontSize: "11px", fill: "#5D4037", fontWeight: 600 }}
@@ -964,15 +973,15 @@ export default function ChartSection({
                 <div className="grid grid-cols-3 gap-1.5 mb-3 text-center">
                   <div className="rounded-lg bg-green-50 border border-green-100 p-1.5">
                     <p className="text-sm font-black text-green-700">{s.pos}</p>
-                    <p className="text-[9px] text-green-600">Positive</p>
+                    <p className="text-[9px] text-green-600">Good</p>
                   </div>
                   <div className="rounded-lg bg-amber-50 border border-amber-100 p-1.5">
                     <p className="text-sm font-black text-amber-700">{s.neutral}</p>
-                    <p className="text-[9px] text-amber-600">Neutral</p>
+                    <p className="text-[9px] text-amber-600">Average</p>
                   </div>
                   <div className="rounded-lg bg-red-50 border border-red-100 p-1.5">
                     <p className="text-sm font-black text-red-700">{s.neg}</p>
-                    <p className="text-[9px] text-red-600">Negative</p>
+                    <p className="text-[9px] text-red-600">Poor</p>
                   </div>
                 </div>
 
