@@ -62,8 +62,7 @@ interface Course {
 
 const API_LMS_URL = process.env.NEXT_PUBLIC_LMS_URL;
 
-const pill =
-  "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold";
+const pill = "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold";
 
 const zoneBadge = (zone?: string) => {
   const z = (zone || "").toLowerCase();
@@ -74,19 +73,6 @@ const zoneBadge = (zone?: string) => {
   if (z === "green")
     return "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30";
   return "bg-slate-500/15 text-slate-300 ring-1 ring-slate-500/30";
-};
-
-const feeBadge = (feePlan?: string) => {
-  const fp = (feePlan || "").toLowerCase();
-  if (!fp || fp === "-" || fp === "none")
-    return "bg-slate-500/15 text-slate-300 ring-1 ring-slate-500/30";
-  if (fp.includes("emi"))
-    return "bg-violet-500/15 text-violet-300 ring-1 ring-violet-500/30";
-  if (fp.includes("one") || fp.includes("full"))
-    return "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30";
-  if (fp.includes("admission") || fp.includes("advance"))
-    return "bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30";
-  return "bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-500/30";
 };
 
 const shortCourseName = (title?: string) => {
@@ -127,27 +113,6 @@ const courseThemes = [
   },
 ];
 
-const zoneThemes: Record<string,{ ring: string; text: string; bg: string; hover: string }>
- = {
-  blue: {
-    ring: "border-blue-500/40",
-    text: "text-blue-300",
-    bg: "from-blue-600/20 to-blue-900/10",
-    hover: "hover:border-blue-400",
-  },
-  yellow: {
-    ring: "border-yellow-500/40",
-    text: "text-yellow-300",
-    bg: "from-yellow-600/20 to-yellow-900/10",
-    hover: "hover:border-yellow-400",
-  },
-  green: {
-    ring: "border-emerald-500/40",
-    text: "text-emerald-300",
-    bg: "from-emerald-600/20 to-emerald-900/10",
-    hover: "hover:border-emerald-400",
-  },
-};
 
 const zoneOrder = (zone?: string) => {
   const z = (zone || "").toLowerCase();
@@ -157,8 +122,7 @@ const zoneOrder = (zone?: string) => {
   return 3;
 };
 
-const sortByZone = (list: Student[]) =>
-  [...list].sort((a, b) => zoneOrder(a.zone) - zoneOrder(b.zone));
+const sortByZone = (list: Student[]) =>[...list].sort((a, b) => zoneOrder(a.zone) - zoneOrder(b.zone));
 
 const safeDate = (val?: string) => {
   if (!val) return "—";
@@ -174,14 +138,12 @@ const safeDate = (val?: string) => {
 const StudentsListPage = () => {
   const router = useRouter();
   const searchBoxRef = useRef<HTMLDivElement | null>(null);
-
   const [showAcademicResults, setShowAcademicResults] = useState(false);
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<string>("");
   const [courseCounts, setCourseCounts] = useState<Record<string, number>>({});
-  const [totalStudents, setTotalStudents] = useState<number | null>(null);
   const [courseStudents, setCourseStudents] = useState<Student[]>([]);
   const skipNextSuggestionRef = useRef(false);
   const [allStudentsForChart, setAllStudentsForChart] = useState<Student[]>([]);
@@ -315,9 +277,7 @@ const StudentsListPage = () => {
   // Final display list
   const displayStudents = isAllView ? allViewPageStudents : visibleStudents;
   const displayTotal = isAllView ? allViewTotal : total;
-  const displayTotalPages = isAllView
-    ? allViewTotalPages
-    : Math.max(1, Math.ceil(total / limit));
+  const displayTotalPages = isAllView ? allViewTotalPages : Math.max(1, Math.ceil(total / limit));
 
   // Zone counts for the current drill-down list
   const zoneCounts = useMemo(() => {
@@ -396,26 +356,14 @@ const StudentsListPage = () => {
       if (selectedCourseId && selectedCourseId !== "ALL") {
         let list = courseStudents;
         if (list.length === 0) {
-          const response = await fetch(
-            `${API_LMS_URL}/api/users/find-student-by-course?courseId=${encodeURIComponent(
-              selectedCourseId
-            )}`,
-            {
-              method: "GET",
-              headers: {
-                "Content-Type": "application/json",
-                "x-api-key":
-                  process.env.NEXT_PUBLIC_STUDENT_INFO_API_KEY || "",
-              },
-              cache: "no-store",
-            }
-          );
-          const json = await response.json();
-          if (!response.ok)
-            throw new Error("Failed to load students by course");
-          const raw = Array.isArray(json.students) ? json.students : [];
-          list = raw.filter(
-            (s: Student) => s.isPlaced !== true && s.isRealUser !== true
+          // Derive from the same source the course cards use so the
+          // drill-down count always matches the card count.
+          list = activeStudentsBase.filter(
+            (s) =>
+              Array.isArray(s.purchasedCourses) &&
+              s.purchasedCourses.some(
+                (p) => String(p) === String(selectedCourseId)
+              )
           );
           setCourseStudents(list);
         }
@@ -631,7 +579,7 @@ const StudentsListPage = () => {
 
   useEffect(() => {
     getStudentList();
-  }, [page, limit, appliedSearch, selectedCourseId]);
+  }, [page, limit, appliedSearch, selectedCourseId, activeStudentsBase]);
 
   useEffect(() => {
     try {
@@ -673,10 +621,7 @@ const StudentsListPage = () => {
             (s: Student) => s.isRealUser !== true
           );
           setAllStudentsForChart(chartList);
-          setTotalStudents(
-            Number(j.total || 0) -
-            ((Array.isArray(j.data) ? j.data.length : 0) - chartList.length)
-          );
+         
         }
       } catch (e) {
         console.error("chart fetch error:", e);
@@ -1559,9 +1504,7 @@ const StudentsListPage = () => {
               </div>
             )}
           </>
-        )}
-
-        
+        )}        
       </div>
     </div>
   );

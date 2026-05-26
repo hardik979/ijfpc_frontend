@@ -262,6 +262,7 @@ export const POSITIVE_OUTCOMES = [
   "CALLBACK_REQUESTED",
   "INFO_SHARED",
   "RESUME_REQUESTED",
+  "INTERVIEW_SCHEDULED",
 ];
 
 export const QUALITY_SCORE_MAP: Record<string, number> = {

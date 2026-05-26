@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, X, Search, Send, BarChart3, ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { toast } from "react-toastify";
 import {
   XAxis,
   YAxis,
@@ -13,6 +14,7 @@ import {
   Bar,
   Cell,
   ReferenceLine,
+  LabelList,
 } from "recharts";
 
 const API_LMS_URL = process.env.NEXT_PUBLIC_LMS_URL;
@@ -52,6 +54,27 @@ type Mode = "submit" | "view";
 
 const REMARK_OPTIONS: RemarkEnum[] = ["Good", "Average", "Bad"];
 
+const STRENGTH_OPTIONS = [
+  "Good communication flow",
+  "Clear pronunciation and voice clarity",
+  "Confident speaking style",
+  "Good understanding of interview questions",
+];
+
+const IMPROVEMENT_OPTIONS = [
+  "Needs to improve fluency",
+  "Needs better sentence formation",
+  "Needs more confidence while speaking",
+  "Needs to reduce hesitation and pauses",
+];
+
+const PRACTICE_TASK_OPTIONS = [
+  "Practice daily self-introduction",
+  "Practice HR interview questions",
+  "Record and review speaking practice",
+  "Practice explaining technical projects/skills",
+];
+
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
@@ -87,6 +110,13 @@ export default function CommunicationAnalytics() {
   const [score, setScore] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [submitMsg, setSubmitMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [submittedThisSession, setSubmittedThisSession] = useState<
+    { clerkId: string; fullName?: string; email?: string; remark: RemarkEnum; score?: number; at: string }[]
+  >([]);
+  const submittedIds = useMemo(
+    () => new Set(submittedThisSession.map((s) => s.clerkId)),
+    [submittedThisSession]
+  );
 
   // View remarks
   const now = new Date();
@@ -95,6 +125,43 @@ export default function CommunicationAnalytics() {
   const [remarks, setRemarks] = useState<CommunicationRemark[]>([]);
   const [loadingRemarks, setLoadingRemarks] = useState(false);
   const [remarksError, setRemarksError] = useState("");
+
+  // Day-wise remarks (all students on a single date)
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const [dayDate, setDayDate] = useState<string>(todayISO);
+  const [dayRemarks, setDayRemarks] = useState<CommunicationRemark[]>([]);
+  const [loadingDayRemarks, setLoadingDayRemarks] = useState(false);
+
+  const fetchDayRemarks = async (date: string) => {
+    try {
+      setLoadingDayRemarks(true);
+      const res = await fetch(
+        `${API_LMS_URL}/api/student-management/get-day-remarks?date=${encodeURIComponent(date)}`
+      );
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.message || "Failed");
+      setDayRemarks(json.data ?? []);
+    } catch {
+      setDayRemarks([]);
+    } finally {
+      setLoadingDayRemarks(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDayRemarks(dayDate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dayDate, submittedThisSession.length]);
+
+  const dayChartData = useMemo(() => {
+    return [...dayRemarks]
+      .filter((r) => typeof r.score === "number")
+      .map((r) => ({
+        name: r.fullName || r.clerkId,
+        score: r.score as number,
+        remark: r.remark || "—",
+      }));
+  }, [dayRemarks]);
 
   // ----- Fetch active placement students -----
   useEffect(() => {
@@ -242,9 +309,22 @@ export default function CommunicationAnalytics() {
       if (!res.ok || !json.success) {
         throw new Error(json.message || "Failed to submit remark");
       }
-      setSubmitMsg({ ok: true, text: "Remark submitted successfully" });
+      toast.success("Remark submitted successfully");
+      setSubmittedThisSession((prev) => [
+        {
+          clerkId: selected.clerkId,
+          fullName: selected.fullName,
+          email: selected.email,
+          remark,
+          score: scoreNum,
+          at: new Date().toISOString(),
+        },
+        ...prev.filter((p) => p.clerkId !== selected.clerkId),
+      ]);
       resetForm();
+      closeModal();
     } catch (error) {
+      toast.error(getErrorMessage(error));
       setSubmitMsg({ ok: false, text: getErrorMessage(error) });
     } finally {
       setSubmitting(false);
@@ -347,6 +427,8 @@ export default function CommunicationAnalytics() {
   // ---------- UI ----------
   return (
     <div className="rounded-2xl bg-slate-900/60 p-5 ring-1 ring-slate-700/60">
+
+      
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <button
@@ -411,6 +493,94 @@ export default function CommunicationAnalytics() {
         />
       </div>
 
+        {/* Day-wise scores chart */}
+      {mode === "submit" ? (
+        <div className="mt-6 rounded-xl bg-slate-800/40 p-4 ring-1 ring-slate-700/60">
+          <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                Day-wise Student Scores
+              </p>
+              <p className="text-xs text-slate-500">
+                All students remarked on the selected date
+              </p>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-300">
+                Date
+              </label>
+              <input
+                type="date"
+                value={dayDate}
+                max={todayISO}
+                onChange={(e) => setDayDate(e.target.value)}
+                className="rounded-lg bg-slate-800/60 p-2 text-sm text-slate-100 ring-1 ring-slate-700 focus:outline-none focus:ring-indigo-500"
+              />
+            </div>
+          </div>
+
+          {loadingDayRemarks ? (
+            <div className="flex items-center justify-center py-10 text-slate-400">
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading…
+            </div>
+          ) : dayChartData.length === 0 ? (
+            <div className="py-10 text-center text-sm text-slate-400">
+              No scored remarks on this date.
+            </div>
+          ) : (
+            <div className="h-72 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={dayChartData}
+                  margin={{ top: 5, right: 10, left: -20, bottom: 40 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                  <XAxis
+                    dataKey="name"
+                    stroke="#94a3b8"
+                    fontSize={11}
+                    interval={0}
+                    angle={-25}
+                    textAnchor="end"
+                  />
+                  <YAxis domain={[0, 10]} stroke="#94a3b8" fontSize={11} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#0f172a",
+                      border: "1px solid #334155",
+                      borderRadius: 8,
+                      fontSize: 12,
+                    }}
+                    labelStyle={{ color: "#cbd5e1" }}
+                    cursor={{ fill: "rgba(99,102,241,0.08)" }}
+                  />
+                  <Bar dataKey="score" radius={[6, 6, 0, 0]} barSize={28}>
+                    <LabelList
+                      dataKey="score"
+                      position="top"
+                      fill="#e2e8f0"
+                      fontSize={11}
+                      fontWeight={600}
+                      formatter={(v) => `${v}/10`}
+                    />
+                    {dayChartData.map((d, i) => {
+                      const color =
+                        d.score >= 7
+                          ? "#10b981"
+                          : d.score >= 4
+                          ? "#eab308"
+                          : "#ef4444";
+                      return <Cell key={i} fill={color} />;
+                    })}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      ) : null}
+
+
       {/* Students list */}
       {loadingStudents ? (
         <div className="flex items-center justify-center py-10 text-slate-400">
@@ -443,13 +613,23 @@ export default function CommunicationAnalytics() {
                   <td className="px-4 py-2 text-slate-100">{s.fullName || "—"}</td>
                   <td className="px-4 py-2 text-slate-300">{s.email || "—"}</td>
                   <td className="px-4 py-2 text-right">
-                    <button
-                      type="button"
-                      onClick={() => openStudent(s)}
-                      className="rounded-lg bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-500"
-                    >
-                      {mode === "submit" ? "Add Remark" : "View Remarks"}
-                    </button>
+                    {mode === "submit" && submittedIds.has(s.clerkId) ? (
+                      <button
+                        type="button"
+                        disabled
+                        className="cursor-not-allowed rounded-lg bg-slate-700 px-3 py-1 text-xs font-medium text-slate-300 opacity-70"
+                      >
+                        Remark Submitted
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => openStudent(s)}
+                        className="rounded-lg bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-500"
+                      >
+                        {mode === "submit" ? "Add Remark" : "View Remarks"}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -458,6 +638,50 @@ export default function CommunicationAnalytics() {
         </div>
       )}
 
+      {/* Submitted this session */}
+      {mode === "submit" && submittedThisSession.length > 0 ? (
+        <div className="mt-6 rounded-xl bg-slate-800/40 p-4 ring-1 ring-slate-700/60">
+          <p className="mb-3 text-xs font-medium uppercase tracking-wider text-slate-400">
+            Submitted this session ({submittedThisSession.length})
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-xs uppercase text-slate-400">
+                <tr>
+                  <th className="px-3 py-2 text-left font-medium">Name</th>
+                  <th className="px-3 py-2 text-left font-medium">Email</th>
+                  <th className="px-3 py-2 text-left font-medium">Remark</th>
+                  <th className="px-3 py-2 text-left font-medium">Score</th>
+                  <th className="px-3 py-2 text-left font-medium">Submitted</th>
+                </tr>
+              </thead>
+              <tbody>
+                {submittedThisSession.map((s) => (
+                  <tr key={s.clerkId} className="border-t border-slate-800">
+                    <td className="px-3 py-2 text-slate-100">{s.fullName || "—"}</td>
+                    <td className="px-3 py-2 text-slate-300">{s.email || "—"}</td>
+                    <td className="px-3 py-2">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${REMARK_PILL[s.remark]}`}
+                      >
+                        {s.remark}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-slate-300">
+                      {typeof s.score === "number" ? `${s.score}/10` : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-slate-400">
+                      {new Date(s.at).toLocaleTimeString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+
+    
       {/* Modal */}
       {selected ? (
         <div
@@ -497,37 +721,55 @@ export default function CommunicationAnalytics() {
                     <label className="mb-1 block text-xs font-medium text-slate-300">
                       Area of Strength
                     </label>
-                    <textarea
+                    <select
                       value={areaOfStrength}
                       onChange={(e) => setAreaOfStrength(e.target.value)}
-                      rows={2}
                       required
                       className="w-full rounded-lg bg-slate-800/60 p-2 text-sm text-slate-100 ring-1 ring-slate-700 focus:outline-none focus:ring-indigo-500"
-                    />
+                    >
+                      <option value="">Select an area of strength</option>
+                      {STRENGTH_OPTIONS.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="mb-1 block text-xs font-medium text-slate-300">
                       Area of Improvement
                     </label>
-                    <textarea
+                    <select
                       value={areaOfImprovement}
                       onChange={(e) => setAreaOfImprovement(e.target.value)}
-                      rows={2}
                       required
                       className="w-full rounded-lg bg-slate-800/60 p-2 text-sm text-slate-100 ring-1 ring-slate-700 focus:outline-none focus:ring-indigo-500"
-                    />
+                    >
+                      <option value="">Select an area of improvement</option>
+                      {IMPROVEMENT_OPTIONS.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="mb-1 block text-xs font-medium text-slate-300">
                       Practice Task
                     </label>
-                    <textarea
+                    <select
                       value={practiceTask}
                       onChange={(e) => setPracticeTask(e.target.value)}
-                      rows={2}
                       required
                       className="w-full rounded-lg bg-slate-800/60 p-2 text-sm text-slate-100 ring-1 ring-slate-700 focus:outline-none focus:ring-indigo-500"
-                    />
+                    >
+                      <option value="">Select a practice task</option>
+                      {PRACTICE_TASK_OPTIONS.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
