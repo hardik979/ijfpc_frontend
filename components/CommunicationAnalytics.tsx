@@ -1,25 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, X, Search, Send, BarChart3, ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useUser } from "@clerk/nextjs";
 import { toast } from "react-toastify";
-import {
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  Cell,
-  ReferenceLine,
-  LabelList,
-} from "recharts";
+import {ResponsiveContainer,ComposedChart,Bar,XAxis,YAxis,CartesianGrid,Tooltip,LineChart,Line,ReferenceLine,ReferenceArea} from "recharts";
+import {ArrowLeft,Calendar,Users,TrendingUp,TrendingDown,Award,BookOpen,Search,X,Send,Loader2,ChevronRight,Activity,Plus,Layers,Sparkles} from "lucide-react";
 
 const API_LMS_URL = process.env.NEXT_PUBLIC_LMS_URL;
 
-type RemarkEnum = "Good" | "Bad" | "Average";
+// ───────────────────────── Types ─────────────────────────
+
+type View = "overview" | "course" | "student";
+type RemarkEnum = "Good" | "Average" | "Bad";
 
 type Student = {
   _id?: string;
@@ -31,13 +24,13 @@ type Student = {
   feePlan?: string;
   isPlaced?: boolean;
   isRealUser?: boolean;
-  purchasedCourses?: unknown[];
+  purchasedCourses?: string[];
   batchHistory?: { to?: string; from?: string | null; changedAt?: string }[];
 };
 
 type Course = { _id: string; title?: string };
 
-type CommunicationRemark = {
+type Remark = {
   _id: string;
   clerkId: string;
   fullName?: string;
@@ -50,9 +43,33 @@ type CommunicationRemark = {
   createdAt: string;
 };
 
-type Mode = "submit" | "view";
+type Candle = {
+  name: string;
+  open: number;
+  close: number;
+  high: number;
+  low: number;
+  avg: number;
+  count: number;
+  range: [number, number];
+  meta?: any;
+};
 
-const REMARK_OPTIONS: RemarkEnum[] = ["Good", "Average", "Bad"];
+type CourseStack = {
+  name: string;
+  poor: number;
+  average: number;
+  good: number;
+  excellent: number;
+  poorAvg: number;
+  averageAvg: number;
+  goodAvg: number;
+  excellentAvg: number;
+  total: number;
+  overallAvg: number;
+};
+
+// ───────────────────────── Constants ─────────────────────────
 
 const STRENGTH_OPTIONS = [
   "Good communication flow",
@@ -75,131 +92,358 @@ const PRACTICE_TASK_OPTIONS = [
   "Practice explaining technical projects/skills",
 ];
 
-const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
+const REMARK_OPTIONS: RemarkEnum[] = ["Good", "Average", "Bad"];
 
 const REMARK_PILL: Record<RemarkEnum, string> = {
   Good: "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30",
-  Average: "bg-yellow-500/15 text-yellow-300 ring-1 ring-yellow-500/30",
-  Bad: "bg-red-500/15 text-red-300 ring-1 ring-red-500/30",
+  Average: "bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30",
+  Bad: "bg-rose-500/15 text-rose-300 ring-1 ring-rose-500/30",
 };
 
-function getErrorMessage(error: unknown, fallback = "Something went wrong") {
-  return error instanceof Error ? error.message : fallback;
+const COURSE_GRADIENTS = [
+  "from-violet-500/20 via-violet-500/10 to-transparent",
+  "from-sky-500/20 via-sky-500/10 to-transparent",
+  "from-emerald-500/20 via-emerald-500/10 to-transparent",
+  "from-amber-500/20 via-amber-500/10 to-transparent",
+  "from-rose-500/20 via-rose-500/10 to-transparent",
+  "from-fuchsia-500/20 via-fuchsia-500/10 to-transparent",
+];
+
+const COURSE_RING = [
+  "ring-violet-500/30",
+  "ring-sky-500/30",
+  "ring-emerald-500/30",
+  "ring-amber-500/30",
+  "ring-rose-500/30",
+  "ring-fuchsia-500/30",
+];
+
+const COURSE_ICON_BG = [
+  "bg-violet-500/20 text-violet-300",
+  "bg-sky-500/20 text-sky-300",
+  "bg-emerald-500/20 text-emerald-300",
+  "bg-amber-500/20 text-amber-300",
+  "bg-rose-500/20 text-rose-300",
+  "bg-fuchsia-500/20 text-fuchsia-300",
+];
+
+// ───────────────────────── Helpers ─────────────────────────
+
+const todayISO = () => new Date().toISOString().slice(0, 10);
+const daysAgoISO = (n: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().slice(0, 10);
+};
+const fmt = (n: number, d = 1) =>
+  Number.isFinite(n) ? Number(n).toFixed(d) : "—";
+
+const getCurrentBatch = (s: Student): string => {
+  const h = s.batchHistory;
+  if (!h?.length) return "Unassigned";
+  return h[h.length - 1]?.to || "Unassigned";
+};
+
+const getErr = (e: unknown, fb = "Something went wrong") =>
+  e instanceof Error ? e.message : fb;
+
+function buildCandle(
+  name: string,
+  records: { score: number; createdAt: string }[],
+  meta?: any
+): Candle | null {
+  const sorted = [...records]
+    .filter((r) => typeof r.score === "number")
+    .sort(
+      (a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+  if (!sorted.length) return null;
+  const scores = sorted.map((r) => r.score);
+  const open = scores[0];
+  const close = scores[scores.length - 1];
+  const high = Math.max(...scores);
+  const low = Math.min(...scores);
+  const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+  return {
+    name,
+    open,
+    close,
+    high,
+    low,
+    avg,
+    count: scores.length,
+    range: [low, high],
+    meta,
+  };
 }
+
+// ───────────────────── Candlestick custom shape ─────────────────────
+
+// Per-student bar that starts at 0 and rises to the latest score.
+// Color is based on the performance tier band.
+const tierColor = (score: number) => {
+  if (score >= 8) return "#8b5cf6"; // excellent
+  if (score >= 6) return "#10b981"; // good
+  if (score >= 4) return "#f59e0b"; // average
+  return "#ef4444"; // poor
+};
+
+const StudentBarShape = (props: any) => {
+  const { x, y, width, height, payload } = props;
+  if (!payload) return null;
+  const { close } = payload as Candle;
+  const color = tierColor(close);
+  const barWidth = Math.max(Math.min(width * 0.55, 36), 10);
+  const barX = x + (width - barWidth) / 2;
+  const r = Math.min(6, barWidth / 2);
+
+  return (
+    <g>
+      <defs>
+        <linearGradient id={`grad-${barX}-${y}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity={0.95} />
+          <stop offset="100%" stopColor={color} stopOpacity={0.55} />
+        </linearGradient>
+      </defs>
+      <rect
+        x={barX}
+        y={y}
+        width={barWidth}
+        height={height}
+        fill={`url(#grad-${barX}-${y})`}
+        rx={r}
+      />
+      <text
+        x={x + width / 2}
+        y={y - 6}
+        textAnchor="middle"
+        fill={color}
+        fontSize={11}
+        fontWeight={600}
+      >
+        {Number(close).toFixed(1)}
+      </text>
+    </g>
+  );
+};
+
+const TIER_META: { key: keyof CourseStack; avgKey: keyof CourseStack; label: string; color: string }[] = [
+  { key: "poor", avgKey: "poorAvg", label: "Poor", color: "#ef4444" },
+  { key: "average", avgKey: "averageAvg", label: "Average", color: "#f59e0b" },
+  { key: "good", avgKey: "goodAvg", label: "Good", color: "#10b981" },
+  { key: "excellent", avgKey: "excellentAvg", label: "Excellent", color: "#8b5cf6" },
+];
+
+const TierStackTooltip = ({ active, payload }: any) => {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload as CourseStack;
+  return (
+    <div className="rounded-lg border border-[#312a63] bg-[#0f0b24]/95 px-3 py-2 text-xs shadow-xl backdrop-blur">
+      <p className="mb-1 font-semibold text-white">{d.name}</p>
+      <div className="space-y-0.5">
+        {TIER_META.map((t) => {
+          const count = d[t.key] as number;
+          const avg = d[t.avgKey] as number;
+          return (
+            <div key={t.label} className="flex items-center gap-2">
+              <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: t.color }} />
+              <span className="text-[#a8a0d6]">{t.label}</span>
+              <span className="ml-auto text-white">
+                {count} {count === 1 ? "remark" : "remarks"}
+                {count > 0 ? (
+                  <span className="ml-1 text-[#8f87bf]">· avg {fmt(avg, 1)}</span>
+                ) : null}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-1 flex justify-between border-t border-[#312a63] pt-1 text-[11px]">
+        <span className="text-[#a8a0d6]">Total</span>
+        <span className="text-white">
+          {d.total} · overall avg {fmt(d.overallAvg, 1)}
+        </span>
+      </div>
+    </div>
+  );
+};
+
+const CandleTooltip = ({ active, payload }: any) => {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload as Candle;
+  const delta = d.close - d.open;
+  return (
+    <div className="rounded-lg border border-[#312a63] bg-[#0f0b24]/95 px-3 py-2 text-xs shadow-xl backdrop-blur">
+      <p className="mb-1 font-semibold text-white">{d.name}</p>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[#a8a0d6]">
+        <span>Open</span>
+        <span className="text-right text-white">{fmt(d.open, 1)}</span>
+        <span>Close</span>
+        <span className="text-right text-white">{fmt(d.close, 1)}</span>
+        <span>High</span>
+        <span className="text-right text-emerald-300">{fmt(d.high, 1)}</span>
+        <span>Low</span>
+        <span className="text-right text-rose-300">{fmt(d.low, 1)}</span>
+        <span>Average</span>
+        <span className="text-right text-violet-300">{fmt(d.avg, 1)}</span>
+        <span>Assessments</span>
+        <span className="text-right text-white">{d.count}</span>
+      </div>
+      <p
+        className={`mt-1 text-right text-[11px] font-medium ${
+          delta >= 0 ? "text-emerald-300" : "text-rose-300"
+        }`}
+      >
+        {delta >= 0 ? "▲" : "▼"} {fmt(Math.abs(delta), 1)}
+      </p>
+    </div>
+  );
+};
+
+// ───────────────────── Date Range Filter ─────────────────────
+
+const RANGE_PRESETS: { label: string; days: number }[] = [
+  { label: "7D", days: 6 },
+  { label: "30D", days: 29 },
+  { label: "90D", days: 89 },
+];
+
+function DateRangeFilter({
+  fromDate,
+  toDate,
+  setFromDate,
+  setToDate,
+}: {
+  fromDate: string;
+  toDate: string;
+  setFromDate: (v: string) => void;
+  setToDate: (v: string) => void;
+}) {
+  const applyPreset = (days: number) => {
+    setFromDate(daysAgoISO(days));
+    setToDate(todayISO());
+  };
+
+  return (
+    <div className="flex flex-wrap items-end gap-3 rounded-xl border border-[#312a63] bg-[#120f2d]/80 p-3">
+      <div>
+        <label className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-[#9a92c9]">
+          From
+        </label>
+        <input
+          type="date"
+          value={fromDate}
+          max={toDate}
+          onChange={(e) => setFromDate(e.target.value)}
+          className="rounded-lg border border-[#312a63] bg-[#0f0b24] px-3 py-1.5 text-sm text-white outline-none focus:border-[#8b5cf6] [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:brightness-0 [&::-webkit-calendar-picker-indicator]:invert"
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-[#9a92c9]">
+          To
+        </label>
+        <input
+          type="date"
+          value={toDate}
+          min={fromDate}
+          max={todayISO()}
+          onChange={(e) => setToDate(e.target.value)}
+          className="rounded-lg border border-[#312a63] bg-[#0f0b24] px-3 py-1.5 text-sm text-white outline-none focus:border-[#8b5cf6] [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:brightness-0 [&::-webkit-calendar-picker-indicator]:invert"
+        />
+      </div>
+      <div className="flex items-center gap-1.5">
+        {RANGE_PRESETS.map((p) => (
+          <button
+            key={p.label}
+            type="button"
+            onClick={() => applyPreset(p.days)}
+            className="rounded-lg border border-[#312a63] bg-[#0f0b24] px-3 py-1.5 text-xs font-medium text-[#a8a0d6] transition hover:border-[#8b5cf6] hover:text-white"
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ───────────────────── Stat card ─────────────────────
+
+function StatCard({
+  icon,
+  label,
+  value,
+  hint,
+  accent = "violet",
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: React.ReactNode;
+  hint?: React.ReactNode;
+  accent?: "violet" | "emerald" | "amber" | "rose" | "sky";
+}) {
+  const accentMap = {
+    violet: "text-violet-300 bg-violet-500/15 ring-violet-500/30",
+    emerald: "text-emerald-300 bg-emerald-500/15 ring-emerald-500/30",
+    amber: "text-amber-300 bg-amber-500/15 ring-amber-500/30",
+    rose: "text-rose-300 bg-rose-500/15 ring-rose-500/30",
+    sky: "text-sky-300 bg-sky-500/15 ring-sky-500/30",
+  };
+  return (
+    <div className="rounded-2xl border border-[#312a63] bg-[#120f2d] p-4 shadow-[0_4px_20px_rgba(0,0,0,0.25)]">
+      <div className="flex items-center gap-3">
+        <div
+          className={`flex h-9 w-9 items-center justify-center rounded-xl ring-1 ${accentMap[accent]}`}
+        >
+          {icon}
+        </div>
+        <p className="text-[11px] font-medium uppercase tracking-wider text-[#9a92c9]">
+          {label}
+        </p>
+      </div>
+      <p className="mt-3 text-2xl font-semibold text-white">{value}</p>
+      {hint ? <p className="mt-1 text-xs text-[#a8a0d6]">{hint}</p> : null}
+    </div>
+  );
+}
+
+// ───────────────────────── Main ─────────────────────────
 
 export default function CommunicationAnalytics() {
   const router = useRouter();
-  const [mode, setMode] = useState<Mode>("submit");
+  const { user } = useUser();
 
-  // Students
+  // ── navigation state ──
+  const [view, setView] = useState<View>("overview");
+  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [remarkTarget, setRemarkTarget] = useState<Student | null>(null);
+
+  // ── data ──
   const [students, setStudents] = useState<Student[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
-  const [loadingStudents, setLoadingStudents] = useState<boolean>(true);
-  const [studentsError, setStudentsError] = useState<string>("");
-  const [search, setSearch] = useState<string>("");
-  const [selected, setSelected] = useState<Student | null>(null);
+  const [remarks, setRemarks] = useState<Remark[]>([]);
+  const [studentRemarks, setStudentRemarks] = useState<Remark[]>([]);
+  const [loadingStudents, setLoadingStudents] = useState(true);
+  const [loadingRemarks, setLoadingRemarks] = useState(false);
+  const [loadingStudentRemarks, setLoadingStudentRemarks] = useState(false);
 
-  // Submit form
-  const [areaOfImprovement, setAreaOfImprovement] = useState("");
+  // ── filters ──
+  const [fromDate, setFromDate] = useState<string>(todayISO());
+  const [toDate, setToDate] = useState<string>(todayISO());
+  const [studentSearch, setStudentSearch] = useState("");
+
+  // ── add remark modal ──
+  const [showAddRemark, setShowAddRemark] = useState(false);
   const [areaOfStrength, setAreaOfStrength] = useState("");
+  const [areaOfImprovement, setAreaOfImprovement] = useState("");
   const [practiceTask, setPracticeTask] = useState("");
   const [remark, setRemark] = useState<RemarkEnum>("Average");
-  const [score, setScore] = useState<string>("");
+  const [score, setScore] = useState<number>(7);
   const [submitting, setSubmitting] = useState(false);
-  const [submitMsg, setSubmitMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [submittedThisSession, setSubmittedThisSession] = useState<
-    { clerkId: string; fullName?: string; email?: string; remark: RemarkEnum; score?: number; at: string }[]
-  >([]);
-  const submittedIds = useMemo(
-    () => new Set(submittedThisSession.map((s) => s.clerkId)),
-    [submittedThisSession]
-  );
 
-  // View remarks
-  const now = new Date();
-  const [filterMonth, setFilterMonth] = useState<number>(now.getMonth() + 1);
-  const [filterYear, setFilterYear] = useState<number>(now.getFullYear());
-  const [remarks, setRemarks] = useState<CommunicationRemark[]>([]);
-  const [loadingRemarks, setLoadingRemarks] = useState(false);
-  const [remarksError, setRemarksError] = useState("");
-
-  // Day-wise remarks (all students on a single date)
-  const todayISO = new Date().toISOString().slice(0, 10);
-  const [dayDate, setDayDate] = useState<string>(todayISO);
-  const [dayRemarks, setDayRemarks] = useState<CommunicationRemark[]>([]);
-  const [loadingDayRemarks, setLoadingDayRemarks] = useState(false);
-
-  const fetchDayRemarks = async (date: string) => {
-    try {
-      setLoadingDayRemarks(true);
-      const res = await fetch(
-        `${API_LMS_URL}/api/student-management/get-day-remarks?date=${encodeURIComponent(date)}`
-      );
-      const json = await res.json();
-      if (!res.ok || !json.success) throw new Error(json.message || "Failed");
-      setDayRemarks(json.data ?? []);
-    } catch {
-      setDayRemarks([]);
-    } finally {
-      setLoadingDayRemarks(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchDayRemarks(dayDate);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dayDate, submittedThisSession.length]);
-
-  const dayChartData = useMemo(() => {
-    return [...dayRemarks]
-      .filter((r) => typeof r.score === "number")
-      .map((r) => ({
-        name: r.fullName || r.clerkId,
-        score: r.score as number,
-        remark: r.remark || "—",
-      }));
-  }, [dayRemarks]);
-
-  // ----- Fetch active placement students -----
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        setLoadingStudents(true);
-        setStudentsError("");
-        if (!API_LMS_URL) throw new Error("NEXT_PUBLIC_LMS_URL is missing in .env");
-
-        const res = await fetch(
-          `${API_LMS_URL}/api/users/active-placement-students?status=all`
-        );
-        const json = await res.json();
-        if (cancelled) return;
-        if (!res.ok || !json.success) {
-          throw new Error(json.message || "Failed to load students");
-        }
-        const activeStudents = (json.students ?? []).filter(
-          (s: Student) =>
-            s.isRealUser !== true &&
-            s.isPlaced !== true &&
-            Array.isArray(s.purchasedCourses) &&
-            s.purchasedCourses.length > 0
-        );
-        setStudents(activeStudents);
-      } catch (error) {
-        if (!cancelled) setStudentsError(getErrorMessage(error));
-      } finally {
-        if (!cancelled) setLoadingStudents(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // ----- Fetch courses for course-name resolution -----
+  // ── fetch courses ──
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -216,7 +460,7 @@ export default function CommunicationAnalytics() {
         if (cancelled || !res.ok) return;
         setCourses(Array.isArray(json) ? json : []);
       } catch {
-        // non-fatal
+        /* non-fatal */
       }
     })();
     return () => {
@@ -224,934 +468,1410 @@ export default function CommunicationAnalytics() {
     };
   }, []);
 
-  const courseTitleById = useMemo(() => {
-    const map = new Map<string, string>();
-    courses.forEach((c) => map.set(String(c._id), c.title || "Untitled"));
-    return map;
-  }, [courses]);
-
-  const selectedCourseTitles = useMemo(() => {
-    if (!selected?.purchasedCourses?.length) return [] as string[];
-    return selected.purchasedCourses
-      .map((id) => courseTitleById.get(String(id)) || String(id))
-      .filter(Boolean);
-  }, [selected, courseTitleById]);
-
-  const filteredStudents = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return students;
-    return students.filter(
-      (s) =>
-        (s.fullName ?? "").toLowerCase().includes(q) ||
-        (s.email ?? "").toLowerCase().includes(q)
-    );
-  }, [students, search]);
-
-  const resetForm = () => {
-    setAreaOfImprovement("");
-    setAreaOfStrength("");
-    setPracticeTask("");
-    setRemark("Average");
-    setScore("");
-    setSubmitMsg(null);
-  };
-
-  const openStudent = (student: Student) => {
-    setSelected(student);
-    resetForm();
-    setRemarks([]);
-    setRemarksError("");
-    if (mode === "view") {
-      fetchRemarks(student, filterMonth, filterYear);
-    }
-  };
-
-  const closeModal = () => {
-    setSelected(null);
-    resetForm();
-    setRemarks([]);
-    setRemarksError("");
-  };
-
-  // ----- Submit -----
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!selected) return;
-    try {
-      setSubmitting(true);
-      setSubmitMsg(null);
-
-      if (!areaOfImprovement.trim() || !areaOfStrength.trim() || !practiceTask.trim()) {
-        throw new Error("All fields are required");
+  // ── fetch students ──
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoadingStudents(true);
+        if (!API_LMS_URL) throw new Error("NEXT_PUBLIC_LMS_URL is missing");
+        const res = await fetch(
+          `${API_LMS_URL}/api/users/active-placement-students?status=all`
+        );
+        const json = await res.json();
+        if (cancelled) return;
+        if (!res.ok || !json.success)
+          throw new Error(json.message || "Failed to load students");
+        const list: Student[] = (json.students ?? []).filter(
+          (s: Student) =>
+            s.isRealUser !== true &&
+            s.isPlaced !== true &&
+            Array.isArray(s.purchasedCourses) &&
+            s.purchasedCourses.length > 0
+        );
+        setStudents(list);
+      } catch (e) {
+        toast.error(getErr(e));
+      } finally {
+        if (!cancelled) setLoadingStudents(false);
       }
-      const scoreNum = score === "" ? undefined : Number(score);
-      if (scoreNum !== undefined && (Number.isNaN(scoreNum) || scoreNum < 0 || scoreNum > 10)) {
-        throw new Error("Score must be between 0 and 10");
-      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-      const res = await fetch(
-        `${API_LMS_URL}/api/student-management/submit-communication-remark`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            clerkId: selected.clerkId,
-            fullName: selected.fullName,
-            areaOfImprovement: areaOfImprovement.trim(),
-            areaOfStrength: areaOfStrength.trim(),
-            practiceTask: practiceTask.trim(),
-            remark,
-            score: scoreNum,
-          }),
-        }
-      );
-      const json = await res.json();
-      if (!res.ok || !json.success) {
-        throw new Error(json.message || "Failed to submit remark");
-      }
-      toast.success("Remark submitted successfully");
-      setSubmittedThisSession((prev) => [
-        {
-          clerkId: selected.clerkId,
-          fullName: selected.fullName,
-          email: selected.email,
-          remark,
-          score: scoreNum,
-          at: new Date().toISOString(),
-        },
-        ...prev.filter((p) => p.clerkId !== selected.clerkId),
-      ]);
-      resetForm();
-      closeModal();
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-      setSubmitMsg({ ok: false, text: getErrorMessage(error) });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // ----- View remarks -----
-  const fetchRemarks = async (student: Student, month: number, year: number) => {
+  // ── fetch remarks in date range ──
+  const fetchRangeRemarks = async () => {
     try {
       setLoadingRemarks(true);
-      setRemarksError("");
-      const url = `${API_LMS_URL}/api/student-management/get-student-remarks?clerkId=${encodeURIComponent(
-        student.clerkId
-      )}&month=${month}&year=${year}`;
-      const res = await fetch(url);
+      const res = await fetch(
+        `${API_LMS_URL}/api/student-management/get-remarks-range?from=${fromDate}&to=${toDate}`
+      );
       const json = await res.json();
-      if (!res.ok || !json.success) {
+      if (!res.ok || !json.success)
         throw new Error(json.message || "Failed to load remarks");
-      }
       setRemarks(json.data ?? []);
-    } catch (error) {
-      setRemarksError(getErrorMessage(error));
+    } catch (e) {
+      setRemarks([]);
+      toast.error(getErr(e));
     } finally {
       setLoadingRemarks(false);
     }
   };
 
   useEffect(() => {
-    if (selected && mode === "view") {
-      fetchRemarks(selected, filterMonth, filterYear);
-    }
+    fetchRangeRemarks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterMonth, filterYear]);
+  }, [fromDate, toDate]);
 
-  // ----- Chart data (reactive to current remarks) -----
-  const REMARK_SCORE: Record<RemarkEnum, number> = { Bad: 3, Average: 6, Good: 9 };
+  // ── fetch student remarks (for student view, all-time) ──
+  useEffect(() => {
+    if (view !== "student" || !selectedStudent) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoadingStudentRemarks(true);
+        const y = new Date().getFullYear();
+        const res = await fetch(
+          `${API_LMS_URL}/api/student-management/get-student-remarks?clerkId=${encodeURIComponent(
+            selectedStudent.clerkId
+          )}&year=${y}`
+        );
+        const json = await res.json();
+        if (cancelled) return;
+        if (!res.ok || !json.success) throw new Error(json.message);
+        setStudentRemarks(json.data ?? []);
+      } catch {
+        setStudentRemarks([]);
+      } finally {
+        if (!cancelled) setLoadingStudentRemarks(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, selectedStudent]);
 
-  const scoreTrend = useMemo(() => {
-    return [...remarks]
+  // ── derived: course lookup ──
+  const courseById = useMemo(() => {
+    const m = new Map<string, Course>();
+    courses.forEach((c) => m.set(String(c._id), c));
+    return m;
+  }, [courses]);
+
+  // ── derived: students grouped by course ──
+  const studentsByCourse = useMemo(() => {
+    const m = new Map<string, Student[]>();
+    students.forEach((s) => {
+      (s.purchasedCourses ?? []).forEach((cid) => {
+        const k = String(cid);
+        if (!m.has(k)) m.set(k, []);
+        m.get(k)!.push(s);
+      });
+    });
+    return m;
+  }, [students]);
+
+  // ── derived: clerkId → student ──
+  const studentByClerkId = useMemo(() => {
+    const m = new Map<string, Student>();
+    students.forEach((s) => m.set(s.clerkId, s));
+    return m;
+  }, [students]);
+
+  // ── derived: remarks grouped by course ──
+  const remarksByCourse = useMemo(() => {
+    const m = new Map<string, Remark[]>();
+    remarks.forEach((r) => {
+      const s = studentByClerkId.get(r.clerkId);
+      if (!s) return;
+      (s.purchasedCourses ?? []).forEach((cid) => {
+        const k = String(cid);
+        if (!m.has(k)) m.set(k, []);
+        m.get(k)!.push(r);
+      });
+    });
+    return m;
+  }, [remarks, studentByClerkId]);
+
+  // ── overview: course cards with stats ──
+  const courseCards = useMemo(() => {
+    return courses
+      .map((c, idx) => {
+        const list = studentsByCourse.get(String(c._id)) ?? [];
+        const rmks = remarksByCourse.get(String(c._id)) ?? [];
+        const scores = rmks
+          .filter((r) => typeof r.score === "number")
+          .map((r) => r.score as number);
+        const avg = scores.length
+          ? scores.reduce((a, b) => a + b, 0) / scores.length
+          : 0;
+        const sorted = [...rmks]
+          .filter((r) => typeof r.score === "number")
+          .sort(
+            (a, b) =>
+              new Date(a.createdAt).getTime() -
+              new Date(b.createdAt).getTime()
+          );
+        const delta =
+          sorted.length >= 2
+            ? (sorted[sorted.length - 1].score as number) -
+              (sorted[0].score as number)
+            : 0;
+        return {
+          course: c,
+          idx,
+          studentCount: list.length,
+          remarkCount: rmks.length,
+          avgScore: avg,
+          delta,
+        };
+      })
+      .filter((c) => c.studentCount > 0)
+      .sort((a, b) => b.studentCount - a.studentCount);
+  }, [courses, studentsByCourse, remarksByCourse]);
+
+  // ── overview: stacked tier breakdown per course ──
+  const courseStacks = useMemo<CourseStack[]>(() => {
+    const arr: CourseStack[] = [];
+    courseCards.forEach(({ course }) => {
+      const rmks = (remarksByCourse.get(String(course._id)) ?? []).filter(
+        (r) => typeof r.score === "number"
+      );
+      if (!rmks.length) return;
+      const buckets = { poor: [] as number[], average: [] as number[], good: [] as number[], excellent: [] as number[] };
+      rmks.forEach((r) => {
+        const s = r.score as number;
+        if (s >= 8) buckets.excellent.push(s);
+        else if (s >= 6) buckets.good.push(s);
+        else if (s >= 4) buckets.average.push(s);
+        else buckets.poor.push(s);
+      });
+      const mean = (arr: number[]) =>
+        arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+      const allScores = rmks.map((r) => r.score as number);
+      arr.push({
+        name: course.title || "Untitled",
+        poor: buckets.poor.length,
+        average: buckets.average.length,
+        good: buckets.good.length,
+        excellent: buckets.excellent.length,
+        poorAvg: mean(buckets.poor),
+        averageAvg: mean(buckets.average),
+        goodAvg: mean(buckets.good),
+        excellentAvg: mean(buckets.excellent),
+        total: rmks.length,
+        overallAvg: mean(allScores),
+      });
+    });
+    return arr;
+  }, [courseCards, remarksByCourse]);
+
+  // ── course view: students in this course ──
+  const courseStudents = useMemo(() => {
+    if (!selectedCourse) return [];
+    const list = studentsByCourse.get(String(selectedCourse._id)) ?? [];
+    const q = studentSearch.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter(
+      (s) =>
+        (s.fullName ?? "").toLowerCase().includes(q) ||
+        (s.email ?? "").toLowerCase().includes(q)
+    );
+  }, [selectedCourse, studentsByCourse, studentSearch]);
+
+  // ── course view: remarks scoped to this course ──
+  const courseRemarks = useMemo(() => {
+    if (!selectedCourse) return [];
+    return remarksByCourse.get(String(selectedCourse._id)) ?? [];
+  }, [selectedCourse, remarksByCourse]);
+
+  // ── course view: per-student candles ──
+  const studentCandles = useMemo(() => {
+    if (!selectedCourse) return [];
+    const list = studentsByCourse.get(String(selectedCourse._id)) ?? [];
+    const nameById = new Map<string, string>();
+    list.forEach((s) =>
+      nameById.set(s.clerkId, s.fullName || s.email || s.clerkId)
+    );
+
+    const grouped = new Map<string, { score: number; createdAt: string }[]>();
+    courseRemarks.forEach((r) => {
+      if (typeof r.score !== "number") return;
+      if (!nameById.has(r.clerkId)) return;
+      if (!grouped.has(r.clerkId)) grouped.set(r.clerkId, []);
+      grouped
+        .get(r.clerkId)!
+        .push({ score: r.score as number, createdAt: r.createdAt });
+    });
+
+    const arr: Candle[] = [];
+    grouped.forEach((records, cid) => {
+      const c = buildCandle(nameById.get(cid) || cid, records, { clerkId: cid });
+      if (c) arr.push(c);
+    });
+    return arr.sort((a, b) => b.avg - a.avg);
+  }, [selectedCourse, studentsByCourse, courseRemarks]);
+
+  // ── course view: per-student stats in this course ──
+  const courseStudentStats = useMemo(() => {
+    if (!selectedCourse) return new Map<string, { avg: number; count: number; last?: RemarkEnum }>();
+    const m = new Map<
+      string,
+      { avg: number; count: number; last?: RemarkEnum }
+    >();
+    const grouped = new Map<string, Remark[]>();
+    courseRemarks.forEach((r) => {
+      if (!grouped.has(r.clerkId)) grouped.set(r.clerkId, []);
+      grouped.get(r.clerkId)!.push(r);
+    });
+    grouped.forEach((rs, cid) => {
+      const scored = rs.filter((r) => typeof r.score === "number");
+      const avg = scored.length
+        ? scored.reduce((a, b) => a + (b.score as number), 0) / scored.length
+        : 0;
+      const sortedDesc = [...rs].sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      m.set(cid, {
+        avg,
+        count: rs.length,
+        last: sortedDesc[0]?.remark,
+      });
+    });
+    return m;
+  }, [selectedCourse, courseRemarks]);
+
+  // ── student view: trend data ──
+  const studentTrend = useMemo(() => {
+    return [...studentRemarks]
+      .filter((r) => typeof r.score === "number")
       .sort(
         (a, b) =>
           new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
       )
-      .map((r, i) => {
-        const value =
-          typeof r.score === "number"
-            ? r.score
-            : r.remark
-            ? REMARK_SCORE[r.remark]
-            : null;
-        return {
-          idx: i + 1,
-          date: new Date(r.createdAt).toLocaleDateString(undefined, {
-            month: "short",
-            day: "numeric",
-          }),
-          score: value,
-          remark: r.remark ?? "—",
-        };
-      })
-      .filter((d) => d.score !== null) as {
-      idx: number;
-      date: string;
-      score: number;
-      remark: string;
-    }[];
-  }, [remarks]);
+      .map((r) => ({
+        date: new Date(r.createdAt).toLocaleDateString(undefined, {
+          day: "2-digit",
+          month: "short",
+        }),
+        score: r.score as number,
+        remark: r.remark,
+      }));
+  }, [studentRemarks]);
 
-  const improvementDelta = useMemo(() => {
-    if (scoreTrend.length < 2) return 0;
-    return scoreTrend[scoreTrend.length - 1].score - scoreTrend[0].score;
-  }, [scoreTrend]);
+  const studentAvg = useMemo(() => {
+    if (!studentTrend.length) return 0;
+    return (
+      studentTrend.reduce((a, b) => a + b.score, 0) / studentTrend.length
+    );
+  }, [studentTrend]);
 
-  const avgScore = useMemo(() => {
-    if (scoreTrend.length === 0) return 0;
-    const sum = scoreTrend.reduce((acc, d) => acc + d.score, 0);
-    return Math.round((sum / scoreTrend.length) * 10) / 10;
-  }, [scoreTrend]);
+  const studentDelta = useMemo(() => {
+    if (studentTrend.length < 2) return 0;
+    return (
+      studentTrend[studentTrend.length - 1].score - studentTrend[0].score
+    );
+  }, [studentTrend]);
 
-  const remarkDistribution = useMemo(() => {
-    const counts: Record<RemarkEnum, number> = { Good: 0, Average: 0, Bad: 0 };
-    remarks.forEach((r) => {
-      if (r.remark) counts[r.remark] += 1;
-    });
-    return REMARK_OPTIONS.map((r) => ({ remark: r, count: counts[r] }));
-  }, [remarks]);
+  // ── totals for header ──
+  const totals = useMemo(() => {
+    const scored = remarks.filter((r) => typeof r.score === "number");
+    const avg = scored.length
+      ? scored.reduce((a, b) => a + (b.score as number), 0) / scored.length
+      : 0;
+    return {
+      students: students.length,
+      courses: courseCards.length,
+      remarks: remarks.length,
+      avg,
+    };
+  }, [remarks, students, courseCards]);
 
-  const REMARK_COLOR: Record<RemarkEnum, string> = {
-    Good: "#10b981",
-    Average: "#eab308",
-    Bad: "#ef4444",
+  // ── handlers ──
+  const goOverview = () => {
+    setView("overview");
+    setSelectedCourse(null);
+    setSelectedStudent(null);
+    setStudentSearch("");
   };
 
-  const yearOptions = useMemo(() => {
-    const y = now.getFullYear();
-    return [y - 2, y - 1, y, y + 1];
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const openCourse = (c: Course) => {
+    setSelectedCourse(c);
+    setSelectedStudent(null);
+    setStudentSearch("");
+    setView("course");
+  };
 
-  // ---------- UI ----------
+  const openStudent = (s: Student) => {
+    setSelectedStudent(s);
+    setView("student");
+  };
+
+  const resetRemarkForm = () => {
+    setAreaOfStrength("");
+    setAreaOfImprovement("");
+    setPracticeTask("");
+    setRemark("Average");
+    setScore(7);
+  };
+
+  const openAddRemarkFor = (s: Student) => {
+    setRemarkTarget(s);
+    resetRemarkForm();
+    setShowAddRemark(true);
+  };
+
+  const closeAddRemark = () => {
+    setShowAddRemark(false);
+    setRemarkTarget(null);
+  };
+
+  const submitRemark = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!remarkTarget) return;
+    try {
+      setSubmitting(true);
+      if (!areaOfStrength || !areaOfImprovement || !practiceTask) {
+        throw new Error("Please fill all fields");
+      }
+      const res = await fetch(
+        `${API_LMS_URL}/api/student-management/submit-communication-remark`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            clerkId: remarkTarget.clerkId,
+            fullName: remarkTarget.fullName,
+            areaOfStrength,
+            areaOfImprovement,
+            practiceTask,
+            remark,
+            score,
+            assessorClerkId: user?.id,
+          }),
+        }
+      );
+      const json = await res.json();
+      if (!res.ok || !json.success)
+        throw new Error(json.message || "Failed to submit");
+      toast.success("Remark submitted");
+      closeAddRemark();
+      resetRemarkForm();
+      // refresh data
+      fetchRangeRemarks();
+      // also refresh student remarks if we're viewing this student
+      if (selectedStudent && selectedStudent.clerkId === remarkTarget.clerkId) {
+        const y = new Date().getFullYear();
+        const sr = await fetch(
+          `${API_LMS_URL}/api/student-management/get-student-remarks?clerkId=${encodeURIComponent(
+            selectedStudent.clerkId
+          )}&year=${y}`
+        );
+        const sj = await sr.json();
+        if (sr.ok && sj.success) setStudentRemarks(sj.data ?? []);
+      }
+    } catch (e) {
+      toast.error(getErr(e));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ───────────────────────── Render ─────────────────────────
+
   return (
-    <div className="rounded-2xl bg-slate-900/60 p-5 ring-1 ring-slate-700/60">
-
-      
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
+    <div className="space-y-6">
+      {/* ─── Header ─── */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex items-start gap-3">
           <button
             type="button"
             onClick={() => router.back()}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:bg-slate-700/60"
+            className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-[#312a63] bg-[#120f2d] px-3 py-2 text-xs font-medium text-[#a8a0d6] transition hover:border-[#8b5cf6] hover:text-white"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="h-3.5 w-3.5" />
             Back
           </button>
           <div>
-          <h3 className="text-lg font-semibold text-slate-100">
-            Communication Analytics
-          </h3>
-          <p className="text-xs text-slate-400">
-            Submit and review student communication remarks
-          </p>
+            <h1 className="flex items-center gap-2 text-2xl font-bold text-white sm:text-3xl">
+              <Sparkles className="h-6 w-6 text-[#8b5cf6]" />
+              Communication Analytics
+            </h1>
+            <p className="mt-1 text-sm text-[#a8a0d6]">
+              Track communication performance across courses, batches, and
+              students.
+            </p>
           </div>
         </div>
 
-        <div className="flex rounded-xl bg-slate-800/60 p-1 ring-1 ring-slate-700">
-          <button
-            type="button"
-            onClick={() => {
-              setMode("submit");
-              closeModal();
-            }}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-              mode === "submit"
-                ? "bg-indigo-600 text-white"
-                : "text-slate-300 hover:text-white"
-            }`}
-          >
-            <Send className="h-3.5 w-3.5" /> Submit Remark
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setMode("view");
-              closeModal();
-            }}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-              mode === "view"
-                ? "bg-indigo-600 text-white"
-                : "text-slate-300 hover:text-white"
-            }`}
-          >
-            <BarChart3 className="h-3.5 w-3.5" /> View Remarks
-          </button>
-        </div>
-      </div>
-
-      {/* Search */}
-      <div className="relative mb-4">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search active placement students by name or email…"
-          className="w-full rounded-xl bg-slate-800/60 py-2 pl-9 pr-3 text-sm text-slate-100 ring-1 ring-slate-700 placeholder:text-slate-500 focus:outline-none focus:ring-indigo-500"
+        <DateRangeFilter
+          fromDate={fromDate}
+          toDate={toDate}
+          setFromDate={setFromDate}
+          setToDate={setToDate}
         />
       </div>
 
-        {/* Day-wise scores chart */}
-      {mode === "submit" ? (
-        <div className="mt-6 rounded-xl bg-slate-800/40 p-4 ring-1 ring-slate-700/60">
-          <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
-                Day-wise Student Scores
-              </p>
-              <p className="text-xs text-slate-500">
-                All students remarked on the selected date
-              </p>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-300">
-                Date
-              </label>
-              <input
-                type="date"
-                value={dayDate}
-                max={todayISO}
-                onChange={(e) => setDayDate(e.target.value)}
-                className="rounded-lg bg-slate-800/60 p-2 text-sm text-slate-100 ring-1 ring-slate-700 focus:outline-none focus:ring-indigo-500"
-              />
-            </div>
-          </div>
-
-          {loadingDayRemarks ? (
-            <div className="flex items-center justify-center py-10 text-slate-400">
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading…
-            </div>
-          ) : dayChartData.length === 0 ? (
-            <div className="py-10 text-center text-sm text-slate-400">
-              No scored remarks on this date.
-            </div>
-          ) : (
-            <div className="h-72 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={dayChartData}
-                  margin={{ top: 5, right: 10, left: -20, bottom: 40 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                  <XAxis
-                    dataKey="name"
-                    stroke="#94a3b8"
-                    fontSize={11}
-                    interval={0}
-                    angle={-25}
-                    textAnchor="end"
-                  />
-                  <YAxis domain={[0, 10]} stroke="#94a3b8" fontSize={11} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#0f172a",
-                      border: "1px solid #334155",
-                      borderRadius: 8,
-                      fontSize: 12,
-                    }}
-                    labelStyle={{ color: "#cbd5e1" }}
-                    cursor={{ fill: "rgba(99,102,241,0.08)" }}
-                  />
-                  <Bar dataKey="score" radius={[6, 6, 0, 0]} barSize={28}>
-                    <LabelList
-                      dataKey="score"
-                      position="top"
-                      fill="#e2e8f0"
-                      fontSize={11}
-                      fontWeight={600}
-                      formatter={(v) => `${v}/10`}
-                    />
-                    {dayChartData.map((d, i) => {
-                      const color =
-                        d.score >= 7
-                          ? "#10b981"
-                          : d.score >= 4
-                          ? "#eab308"
-                          : "#ef4444";
-                      return <Cell key={i} fill={color} />;
-                    })}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
+      {/* ─── Breadcrumb ─── */}
+      {view !== "overview" ? (
+        <div className="flex items-center gap-2 text-sm">
+          <button
+            onClick={goOverview}
+            className="text-[#a8a0d6] transition hover:text-white"
+          >
+            Overview
+          </button>
+          {selectedCourse ? (
+            <>
+              <ChevronRight className="h-4 w-4 text-[#5b537d]" />
+              <button
+                onClick={() => {
+                  setSelectedStudent(null);
+                  setView("course");
+                }}
+                className={
+                  view === "course"
+                    ? "font-medium text-white"
+                    : "text-[#a8a0d6] transition hover:text-white"
+                }
+              >
+                {selectedCourse.title}
+              </button>
+            </>
+          ) : null}
+          {selectedStudent && view === "student" ? (
+            <>
+              <ChevronRight className="h-4 w-4 text-[#5b537d]" />
+              <span className="font-medium text-white">
+                {selectedStudent.fullName}
+              </span>
+            </>
+          ) : null}
         </div>
       ) : null}
 
+      {/* ─── Top KPI strip (always) ─── */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard
+          icon={<Users className="h-4 w-4" />}
+          label="Active Students"
+          value={totals.students}
+          accent="violet"
+        />
+        <StatCard
+          icon={<BookOpen className="h-4 w-4" />}
+          label="Courses"
+          value={totals.courses}
+          accent="sky"
+        />
+        <StatCard
+          icon={<Activity className="h-4 w-4" />}
+          label="Remarks Logged"
+          value={totals.remarks}
+          hint={`Between ${fromDate} → ${toDate}`}
+          accent="emerald"
+        />
+        <StatCard
+          icon={<Award className="h-4 w-4" />}
+          label="Average Score"
+          value={
+            <>
+              {fmt(totals.avg, 1)}
+              <span className="text-base font-normal text-[#8f87bf]">/10</span>
+            </>
+          }
+          accent="amber"
+        />
+      </div>
 
-      {/* Students list */}
+      {/* ─── View body ─── */}
       {loadingStudents ? (
-        <div className="flex items-center justify-center py-10 text-slate-400">
+        <div className="flex items-center justify-center rounded-2xl border border-[#312a63] bg-[#120f2d] py-20 text-[#a8a0d6]">
           <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading students…
         </div>
-      ) : studentsError ? (
-        <div className="text-sm text-red-400">{studentsError}</div>
-      ) : filteredStudents.length === 0 ? (
-        <div className="py-10 text-center text-sm text-slate-400">
-          No active placement students found.
-        </div>
-      ) : (
-        <div className="max-h-[420px] overflow-y-auto rounded-xl ring-1 ring-slate-800">
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-slate-900/95 text-xs uppercase text-slate-400 backdrop-blur">
-              <tr>
-                <th className="px-4 py-2 text-left font-medium">#</th>
-                <th className="px-4 py-2 text-left font-medium">Name</th>
-                <th className="px-4 py-2 text-left font-medium">Email</th>
-                <th className="px-4 py-2 text-right font-medium">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredStudents.map((s, idx) => (
-                <tr
-                  key={s._id ?? s.clerkId ?? idx}
-                  className="border-t border-slate-800 hover:bg-slate-800/40"
-                >
-                  <td className="px-4 py-2 text-slate-400">{idx + 1}</td>
-                  <td className="px-4 py-2 text-slate-100">{s.fullName || "—"}</td>
-                  <td className="px-4 py-2 text-slate-300">{s.email || "—"}</td>
-                  <td className="px-4 py-2 text-right">
-                    {mode === "submit" && submittedIds.has(s.clerkId) ? (
-                      <button
-                        type="button"
-                        disabled
-                        className="cursor-not-allowed rounded-lg bg-slate-700 px-3 py-1 text-xs font-medium text-slate-300 opacity-70"
-                      >
-                        Remark Submitted
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => openStudent(s)}
-                        className="rounded-lg bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-500"
-                      >
-                        {mode === "submit" ? "Add Remark" : "View Remarks"}
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Submitted this session */}
-      {mode === "submit" && submittedThisSession.length > 0 ? (
-        <div className="mt-6 rounded-xl bg-slate-800/40 p-4 ring-1 ring-slate-700/60">
-          <p className="mb-3 text-xs font-medium uppercase tracking-wider text-slate-400">
-            Submitted this session ({submittedThisSession.length})
-          </p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-xs uppercase text-slate-400">
-                <tr>
-                  <th className="px-3 py-2 text-left font-medium">Name</th>
-                  <th className="px-3 py-2 text-left font-medium">Email</th>
-                  <th className="px-3 py-2 text-left font-medium">Remark</th>
-                  <th className="px-3 py-2 text-left font-medium">Score</th>
-                  <th className="px-3 py-2 text-left font-medium">Submitted</th>
-                </tr>
-              </thead>
-              <tbody>
-                {submittedThisSession.map((s) => (
-                  <tr key={s.clerkId} className="border-t border-slate-800">
-                    <td className="px-3 py-2 text-slate-100">{s.fullName || "—"}</td>
-                    <td className="px-3 py-2 text-slate-300">{s.email || "—"}</td>
-                    <td className="px-3 py-2">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${REMARK_PILL[s.remark]}`}
-                      >
-                        {s.remark}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-slate-300">
-                      {typeof s.score === "number" ? `${s.score}/10` : "—"}
-                    </td>
-                    <td className="px-3 py-2 text-xs text-slate-400">
-                      {new Date(s.at).toLocaleTimeString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+      ) : view === "overview" ? (
+        <OverviewView
+          courseCards={courseCards}
+          courseStacks={courseStacks}
+          loadingRemarks={loadingRemarks}
+          openCourse={openCourse}
+        />
+      ) : view === "course" && selectedCourse ? (
+        <CourseView
+          course={selectedCourse}
+          students={courseStudents}
+          studentSearch={studentSearch}
+          setStudentSearch={setStudentSearch}
+          studentCandles={studentCandles}
+          loadingRemarks={loadingRemarks}
+          stats={courseStudentStats}
+          openStudent={openStudent}
+          onAddRemark={openAddRemarkFor}
+        />
+      ) : view === "student" && selectedStudent ? (
+        <StudentView
+          student={selectedStudent}
+          remarks={studentRemarks}
+          loading={loadingStudentRemarks}
+          trend={studentTrend}
+          avg={studentAvg}
+          delta={studentDelta}
+          onAddRemark={() => openAddRemarkFor(selectedStudent)}
+          courseTitles={(selectedStudent.purchasedCourses ?? [])
+            .map((cid) => courseById.get(String(cid))?.title)
+            .filter(Boolean) as string[]}
+        />
       ) : null}
 
-    
-      {/* Modal */}
-      {selected ? (
+      {/* ─── Add Remark Modal ─── */}
+      {showAddRemark && remarkTarget ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-          onClick={closeModal}
-          role="presentation"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          onClick={() => !submitting && closeAddRemark()}
         >
           <div
-            className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-slate-900 shadow-xl ring-1 ring-slate-700"
+            className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-[#312a63] bg-[#0f0b24] shadow-2xl"
             onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
           >
-            <div className="flex items-center justify-between border-b border-slate-700/70 px-5 py-4">
+            <div className="flex items-center justify-between border-b border-[#312a63] px-6 py-4">
               <div>
-                <h4 className="text-sm font-semibold text-slate-100">
-                  {mode === "submit" ? "Submit Communication Remark" : "Communication Remarks"}
-                </h4>
-                <p className="text-xs text-slate-400">
-                  {selected.fullName} {selected.email ? `• ${selected.email}` : ""}
+                <h3 className="text-base font-semibold text-white">
+                  Add Communication Remark
+                </h3>
+                <p className="mt-0.5 text-xs text-[#a8a0d6]">
+                  {remarkTarget.fullName}
+                  {remarkTarget.email ? ` • ${remarkTarget.email}` : ""}
                 </p>
               </div>
               <button
                 type="button"
-                onClick={closeModal}
-                className="rounded-md p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-100"
-                aria-label="Close"
+                onClick={() => !submitting && closeAddRemark()}
+                className="rounded-lg p-1.5 text-[#a8a0d6] hover:bg-[#1c1642] hover:text-white"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-5">
-              {mode === "submit" ? (
-                <form className="space-y-4" onSubmit={handleSubmit}>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-300">
-                      Area of Strength
-                    </label>
-                    <select
-                      value={areaOfStrength}
-                      onChange={(e) => setAreaOfStrength(e.target.value)}
-                      required
-                      className="w-full rounded-lg bg-slate-800/60 p-2 text-sm text-slate-100 ring-1 ring-slate-700 focus:outline-none focus:ring-indigo-500"
-                    >
-                      <option value="">Select an area of strength</option>
-                      {STRENGTH_OPTIONS.map((opt) => (
-                        <option key={opt} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-300">
-                      Area of Improvement
-                    </label>
-                    <select
-                      value={areaOfImprovement}
-                      onChange={(e) => setAreaOfImprovement(e.target.value)}
-                      required
-                      className="w-full rounded-lg bg-slate-800/60 p-2 text-sm text-slate-100 ring-1 ring-slate-700 focus:outline-none focus:ring-indigo-500"
-                    >
-                      <option value="">Select an area of improvement</option>
-                      {IMPROVEMENT_OPTIONS.map((opt) => (
-                        <option key={opt} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-300">
-                      Practice Task
-                    </label>
-                    <select
-                      value={practiceTask}
-                      onChange={(e) => setPracticeTask(e.target.value)}
-                      required
-                      className="w-full rounded-lg bg-slate-800/60 p-2 text-sm text-slate-100 ring-1 ring-slate-700 focus:outline-none focus:ring-indigo-500"
-                    >
-                      <option value="">Select a practice task</option>
-                      {PRACTICE_TASK_OPTIONS.map((opt) => (
-                        <option key={opt} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+            <form
+              onSubmit={submitRemark}
+              className="flex-1 space-y-4 overflow-y-auto p-6"
+            >
+              <Field label="Area of Strength" required>
+                <select
+                  value={areaOfStrength}
+                  onChange={(e) => setAreaOfStrength(e.target.value)}
+                  required
+                  className="w-full rounded-xl border border-[#312a63] bg-[#120f2d] px-3 py-2.5 text-sm text-white outline-none focus:border-[#8b5cf6]"
+                >
+                  <option value="">Select an area of strength</option>
+                  {STRENGTH_OPTIONS.map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Area of Improvement" required>
+                <select
+                  value={areaOfImprovement}
+                  onChange={(e) => setAreaOfImprovement(e.target.value)}
+                  required
+                  className="w-full rounded-xl border border-[#312a63] bg-[#120f2d] px-3 py-2.5 text-sm text-white outline-none focus:border-[#8b5cf6]"
+                >
+                  <option value="">Select an area of improvement</option>
+                  {IMPROVEMENT_OPTIONS.map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Practice Task" required>
+                <select
+                  value={practiceTask}
+                  onChange={(e) => setPracticeTask(e.target.value)}
+                  required
+                  className="w-full rounded-xl border border-[#312a63] bg-[#120f2d] px-3 py-2.5 text-sm text-white outline-none focus:border-[#8b5cf6]"
+                >
+                  <option value="">Select a practice task</option>
+                  {PRACTICE_TASK_OPTIONS.map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
+                </select>
+              </Field>
 
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-300">
-                        Remark
-                      </label>
-                      <select
-                        value={remark}
-                        onChange={(e) => setRemark(e.target.value as RemarkEnum)}
-                        className="w-full rounded-lg bg-slate-800/60 p-2 text-sm text-slate-100 ring-1 ring-slate-700 focus:outline-none focus:ring-indigo-500"
-                      >
-                        {REMARK_OPTIONS.map((r) => (
-                          <option key={r} value={r}>
-                            {r}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-300">
-                        Score (0–10)
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={10}
-                        step="0.5"
-                        value={score}
-                        onChange={(e) => setScore(e.target.value)}
-                        className="w-full rounded-lg bg-slate-800/60 p-2 text-sm text-slate-100 ring-1 ring-slate-700 focus:outline-none focus:ring-indigo-500"
-                      />
-                    </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Overall Remark">
+                  <select
+                    value={remark}
+                    onChange={(e) => setRemark(e.target.value as RemarkEnum)}
+                    className="w-full rounded-xl border border-[#312a63] bg-[#120f2d] px-3 py-2.5 text-sm text-white outline-none focus:border-[#8b5cf6]"
+                  >
+                    {REMARK_OPTIONS.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label={`Score (${score}/10)`}>
+                  <input
+                    type="range"
+                    min={0}
+                    max={10}
+                    step={1}
+                    value={score}
+                    onChange={(e) => setScore(Number(e.target.value))}
+                    className="mt-2 w-full accent-[#8b5cf6]"
+                  />
+                  <div className="mt-1 flex justify-between text-[10px] text-[#8f87bf]">
+                    {Array.from({ length: 11 }).map((_, i) => (
+                      <span key={i}>{i}</span>
+                    ))}
                   </div>
+                </Field>
+              </div>
 
-                  {submitMsg ? (
-                    <div
-                      className={`rounded-lg p-2 text-xs ${
-                        submitMsg.ok
-                          ? "bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/30"
-                          : "bg-red-500/10 text-red-300 ring-1 ring-red-500/30"
-                      }`}
-                    >
-                      {submitMsg.text}
-                    </div>
-                  ) : null}
-
-                  <div className="flex justify-end gap-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={closeModal}
-                      className="rounded-lg bg-slate-800 px-4 py-2 text-xs font-medium text-slate-300 hover:bg-slate-700"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={submitting}
-                      className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-60"
-                    >
-                      {submitting ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Send className="h-3.5 w-3.5" />
-                      )}
-                      Submit
-                    </button>
-                  </div>
-                </form>
-              ) : (
-                <>
-                  {/* Filters */}
-                  <div className="mb-4 flex flex-wrap items-end gap-3">
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-300">
-                        Month
-                      </label>
-                      <select
-                        value={filterMonth}
-                        onChange={(e) => setFilterMonth(Number(e.target.value))}
-                        className="rounded-lg bg-slate-800/60 p-2 text-sm text-slate-100 ring-1 ring-slate-700 focus:outline-none focus:ring-indigo-500"
-                      >
-                        {MONTHS.map((m, i) => (
-                          <option key={m} value={i + 1}>
-                            {m}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-slate-300">
-                        Year
-                      </label>
-                      <select
-                        value={filterYear}
-                        onChange={(e) => setFilterYear(Number(e.target.value))}
-                        className="rounded-lg bg-slate-800/60 p-2 text-sm text-slate-100 ring-1 ring-slate-700 focus:outline-none focus:ring-indigo-500"
-                      >
-                        {yearOptions.map((y) => (
-                          <option key={y} value={y}>
-                            {y}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <span className="ml-auto text-xs text-slate-400">
-                      {remarks.length} record(s)
-                    </span>
-                  </div>
-
-                  {loadingRemarks ? (
-                    <div className="flex items-center justify-center py-10 text-slate-400">
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading…
-                    </div>
-                  ) : remarksError ? (
-                    <div className="text-sm text-red-400">{remarksError}</div>
-                  ) : remarks.length === 0 ? (
-                    <div className="py-10 text-center text-sm text-slate-400">
-                      No remarks found for the selected period.
-                    </div>
+              <div className="flex justify-end gap-2 border-t border-[#312a63] pt-4">
+                <button
+                  type="button"
+                  onClick={closeAddRemark}
+                  disabled={submitting}
+                  className="rounded-xl border border-[#312a63] bg-[#120f2d] px-4 py-2 text-xs font-medium text-[#a8a0d6] transition hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#8b5cf6] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#7c3aed] disabled:opacity-60"
+                >
+                  {submitting ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   ) : (
-                    <div className="space-y-4">
-                      {/* Student info */}
-                      <div className="rounded-xl bg-slate-800/40 p-4 ring-1 ring-slate-700/60">
-                        <p className="mb-3 text-xs font-medium uppercase tracking-wider text-slate-400">
-                          Student Details
-                        </p>
-                        <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
-                          <div>
-                            <dt className="text-xs text-slate-400">Name</dt>
-                            <dd className="text-slate-100">{selected.fullName || "—"}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-xs text-slate-400">Email</dt>
-                            <dd className="break-all text-slate-100">{selected.email || "—"}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-xs text-slate-400">Course(s)</dt>
-                            <dd className="text-slate-100">
-                              {selectedCourseTitles.length > 0
-                                ? selectedCourseTitles.join(", ")
-                                : "—"}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt className="text-xs text-slate-400">Zone</dt>
-                            <dd className="text-slate-100">{selected.zone || "—"}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-xs text-slate-400">Batch</dt>
-                            <dd className="text-slate-100">
-                              {selected.batchHistory?.length
-                                ? selected.batchHistory[selected.batchHistory.length - 1]?.to || "—"
-                                : "—"}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt className="text-xs text-slate-400">Joined</dt>
-                            <dd className="text-slate-100">
-                              {selected.joinedMonth
-                                ? new Date(selected.joinedMonth).toLocaleDateString(undefined, {
-                                    day: "2-digit",
-                                    month: "short",
-                                    year: "numeric",
-                                  })
-                                : "—"}
-                            </dd>
-                          </div>
-                        </dl>
-                      </div>
-
-                      {/* Remarks list */}
-                      {remarks.map((r) => (
-                        <div
-                          key={r._id}
-                          className="rounded-xl bg-slate-800/40 p-4 ring-1 ring-slate-700/60"
-                        >
-                          <div className="mb-2 flex flex-wrap items-center gap-2">
-                            {r.remark ? (
-                              <span
-                                className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${REMARK_PILL[r.remark]}`}
-                              >
-                                {r.remark}
-                              </span>
-                            ) : null}
-                            {typeof r.score === "number" ? (
-                              <span className="rounded-full bg-indigo-500/15 px-2.5 py-0.5 text-xs font-medium text-indigo-300 ring-1 ring-indigo-500/30">
-                                Score: {r.score}/10
-                              </span>
-                            ) : null}
-                            <span className="ml-auto text-xs text-slate-400">
-                              {new Date(r.createdAt).toLocaleString()}
-                            </span>
-                          </div>
-
-                          <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
-                            <div>
-                              <dt className="text-xs text-slate-400">Strength</dt>
-                              <dd className="text-slate-100">
-                                {r.areaOfStrength || "—"}
-                              </dd>
-                            </div>
-                            <div>
-                              <dt className="text-xs text-slate-400">Improvement</dt>
-                              <dd className="text-slate-100">
-                                {r.areaOfImprovement || "—"}
-                              </dd>
-                            </div>
-                            <div>
-                              <dt className="text-xs text-slate-400">Practice Task</dt>
-                              <dd className="text-slate-100">
-                                {r.practiceTask || "—"}
-                              </dd>
-                            </div>
-                          </dl>
-
-                          {r.assessedBy && typeof r.assessedBy === "object" ? (
-                            <p className="mt-2 text-xs text-slate-500">
-                              Assessed by {r.assessedBy.fullName ?? "—"}
-                            </p>
-                          ) : null}
-                        </div>
-                      ))}
-
-                      {/* Analytics charts (moved to bottom) */}
-                      <div className="mt-6 border-t border-slate-700/60 pt-4">
-                        <p className="mb-3 text-xs font-medium uppercase tracking-wider text-slate-400">
-                          Analytics
-                        </p>
-                      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-                        <div className="rounded-xl bg-slate-800/40 p-3 ring-1 ring-slate-700/60">
-                          <p className="text-xs text-slate-400">Average Score</p>
-                          <p className="text-2xl font-semibold text-slate-100">
-                            {avgScore}
-                            <span className="text-sm text-slate-500">/10</span>
-                          </p>
-                        </div>
-                        <div className="rounded-xl bg-slate-800/40 p-3 ring-1 ring-slate-700/60">
-                          <p className="text-xs text-slate-400">
-                            Improvement (first → last)
-                          </p>
-                          <p
-                            className={`text-2xl font-semibold ${
-                              improvementDelta > 0
-                                ? "text-emerald-400"
-                                : improvementDelta < 0
-                                ? "text-red-400"
-                                : "text-slate-100"
-                            }`}
-                          >
-                            {improvementDelta > 0 ? "+" : ""}
-                            {improvementDelta.toFixed(1)}
-                          </p>
-                        </div>
-                        <div className="rounded-xl bg-slate-800/40 p-3 ring-1 ring-slate-700/60">
-                          <p className="text-xs text-slate-400">Total Assessments</p>
-                          <p className="text-2xl font-semibold text-slate-100">
-                            {remarks.length}
-                          </p>
-                        </div>
-                      </div>
-
-                      {scoreTrend.length > 0 ? (
-                        <div className="rounded-xl bg-slate-800/40 p-4 ring-1 ring-slate-700/60">
-                          <p className="mb-2 text-xs font-medium text-slate-300">
-                            Score Trend
-                          </p>
-                          <div className="h-56 w-full">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <BarChart
-                                data={scoreTrend}
-                                margin={{ top: 5, right: 10, left: -20, bottom: 0 }}
-                              >
-                                <CartesianGrid
-                                  strokeDasharray="3 3"
-                                  stroke="#334155"
-                                />
-                                <XAxis
-                                  dataKey="date"
-                                  stroke="#94a3b8"
-                                  fontSize={11}
-                                />
-                                <YAxis
-                                  domain={[0, 10]}
-                                  stroke="#94a3b8"
-                                  fontSize={11}
-                                />
-                                <Tooltip
-                                  contentStyle={{
-                                    backgroundColor: "#0f172a",
-                                    border: "1px solid #334155",
-                                    borderRadius: 8,
-                                    fontSize: 12,
-                                  }}
-                                  labelStyle={{ color: "#cbd5e1" }}
-                                  cursor={{ fill: "rgba(99,102,241,0.08)" }}
-                                />
-                                {avgScore > 0 ? (
-                                  <ReferenceLine
-                                    y={avgScore}
-                                    stroke="#6366f1"
-                                    strokeDasharray="4 4"
-                                    label={{
-                                      value: `avg ${avgScore}`,
-                                      fill: "#a5b4fc",
-                                      fontSize: 10,
-                                      position: "insideTopRight",
-                                    }}
-                                  />
-                                ) : null}
-                                <Bar dataKey="score" radius={[6, 6, 0, 0]} barSize={28}>
-                                  {scoreTrend.map((d) => {
-                                    const color =
-                                      d.score >= 7
-                                        ? "#10b981"
-                                        : d.score >= 4
-                                        ? "#eab308"
-                                        : "#ef4444";
-                                    return <Cell key={d.idx} fill={color} />;
-                                  })}
-                                </Bar>
-                              </BarChart>
-                            </ResponsiveContainer>
-                          </div>
-                        </div>
-                      ) : null}
-
-                      <div className="rounded-xl bg-slate-800/40 p-4 ring-1 ring-slate-700/60">
-                        <p className="mb-2 text-xs font-medium text-slate-300">
-                          Remark Distribution
-                        </p>
-                        <div className="h-44 w-full">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart
-                              data={remarkDistribution}
-                              margin={{ top: 5, right: 10, left: -20, bottom: 0 }}
-                            >
-                              <CartesianGrid
-                                strokeDasharray="3 3"
-                                stroke="#334155"
-                              />
-                              <XAxis
-                                dataKey="remark"
-                                stroke="#94a3b8"
-                                fontSize={11}
-                              />
-                              <YAxis
-                                stroke="#94a3b8"
-                                fontSize={11}
-                                allowDecimals={false}
-                              />
-                              <Tooltip
-                                contentStyle={{
-                                  backgroundColor: "#0f172a",
-                                  border: "1px solid #334155",
-                                  borderRadius: 8,
-                                  fontSize: 12,
-                                }}
-                                labelStyle={{ color: "#cbd5e1" }}
-                                cursor={{ fill: "rgba(99,102,241,0.08)" }}
-                              />
-                              <Bar dataKey="count" radius={[6, 6, 0, 0]}>
-                                {remarkDistribution.map((d) => (
-                                  <Cell
-                                    key={d.remark}
-                                    fill={REMARK_COLOR[d.remark as RemarkEnum]}
-                                  />
-                                ))}
-                              </Bar>
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </div>
-                      </div>
-                    </div>
+                    <Send className="h-3.5 w-3.5" />
                   )}
-                </>
-              )}
-            </div>
+                  Submit Remark
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+// ───────────────────────── Subviews ─────────────────────────
+
+function Field({
+  label,
+  required,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-xs font-medium text-[#a8a0d6]">
+        {label} {required ? <span className="text-rose-400">*</span> : null}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function OverviewView({
+  courseCards,
+  courseStacks,
+  loadingRemarks,
+  openCourse,
+}: {
+  courseCards: {
+    course: Course;
+    idx: number;
+    studentCount: number;
+    remarkCount: number;
+    avgScore: number;
+    delta: number;
+  }[];
+  courseStacks: CourseStack[];
+  loadingRemarks: boolean;
+  openCourse: (c: Course) => void;
+}) {
+  return (
+    <div className="space-y-6">
+      {/* Course cards */}
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-[#9a92c9]">
+            Courses
+          </h2>
+          <p className="text-xs text-[#8f87bf]">Click a course to drill in</p>
+        </div>
+        {courseCards.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-[#312a63] bg-[#120f2d]/50 p-10 text-center text-sm text-[#a8a0d6]">
+            No courses have active placement students.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {courseCards.map(
+              ({ course, idx, studentCount, remarkCount, avgScore, delta }) => {
+                const grad = COURSE_GRADIENTS[idx % COURSE_GRADIENTS.length];
+                const ring = COURSE_RING[idx % COURSE_RING.length];
+                const iconBg = COURSE_ICON_BG[idx % COURSE_ICON_BG.length];
+                return (
+                  <button
+                    key={course._id}
+                    type="button"
+                    onClick={() => openCourse(course)}
+                    className={`group relative overflow-hidden rounded-2xl border border-[#312a63] bg-gradient-to-br ${grad} bg-[#120f2d] p-5 text-left transition hover:-translate-y-0.5 hover:border-[#8b5cf6] hover:shadow-[0_10px_30px_rgba(139,92,246,0.15)]`}
+                  >
+                    <div
+                      className={`mb-4 inline-flex h-10 w-10 items-center justify-center rounded-xl ring-1 ${iconBg} ${ring}`}
+                    >
+                      <BookOpen className="h-5 w-5" />
+                    </div>
+                    <p
+                      className="line-clamp-2 text-sm font-semibold text-white"
+                      title={course.title}
+                    >
+                      {course.title || "Untitled course"}
+                    </p>
+                    <div className="mt-4 flex items-end justify-between">
+                      <div>
+                        <p className="text-3xl font-bold text-white">
+                          {studentCount}
+                        </p>
+                        <p className="text-[11px] uppercase tracking-wider text-[#9a92c9]">
+                          Students
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold text-white">
+                          {fmt(avgScore, 1)}
+                          <span className="text-[11px] text-[#8f87bf]">/10</span>
+                        </p>
+                        <p
+                          className={`mt-0.5 inline-flex items-center gap-0.5 text-[11px] font-medium ${
+                            delta > 0
+                              ? "text-emerald-300"
+                              : delta < 0
+                              ? "text-rose-300"
+                              : "text-[#8f87bf]"
+                          }`}
+                        >
+                          {delta > 0 ? (
+                            <TrendingUp className="h-3 w-3" />
+                          ) : delta < 0 ? (
+                            <TrendingDown className="h-3 w-3" />
+                          ) : null}
+                          {delta > 0 ? "+" : ""}
+                          {fmt(delta, 1)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between border-t border-[#312a63]/60 pt-3 text-[11px] text-[#a8a0d6]">
+                      <span>{remarkCount} remarks</span>
+                      <span className="inline-flex items-center gap-1 text-[#8b5cf6] opacity-0 transition group-hover:opacity-100">
+                        Open <ChevronRight className="h-3 w-3" />
+                      </span>
+                    </div>
+                  </button>
+                );
+              }
+            )}
+          </div>
+        )}
+      </section>
+
+      {/* Course tier breakdown */}
+      <section className="rounded-2xl border border-[#312a63] bg-[#120f2d] p-5">
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="flex items-center gap-2 text-base font-semibold text-white">
+              <Activity className="h-4 w-4 text-[#8b5cf6]" />
+              Course Performance — Tier Breakdown
+            </h2>
+            <p className="mt-0.5 text-xs text-[#a8a0d6]">
+              Each bar shows how many remarks fell into Poor / Average / Good /
+              Excellent tiers for that course.
+            </p>
+          </div>
+          <PerformanceBandLegend />
+        </div>
+
+        {loadingRemarks ? (
+          <div className="flex items-center justify-center py-16 text-[#a8a0d6]">
+            <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Crunching numbers…
+          </div>
+        ) : courseStacks.length === 0 ? (
+          <div className="py-16 text-center text-sm text-[#a8a0d6]">
+            No scored remarks in this date range.
+          </div>
+        ) : (
+          <div className="h-80 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart
+                data={courseStacks}
+                margin={{ top: 10, right: 10, left: 10, bottom: 10 }}
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="#312a63"
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="name"
+                  stroke="#a8a0d6"
+                  fontSize={11}
+                  interval={0}
+                  angle={-20}
+                  textAnchor="end"
+                  height={70}
+                />
+                <YAxis
+                  stroke="#a8a0d6"
+                  fontSize={11}
+                  allowDecimals={false}
+                  width={70}
+                  label={{
+                    value: "Total Students Remarked",
+                    angle: -90,
+                    position: "insideLeft",
+                    offset: 10,
+                    style: { textAnchor: "middle", fontSize: 12, fill: "#a8a0d6", fontWeight: 500 },
+                  }}
+                />
+                <Tooltip
+                  content={<TierStackTooltip />}
+                  cursor={{ fill: "rgba(139,92,246,0.05)" }}
+                />
+                <Bar dataKey="poor" stackId="t" fill="#ef4444" radius={[0, 0, 4, 4]} isAnimationActive={false} />
+                <Bar dataKey="average" stackId="t" fill="#f59e0b" isAnimationActive={false} />
+                <Bar dataKey="good" stackId="t" fill="#10b981" isAnimationActive={false} />
+                <Bar dataKey="excellent" stackId="t" fill="#8b5cf6" radius={[4, 4, 0, 0]} isAnimationActive={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function PerformanceBandLegend() {
+  const bands: { label: string; color: string; range: string }[] = [
+    { label: "Poor", color: "bg-rose-500", range: "0–4" },
+    { label: "Average", color: "bg-amber-500", range: "4–6" },
+    { label: "Good", color: "bg-emerald-500", range: "6–8" },
+    { label: "Excellent", color: "bg-violet-500", range: "8–10" },
+  ];
+  return (
+    <div className="flex flex-wrap items-center gap-3 text-[11px] text-[#a8a0d6]">
+      {bands.map((b) => (
+        <span key={b.label} className="inline-flex items-center gap-1.5">
+          <span className={`inline-block h-3 w-3 rounded-sm ${b.color}`} />
+          <span className="text-white">{b.label}</span>
+          <span className="text-[#8f87bf]">({b.range})</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function CourseView({
+  course,
+  students,
+  studentSearch,
+  setStudentSearch,
+  studentCandles,
+  loadingRemarks,
+  stats,
+  openStudent,
+  onAddRemark,
+}: {
+  course: Course;
+  students: Student[];
+  studentSearch: string;
+  setStudentSearch: (v: string) => void;
+  studentCandles: Candle[];
+  loadingRemarks: boolean;
+  stats: Map<string, { avg: number; count: number; last?: RemarkEnum }>;
+  openStudent: (s: Student) => void;
+  onAddRemark: (s: Student) => void;
+}) {
+  return (
+    <div className="space-y-6">
+      {/* Course header */}
+      <div className="rounded-2xl border border-[#312a63] bg-gradient-to-br from-violet-500/10 via-transparent to-transparent bg-[#120f2d] p-5">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/30">
+            <BookOpen className="h-5 w-5" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-white">{course.title}</h2>
+            <p className="text-xs text-[#a8a0d6]">
+              {students.length} active student(s) • Batch performance below
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Student candlestick */}
+      <section className="rounded-2xl border border-[#312a63] bg-[#120f2d] p-5">
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h3 className="flex items-center gap-2 text-base font-semibold text-white">
+              <Layers className="h-4 w-4 text-[#8b5cf6]" />
+              Student Performance
+            </h3>
+            <p className="mt-0.5 text-xs text-[#a8a0d6]">
+              Each bar starts at 0 and rises to the student's latest score. Bar
+              color reflects the performance tier.
+            </p>
+          </div>
+          <PerformanceBandLegend />
+        </div>
+
+        {loadingRemarks ? (
+          <div className="flex items-center justify-center py-16 text-[#a8a0d6]">
+            <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading…
+          </div>
+        ) : studentCandles.length === 0 ? (
+          <div className="py-16 text-center text-sm text-[#a8a0d6]">
+            No scored remarks for any student in this period.
+          </div>
+        ) : (
+          <div
+            className="w-full"
+            style={{ height: Math.max(240, studentCandles.length * 24 + 80) }}
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart
+                data={studentCandles}
+                margin={{ top: 10, right: 20, left: -10, bottom: 10 }}
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="#312a63"
+                  vertical={false}
+                />
+                <ReferenceArea
+                  y1={0}
+                  y2={4}
+                  fill="#ef4444"
+                  fillOpacity={0.06}
+                  ifOverflow="visible"
+                />
+                <ReferenceArea
+                  y1={4}
+                  y2={6}
+                  fill="#f59e0b"
+                  fillOpacity={0.06}
+                  ifOverflow="visible"
+                />
+                <ReferenceArea
+                  y1={6}
+                  y2={8}
+                  fill="#10b981"
+                  fillOpacity={0.05}
+                  ifOverflow="visible"
+                />
+                <ReferenceArea
+                  y1={8}
+                  y2={10}
+                  fill="#8b5cf6"
+                  fillOpacity={0.08}
+                  ifOverflow="visible"
+                />
+                <ReferenceLine y={4} stroke="#ef4444" strokeDasharray="2 4" strokeOpacity={0.5} />
+                <ReferenceLine y={6} stroke="#f59e0b" strokeDasharray="2 4" strokeOpacity={0.5} />
+                <ReferenceLine y={8} stroke="#10b981" strokeDasharray="2 4" strokeOpacity={0.5} />
+                <XAxis
+                  dataKey="name"
+                  stroke="#a8a0d6"
+                  fontSize={11}
+                  interval={0}
+                  angle={-25}
+                  textAnchor="end"
+                  height={60}
+                />
+                <YAxis
+                  domain={[0, 10]}
+                  ticks={[0, 2, 4, 6, 8, 10]}
+                  stroke="#a8a0d6"
+                  fontSize={11}
+                />
+                <Tooltip content={<CandleTooltip />} cursor={{ fill: "rgba(139,92,246,0.05)" }} />
+                <Bar dataKey="close" shape={<StudentBarShape />} isAnimationActive={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </section>
+
+      {/* Students table */}
+      <section className="rounded-2xl border border-[#312a63] bg-[#120f2d] p-5">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h3 className="text-base font-semibold text-white">
+            Students
+            <span className="ml-2 text-xs font-normal text-[#a8a0d6]">
+              ({students.length})
+            </span>
+          </h3>
+          <div className="relative w-full max-w-xs">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8f87bf]" />
+            <input
+              type="text"
+              value={studentSearch}
+              onChange={(e) => setStudentSearch(e.target.value)}
+              placeholder="Search name or email"
+              className="w-full rounded-xl border border-[#312a63] bg-[#0f0b24] py-2 pl-9 pr-3 text-sm text-white outline-none placeholder:text-[#8f87bf] focus:border-[#8b5cf6]"
+            />
+          </div>
+        </div>
+
+        {students.length === 0 ? (
+          <div className="py-12 text-center text-sm text-[#a8a0d6]">
+            No students match this filter.
+          </div>
+        ) : (
+          <div className="max-h-[480px] overflow-y-auto rounded-xl border border-[#312a63]">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 z-10 bg-[#0f0b24] text-[11px] uppercase tracking-wider text-[#9a92c9]">
+                <tr>
+                  <th className="px-4 py-3 text-left font-medium">Student</th>
+                  <th className="px-4 py-3 text-left font-medium">Batch</th>
+                  <th className="px-4 py-3 text-left font-medium">Avg Score</th>
+                  <th className="px-4 py-3 text-left font-medium">Last Remark</th>
+                  <th className="px-4 py-3 text-right font-medium">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {students.map((s) => {
+                  const st = stats.get(s.clerkId);
+                  return (
+                    <tr
+                      key={s.clerkId}
+                      className="border-t border-[#312a63] transition hover:bg-[#1c1642]/40"
+                    >
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-white">
+                          {s.fullName || "—"}
+                        </p>
+                        <p className="text-xs text-[#a8a0d6]">
+                          {s.email || "—"}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3 text-[#cdc7eb]">
+                        {getCurrentBatch(s)}
+                      </td>
+                      <td className="px-4 py-3">
+                        {st && st.count > 0 ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 px-2 py-0.5 text-xs font-medium text-violet-300 ring-1 ring-violet-500/30">
+                            {fmt(st.avg, 1)}/10
+                          </span>
+                        ) : (
+                          <span className="text-xs text-[#8f87bf]">
+                            No data
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {st?.last ? (
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-xs font-medium ${REMARK_PILL[st.last]}`}
+                          >
+                            {st.last}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-[#8f87bf]">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="inline-flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => onAddRemark(s)}
+                            className="inline-flex items-center gap-1 rounded-lg bg-[#8b5cf6] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#7c3aed]"
+                          >
+                            <Plus className="h-3 w-3" /> Add Remark
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openStudent(s)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-[#312a63] bg-[#0f0b24] px-3 py-1.5 text-xs font-medium text-[#a8a0d6] transition hover:border-[#8b5cf6] hover:text-white"
+                          >
+                            View <ChevronRight className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function StudentView({
+  student,
+  remarks,
+  loading,
+  trend,
+  avg,
+  delta,
+  onAddRemark,
+  courseTitles,
+}: {
+  student: Student;
+  remarks: Remark[];
+  loading: boolean;
+  trend: { date: string; score: number; remark?: RemarkEnum }[];
+  avg: number;
+  delta: number;
+  onAddRemark: () => void;
+  courseTitles: string[];
+}) {
+  return (
+    <div className="space-y-6">
+      {/* Student header */}
+      <div className="rounded-2xl border border-[#312a63] bg-gradient-to-br from-violet-500/10 via-transparent to-transparent bg-[#120f2d] p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-500/20 text-lg font-semibold text-violet-200 ring-1 ring-violet-500/30">
+              {student.fullName?.[0] ?? "?"}
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-white">
+                {student.fullName}
+              </h2>
+              <p className="text-xs text-[#a8a0d6]">{student.email}</p>
+              <p className="mt-1 text-[11px] text-[#8f87bf]">
+                Batch: {getCurrentBatch(student)}
+                {courseTitles.length
+                  ? ` • Courses: ${courseTitles.join(", ")}`
+                  : ""}
+                {student.zone ? ` • Zone: ${student.zone}` : ""}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onAddRemark}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-[#8b5cf6] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#7c3aed]"
+          >
+            <Plus className="h-3.5 w-3.5" /> Add Remark
+          </button>
+        </div>
+      </div>
+
+      {/* Mini stats */}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <StatCard
+          icon={<Award className="h-4 w-4" />}
+          label="Average Score"
+          value={
+            <>
+              {fmt(avg, 1)}
+              <span className="text-base font-normal text-[#8f87bf]">/10</span>
+            </>
+          }
+          accent="violet"
+        />
+        <StatCard
+          icon={
+            delta >= 0 ? (
+              <TrendingUp className="h-4 w-4" />
+            ) : (
+              <TrendingDown className="h-4 w-4" />
+            )
+          }
+          label="Improvement"
+          value={
+            <span
+              className={delta > 0 ? "text-emerald-300" : delta < 0 ? "text-rose-300" : "text-white"}
+            >
+              {delta > 0 ? "+" : ""}
+              {fmt(delta, 1)}
+            </span>
+          }
+          accent={delta >= 0 ? "emerald" : "rose"}
+        />
+        <StatCard
+          icon={<Activity className="h-4 w-4" />}
+          label="Assessments"
+          value={remarks.length}
+          accent="sky"
+        />
+        <StatCard
+          icon={<Calendar className="h-4 w-4" />}
+          label="Last Assessed"
+          value={
+            remarks[0]?.createdAt
+              ? new Date(remarks[0].createdAt).toLocaleDateString(undefined, {
+                  day: "2-digit",
+                  month: "short",
+                })
+              : "—"
+          }
+          accent="amber"
+        />
+      </div>
+
+      {/* Trend chart */}
+      <section className="rounded-2xl border border-[#312a63] bg-[#120f2d] p-5">
+        <h3 className="mb-1 text-base font-semibold text-white">Score Trend</h3>
+        <p className="mb-4 text-xs text-[#a8a0d6]">
+          Per-session score over the current year
+        </p>
+        {loading ? (
+          <div className="flex items-center justify-center py-16 text-[#a8a0d6]">
+            <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading…
+          </div>
+        ) : trend.length === 0 ? (
+          <div className="py-16 text-center text-sm text-[#a8a0d6]">
+            No scored remarks yet.
+          </div>
+        ) : (
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart
+                data={trend}
+                margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="#312a63"
+                  vertical={false}
+                />
+                <XAxis dataKey="date" stroke="#a8a0d6" fontSize={11} />
+                <YAxis domain={[0, 10]} stroke="#a8a0d6" fontSize={11} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "#0f0b24",
+                    border: "1px solid #312a63",
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
+                  labelStyle={{ color: "#cbd5e1" }}
+                />
+                {avg > 0 ? (
+                  <ReferenceLine
+                    y={avg}
+                    stroke="#8b5cf6"
+                    strokeDasharray="4 4"
+                    label={{
+                      value: `avg ${fmt(avg, 1)}`,
+                      fill: "#c4b5fd",
+                      fontSize: 10,
+                      position: "insideTopRight",
+                    }}
+                  />
+                ) : null}
+                <Line
+                  type="monotone"
+                  dataKey="score"
+                  stroke="#8b5cf6"
+                  strokeWidth={2.5}
+                  dot={{ r: 4, fill: "#8b5cf6", strokeWidth: 0 }}
+                  activeDot={{ r: 6 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </section>
+
+      {/* Past remarks */}
+      <section className="rounded-2xl border border-[#312a63] bg-[#120f2d] p-5">
+        <h3 className="mb-4 text-base font-semibold text-white">
+          Remark History
+          <span className="ml-2 text-xs font-normal text-[#a8a0d6]">
+            ({remarks.length})
+          </span>
+        </h3>
+        {loading ? (
+          <div className="flex items-center justify-center py-10 text-[#a8a0d6]">
+            <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading…
+          </div>
+        ) : remarks.length === 0 ? (
+          <div className="py-10 text-center text-sm text-[#a8a0d6]">
+            No remarks yet. Click "Add Remark" to record one.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {remarks.map((r) => (
+              <div
+                key={r._id}
+                className="rounded-xl border border-[#312a63] bg-[#0f0b24] p-4"
+              >
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  {r.remark ? (
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${REMARK_PILL[r.remark]}`}
+                    >
+                      {r.remark}
+                    </span>
+                  ) : null}
+                  {typeof r.score === "number" ? (
+                    <span className="rounded-full bg-violet-500/15 px-2.5 py-0.5 text-xs font-medium text-violet-300 ring-1 ring-violet-500/30">
+                      Score: {r.score}/10
+                    </span>
+                  ) : null}
+                  <span className="ml-auto text-xs text-[#a8a0d6]">
+                    {new Date(r.createdAt).toLocaleString()}
+                  </span>
+                </div>
+                <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
+                  <div>
+                    <dt className="text-[11px] uppercase tracking-wider text-[#9a92c9]">
+                      Strength
+                    </dt>
+                    <dd className="mt-0.5 text-white">
+                      {r.areaOfStrength || "—"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[11px] uppercase tracking-wider text-[#9a92c9]">
+                      Improvement
+                    </dt>
+                    <dd className="mt-0.5 text-white">
+                      {r.areaOfImprovement || "—"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[11px] uppercase tracking-wider text-[#9a92c9]">
+                      Practice
+                    </dt>
+                    <dd className="mt-0.5 text-white">
+                      {r.practiceTask || "—"}
+                    </dd>
+                  </div>
+                </dl>
+                {r.assessedBy && typeof r.assessedBy === "object" ? (
+                  <p className="mt-3 text-xs text-[#8f87bf]">
+                    Assessed by {r.assessedBy.fullName ?? "—"}
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
