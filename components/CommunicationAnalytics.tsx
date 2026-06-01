@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import { toast } from "react-toastify";
-import {ResponsiveContainer,ComposedChart,Bar,XAxis,YAxis,CartesianGrid,Tooltip,LineChart,Line,ReferenceLine,ReferenceArea} from "recharts";
+import {ResponsiveContainer,ComposedChart,Bar,XAxis,YAxis,CartesianGrid,Tooltip,LineChart,Line,ReferenceLine,ReferenceArea,PieChart,Pie,Cell,Legend} from "recharts";
 import {ArrowLeft,Calendar,Users,TrendingUp,TrendingDown,Award,BookOpen,Search,X,Send,Loader2,ChevronRight,Activity,Plus,Layers,Sparkles} from "lucide-react";
 
 const API_LMS_URL = process.env.NEXT_PUBLIC_LMS_URL;
@@ -12,7 +12,45 @@ const API_LMS_URL = process.env.NEXT_PUBLIC_LMS_URL;
 // ───────────────────────── Types ─────────────────────────
 
 type View = "overview" | "course" | "student";
-type RemarkEnum = "Good" | "Average" | "Bad";
+type RemarkEnum = "Excellent" | "Good" | "Average" | "Bad";
+type BatchRange = "week" | "month";
+
+// One day of aggregated batch performance (from /get-overall-batch-remarks).
+// Rendered as a candlestick: `open` is the previous bucket's unique-student
+// count, `unique` (the close) is this bucket's count, and `body` is the
+// [low, high] span the candle body covers.
+type BatchDay = {
+  date: string; // x-axis label (weekday name for week, date number for month)
+  iso: string; // YYYY-MM-DD for sorting
+  unique: number; // close — unique students remarked that day
+  open: number; // previous bucket's unique-student count
+  avg: number; // average score that day (tooltip only)
+  count: number; // assessments that day (tooltip only)
+  body: [number, number]; // [min(open,close), max(open,close)]
+  dir: "up" | "down" | "flat"; // candle direction → color
+};
+
+// A slice of the remark-distribution pie.
+type RemarkSlice = {
+  name: RemarkEnum;
+  value: number;
+  color: string;
+};
+
+type BatchRemark = {
+  _id: string;
+  clerkId: string;
+  remark?: RemarkEnum;
+  score?: number | string;
+  createdAt: string;
+};
+
+type BatchSummary = {
+  totalAssessments: number;
+  uniqueStudents: number;
+  remarkCounts: Record<string, number>;
+  averageScore: number | null;
+};
 
 type Student = {
   _id?: string;
@@ -92,9 +130,23 @@ const PRACTICE_TASK_OPTIONS = [
   "Practice explaining technical projects/skills",
 ];
 
-const REMARK_OPTIONS: RemarkEnum[] = ["Good", "Average", "Bad"];
+const REMARK_OPTIONS: RemarkEnum[] = ["Excellent", "Good", "Average", "Bad"];
+
+// Fixed color per remark tier — shared by the pie chart + legend.
+const REMARK_COLOR: Record<RemarkEnum, string> = {
+  Excellent: "#8b5cf6",
+  Good: "#10b981",
+  Average: "#f59e0b",
+  Bad: "#ef4444",
+};
+
+const BATCH_RANGES: { label: string; value: BatchRange }[] = [
+  { label: "Week", value: "week" },
+  { label: "Month", value: "month" },
+];
 
 const REMARK_PILL: Record<RemarkEnum, string> = {
+  Excellent: "bg-violet-500/15 text-violet-300 ring-1 ring-violet-500/30",
   Good: "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30",
   Average: "bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30",
   Bad: "bg-rose-500/15 text-rose-300 ring-1 ring-rose-500/30",
@@ -137,6 +189,12 @@ const daysAgoISO = (n: number) => {
 };
 const fmt = (n: number, d = 1) =>
   Number.isFinite(n) ? Number(n).toFixed(d) : "—";
+
+// Local-time YYYY-MM-DD (so day-bucketing matches the user's calendar, not UTC).
+const localISO = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
 
 const getCurrentBatch = (s: Student): string => {
   const h = s.batchHistory;
@@ -419,6 +477,7 @@ export default function CommunicationAnalytics() {
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [remarkTarget, setRemarkTarget] = useState<Student | null>(null);
+  const [remarkCourseId, setRemarkCourseId] = useState<string | null>(null);
 
   // ── data ──
   const [students, setStudents] = useState<Student[]>([]);
@@ -428,6 +487,12 @@ export default function CommunicationAnalytics() {
   const [loadingStudents, setLoadingStudents] = useState(true);
   const [loadingRemarks, setLoadingRemarks] = useState(false);
   const [loadingStudentRemarks, setLoadingStudentRemarks] = useState(false);
+
+  // ── batch overview (per-course) ──
+  const [batchRemarks, setBatchRemarks] = useState<BatchRemark[]>([]);
+  const [batchSummary, setBatchSummary] = useState<BatchSummary | null>(null);
+  const [batchRange, setBatchRange] = useState<BatchRange>("week");
+  const [loadingBatch, setLoadingBatch] = useState(false);
 
   // ── filters ──
   const [fromDate, setFromDate] = useState<string>(todayISO());
@@ -554,6 +619,39 @@ export default function CommunicationAnalytics() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, selectedStudent]);
 
+  // ── fetch overall batch remarks (course view, rolling week/month/year) ──
+  useEffect(() => {
+    if (view !== "course" || !selectedCourse) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoadingBatch(true);
+        const res = await fetch(
+          `${API_LMS_URL}/api/student-management/get-overall-batch-remarks?courseId=${encodeURIComponent(
+            selectedCourse._id
+          )}&range=${batchRange}`
+        );
+        const json = await res.json();
+        if (cancelled) return;
+        if (!res.ok || !json.success)
+          throw new Error(json.message || "Failed to load batch remarks");
+        setBatchRemarks(json.data ?? []);
+        setBatchSummary(json.summary ?? null);
+      } catch (e) {
+        if (!cancelled) {
+          setBatchRemarks([]);
+          setBatchSummary(null);
+        }
+      } finally {
+        if (!cancelled) setLoadingBatch(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, selectedCourse, batchRange]);
+
   // ── derived: course lookup ──
   const courseById = useMemo(() => {
     const m = new Map<string, Course>();
@@ -669,6 +767,8 @@ export default function CommunicationAnalytics() {
     return arr;
   }, [courseCards, remarksByCourse]);
 
+  // ── overview: top/bottom students by average score (min 3 remarks) ──
+
   // ── course view: students in this course ──
   const courseStudents = useMemo(() => {
     if (!selectedCourse) return [];
@@ -687,6 +787,101 @@ export default function CommunicationAnalytics() {
     if (!selectedCourse) return [];
     return remarksByCourse.get(String(selectedCourse._id)) ?? [];
   }, [selectedCourse, remarksByCourse]);
+
+  // ── course view: batch progress per day, as candlesticks ──
+  // Y = unique students remarked per day. The buckets span the *whole* current
+  // week (Mon→Sun) or current month (1→last day) so the axis is stable, and the
+  // candle direction (up/down/flat) compares each day to the previous one.
+  const batchTrend = useMemo<BatchDay[]>(() => {
+    // 1. aggregate remarks by local calendar day
+    const byDay = new Map<
+      string,
+      { ids: Set<string>; sum: number; n: number; count: number }
+    >();
+    batchRemarks.forEach((r) => {
+      const iso = localISO(new Date(r.createdAt));
+      if (!byDay.has(iso))
+        byDay.set(iso, { ids: new Set(), sum: 0, n: 0, count: 0 });
+      const bucket = byDay.get(iso)!;
+      bucket.ids.add(r.clerkId);
+      bucket.count += 1;
+      const s = Number(r.score);
+      if (Number.isFinite(s)) {
+        bucket.sum += s;
+        bucket.n += 1;
+      }
+    });
+
+    // 2. build the full list of day buckets for the current period
+    const days: Date[] = [];
+    const now = new Date();
+    if (batchRange === "week") {
+      const start = new Date(now);
+      const dow = (start.getDay() + 6) % 7; // days since Monday
+      start.setDate(start.getDate() - dow);
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(start);
+        d.setDate(start.getDate() + i);
+        days.push(d);
+      }
+    } else {
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      const lastDay = new Date(year, month + 1, 0).getDate();
+      for (let i = 1; i <= lastDay; i++) days.push(new Date(year, month, i));
+    }
+
+    // 3. map each day to a candle, carrying the previous count as `open`
+    let prev = 0;
+    return days.map((d) => {
+      const iso = localISO(d);
+      const b = byDay.get(iso);
+      const unique = b ? b.ids.size : 0;
+      const open = prev;
+      const dir: BatchDay["dir"] =
+        unique > open ? "up" : unique < open ? "down" : "flat";
+      const row: BatchDay = {
+        iso,
+        date:
+          batchRange === "week"
+            ? d.toLocaleDateString(undefined, { weekday: "short" })
+            : String(d.getDate()),
+        unique,
+        open,
+        avg: b && b.n ? b.sum / b.n : 0,
+        count: b ? b.count : 0,
+        body: [Math.min(open, unique), Math.max(open, unique)],
+        dir,
+      };
+      prev = unique;
+      return row;
+    });
+  }, [batchRemarks, batchRange]);
+
+  // day-over-day change in the most recent batch average score
+  const batchDelta = useMemo(() => {
+    const scored = batchTrend.filter((d) => d.avg > 0);
+    if (scored.length < 2) return 0;
+    return scored[scored.length - 1].avg - scored[scored.length - 2].avg;
+  }, [batchTrend]);
+
+  // ── course view: remark distribution for the pie chart ──
+  const batchPie = useMemo<RemarkSlice[]>(() => {
+    const counts: Record<RemarkEnum, number> = {
+      Excellent: 0,
+      Good: 0,
+      Average: 0,
+      Bad: 0,
+    };
+    batchRemarks.forEach((r) => {
+      if (r.remark && counts[r.remark] !== undefined) counts[r.remark] += 1;
+    });
+    return REMARK_OPTIONS.map((name) => ({
+      name,
+      value: counts[name],
+      color: REMARK_COLOR[name],
+    })).filter((s) => s.value > 0);
+  }, [batchRemarks]);
 
   // ── course view: per-student candles ──
   const studentCandles = useMemo(() => {
@@ -821,6 +1016,10 @@ export default function CommunicationAnalytics() {
 
   const openAddRemarkFor = (s: Student) => {
     setRemarkTarget(s);
+    // share the purchased course as courseId — prefer the course in context
+    setRemarkCourseId(
+      selectedCourse?._id ?? s.purchasedCourses?.[0] ?? null
+    );
     resetRemarkForm();
     setShowAddRemark(true);
   };
@@ -846,6 +1045,7 @@ export default function CommunicationAnalytics() {
           body: JSON.stringify({
             clerkId: remarkTarget.clerkId,
             fullName: remarkTarget.fullName,
+            courseId: remarkCourseId,
             areaOfStrength,
             areaOfImprovement,
             practiceTask,
@@ -1011,6 +1211,13 @@ export default function CommunicationAnalytics() {
           stats={courseStudentStats}
           openStudent={openStudent}
           onAddRemark={openAddRemarkFor}
+          batchTrend={batchTrend}
+          batchPie={batchPie}
+          batchSummary={batchSummary}
+          batchRange={batchRange}
+          setBatchRange={setBatchRange}
+          batchDelta={batchDelta}
+          loadingBatch={loadingBatch}
         />
       ) : view === "student" && selectedStudent ? (
         <StudentView
@@ -1388,6 +1595,335 @@ function PerformanceBandLegend() {
   );
 }
 
+const BatchTrendTooltip = ({ active, payload }: any) => {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload as BatchDay;
+  const delta = d.unique - d.open;
+  return (
+    <div className="rounded-lg border border-[#312a63] bg-[#0f0b24]/95 px-3 py-2 text-xs shadow-xl backdrop-blur">
+      <p className="mb-1 font-semibold text-white">{d.date}</p>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[#a8a0d6]">
+        <span>Students remarked</span>
+        <span className="text-right text-violet-300">{d.unique}</span>
+        <span>Assessments</span>
+        <span className="text-right text-white">{d.count}</span>
+        <span>Avg score</span>
+        <span className="text-right text-emerald-300">{fmt(d.avg, 1)}/10</span>
+      </div>
+      <p
+        className={`mt-1 text-right text-[11px] font-medium ${
+          delta > 0
+            ? "text-emerald-300"
+            : delta < 0
+            ? "text-rose-300"
+            : "text-[#8f87bf]"
+        }`}
+      >
+        {delta > 0 ? "▲" : delta < 0 ? "▼" : "■"} {Math.abs(delta)} vs prev
+      </p>
+    </div>
+  );
+};
+
+// Candlestick body for the batch chart. The bound `Bar` uses dataKey="unique"
+// (0 → close), so it always renders; we derive the `open` pixel from the linear
+// Y scale and draw only the body span between open and close.
+const BatchCandleShape = (props: any) => {
+  const { x, y, width, height, payload } = props;
+  if (!payload) return null;
+  const { open, unique, dir } = payload as BatchDay;
+  if (unique <= 0) return null; // empty day → nothing to draw
+  const color =
+    dir === "up" ? "#10b981" : dir === "down" ? "#ef4444" : "#8b5cf6";
+  const pxPerUnit = height / unique; // px per student (Y axis is linear)
+  const closeY = y; // top of the 0→unique bar = the close
+  const openY = y + (unique - open) * pxPerUnit;
+  let top = Math.min(openY, closeY);
+  let bodyH = Math.abs(openY - closeY);
+  if (bodyH < 2) {
+    // flat candle (close === open) → thin doji line
+    bodyH = 2;
+    top = closeY - 1;
+  }
+  const bw = Math.max(Math.min(width * 0.6, 30), 6);
+  const bx = x + (width - bw) / 2;
+  return (
+    <g>
+      <rect
+        x={bx}
+        y={top}
+        width={bw}
+        height={bodyH}
+        rx={2}
+        fill={color}
+        fillOpacity={0.85}
+        stroke={color}
+      />
+      <text
+        x={x + width / 2}
+        y={closeY - 5}
+        textAnchor="middle"
+        fill={color}
+        fontSize={10}
+        fontWeight={600}
+      >
+        {unique}
+      </text>
+    </g>
+  );
+};
+
+const PieLabel = (props: any) => {
+  const { cx, cy, midAngle, innerRadius, outerRadius, percent } = props;
+  if (!percent) return null;
+  const RAD = Math.PI / 180;
+  const r = innerRadius + (outerRadius - innerRadius) * 0.5;
+  const x = cx + r * Math.cos(-midAngle * RAD);
+  const y = cy + r * Math.sin(-midAngle * RAD);
+  return (
+    <text
+      x={x}
+      y={y}
+      fill="#fff"
+      fontSize={11}
+      fontWeight={600}
+      textAnchor="middle"
+      dominantBaseline="central"
+    >
+      {`${Math.round(percent * 100)}%`}
+    </text>
+  );
+};
+
+function BatchOverview({
+  batchTrend,
+  batchPie,
+  batchSummary,
+  batchRange,
+  setBatchRange,
+  batchDelta,
+  loadingBatch,
+}: {
+  batchTrend: BatchDay[];
+  batchPie: RemarkSlice[];
+  batchSummary: BatchSummary | null;
+  batchRange: BatchRange;
+  setBatchRange: (r: BatchRange) => void;
+  batchDelta: number;
+  loadingBatch: boolean;
+}) {
+  const totalPie = batchPie.reduce((a, b) => a + b.value, 0);
+  const hasTrend = batchTrend.some((d) => d.unique > 0);
+
+  return (
+    <section className="rounded-2xl border border-[#312a63] bg-[#120f2d] p-5">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h3 className="flex items-center gap-2 text-base font-semibold text-white">
+            <TrendingUp className="h-4 w-4 text-[#8b5cf6]" />
+            Batch Progress
+          </h3>
+          <p className="mt-0.5 text-xs text-[#a8a0d6]">
+            Unique students remarked per day (candles) and the overall remark mix
+            for this batch over the {batchRange === "week" ? "current week" : "current month"}.
+          </p>
+        </div>
+
+        {/* Range switch */}
+        <div className="flex items-center gap-1.5">
+          {BATCH_RANGES.map((r) => (
+            <button
+              key={r.value}
+              type="button"
+              onClick={() => setBatchRange(r.value)}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
+                batchRange === r.value
+                  ? "border-[#8b5cf6] bg-[#8b5cf6]/15 text-white"
+                  : "border-[#312a63] bg-[#0f0b24] text-[#a8a0d6] hover:border-[#8b5cf6] hover:text-white"
+              }`}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Summary chips */}
+      <div className="mb-4 flex flex-wrap gap-2 text-xs">
+        <span className="rounded-full bg-violet-500/10 px-2.5 py-1 font-medium text-violet-300 ring-1 ring-violet-500/30">
+          Avg {batchSummary?.averageScore != null ? fmt(batchSummary.averageScore, 1) : "—"}/10
+        </span>
+        <span className="rounded-full bg-sky-500/10 px-2.5 py-1 font-medium text-sky-300 ring-1 ring-sky-500/30">
+          {batchSummary?.uniqueStudents ?? 0} students assessed
+        </span>
+        <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 font-medium text-emerald-300 ring-1 ring-emerald-500/30">
+          {batchSummary?.totalAssessments ?? 0} assessments
+        </span>
+        <span
+          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-medium ring-1 ${
+            batchDelta > 0
+              ? "bg-emerald-500/10 text-emerald-300 ring-emerald-500/30"
+              : batchDelta < 0
+              ? "bg-rose-500/10 text-rose-300 ring-rose-500/30"
+              : "bg-white/5 text-[#a8a0d6] ring-[#312a63]"
+          }`}
+        >
+          {batchDelta > 0 ? (
+            <TrendingUp className="h-3 w-3" />
+          ) : batchDelta < 0 ? (
+            <TrendingDown className="h-3 w-3" />
+          ) : null}
+          {batchDelta > 0 ? "+" : ""}
+          {fmt(batchDelta, 1)} vs prev day
+        </span>
+      </div>
+
+      {loadingBatch ? (
+        <div className="flex items-center justify-center py-16 text-[#a8a0d6]">
+          <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading batch data…
+        </div>
+      ) : (!hasTrend && totalPie === 0) ? (
+        <div className="py-16 text-center text-sm text-[#a8a0d6]">
+          No assessments recorded for this batch in the selected period.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          {/* Daily unique-students candlestick chart */}
+          <div className="lg:col-span-2">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-xs font-medium uppercase tracking-wider text-[#9a92c9]">
+                Students Remarked (Unique)
+              </p>
+              <div className="flex items-center gap-3 text-[10px] text-[#a8a0d6]">
+                <span className="inline-flex items-center gap-1">
+                  <span className="inline-block h-2.5 w-2.5 rounded-sm bg-emerald-500" />
+                  Up
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="inline-block h-2.5 w-2.5 rounded-sm bg-rose-500" />
+                  Down
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="inline-block h-2.5 w-2.5 rounded-sm bg-violet-500" />
+                  Flat
+                </span>
+              </div>
+            </div>
+            <div className="h-72 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart
+                  data={batchTrend}
+                  margin={{ top: 16, right: 10, left: 10, bottom: 0 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="#312a63"
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="date"
+                    stroke="#a8a0d6"
+                    fontSize={batchRange === "month" ? 10 : 11}
+                    interval={0}
+                    angle={batchRange === "month" ? -45 : 0}
+                    textAnchor={batchRange === "month" ? "end" : "middle"}
+                    height={batchRange === "month" ? 46 : 28}
+                  />
+                  <YAxis
+                    allowDecimals={false}
+                    domain={[0, (max: number) => Math.max(2, max + 1)]}
+                    stroke="#a8a0d6"
+                    fontSize={11}
+                    width={70}
+                    label={{
+                      value: "Unique Students Remarked",
+                      angle: -90,
+                      position: "insideLeft",
+                      offset: 12,
+                      style: {
+                        textAnchor: "middle",
+                        fontSize: 11,
+                        fill: "#a8a0d6",
+                        fontWeight: 500,
+                      },
+                    }}
+                  />
+                  <Tooltip
+                    content={<BatchTrendTooltip />}
+                    cursor={{ fill: "rgba(139,92,246,0.05)" }}
+                  />
+                  <Bar
+                    dataKey="unique"
+                    shape={<BatchCandleShape />}
+                    isAnimationActive={false}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Remark distribution pie chart */}
+          <div>
+            <p className="mb-2 text-xs font-medium uppercase tracking-wider text-[#9a92c9]">
+              Remark Distribution
+            </p>
+            {totalPie === 0 ? (
+              <div className="flex h-72 items-center justify-center text-center text-sm text-[#a8a0d6]">
+                No remarks in this period.
+              </div>
+            ) : (
+              <div className="h-72 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={batchPie}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={45}
+                      outerRadius={80}
+                      paddingAngle={2}
+                      labelLine={false}
+                      label={<PieLabel />}
+                      isAnimationActive={false}
+                    >
+                      {batchPie.map((s) => (
+                        <Cell key={s.name} fill={s.color} stroke="#0f0b24" />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#0f0b24",
+                        border: "1px solid #312a63",
+                        borderRadius: 8,
+                        fontSize: 12,
+                      }}
+                      itemStyle={{ color: "#fff" }}
+                      formatter={(v: any, n: any) => [
+                        `${v} (${Math.round((Number(v) / totalPie) * 100)}%)`,
+                        n,
+                      ]}
+                    />
+                    <Legend
+                      verticalAlign="bottom"
+                      height={36}
+                      iconType="circle"
+                      formatter={(value) => (
+                        <span className="text-xs text-[#a8a0d6]">{value}</span>
+                      )}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function CourseView({
   course,
   students,
@@ -1398,6 +1934,13 @@ function CourseView({
   stats,
   openStudent,
   onAddRemark,
+  batchTrend,
+  batchPie,
+  batchSummary,
+  batchRange,
+  setBatchRange,
+  batchDelta,
+  loadingBatch,
 }: {
   course: Course;
   students: Student[];
@@ -1408,6 +1951,13 @@ function CourseView({
   stats: Map<string, { avg: number; count: number; last?: RemarkEnum }>;
   openStudent: (s: Student) => void;
   onAddRemark: (s: Student) => void;
+  batchTrend: BatchDay[];
+  batchPie: RemarkSlice[];
+  batchSummary: BatchSummary | null;
+  batchRange: BatchRange;
+  setBatchRange: (r: BatchRange) => void;
+  batchDelta: number;
+  loadingBatch: boolean;
 }) {
   return (
     <div className="space-y-6">
@@ -1425,6 +1975,17 @@ function CourseView({
           </div>
         </div>
       </div>
+
+      {/* Batch progress + remark distribution */}
+      <BatchOverview
+        batchTrend={batchTrend}
+        batchPie={batchPie}
+        batchSummary={batchSummary}
+        batchRange={batchRange}
+        setBatchRange={setBatchRange}
+        batchDelta={batchDelta}
+        loadingBatch={loadingBatch}
+      />
 
       {/* Student candlestick */}
       <section className="rounded-2xl border border-[#312a63] bg-[#120f2d] p-5">
