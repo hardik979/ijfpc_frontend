@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import { toast } from "react-toastify";
 import {ResponsiveContainer,ComposedChart,Bar,XAxis,YAxis,CartesianGrid,Tooltip,LineChart,Line,ReferenceLine,ReferenceArea,PieChart,Pie,Cell,Legend} from "recharts";
-import {ArrowLeft,Calendar,Users,TrendingUp,TrendingDown,Award,BookOpen,Search,X,Send,Loader2,ChevronRight,Activity,Plus,Layers,Sparkles} from "lucide-react";
+import {ArrowLeft,Calendar,Users,TrendingUp,TrendingDown,Award,BookOpen,Search,X,Send,Loader2,ChevronRight,Activity,Plus,Layers,Sparkles,Upload,Download,FileSpreadsheet,CheckCircle2,AlertTriangle} from "lucide-react";
 
 const API_LMS_URL = process.env.NEXT_PUBLIC_LMS_URL;
 
@@ -67,6 +67,15 @@ type Student = {
 };
 
 type Course = { _id: string; title?: string };
+
+type UploadSkip = { row: number; name?: string; email?: string; reason: string };
+type UploadResult = {
+  inserted: number;
+  skippedCount: number;
+  skipped: UploadSkip[];
+  matchedStudents: { clerkId: string; fullName?: string; email?: string }[];
+  totalRows: number;
+};
 
 type Remark = {
   _id: string;
@@ -131,6 +140,33 @@ const PRACTICE_TASK_OPTIONS = [
 ];
 
 const REMARK_OPTIONS: RemarkEnum[] = ["Excellent", "Good", "Average", "Bad"];
+
+// CSV columns the upload endpoint understands. "Email" + "Remark" + "Score" are
+// what drive matching and the charts; the rest are stored as free text.
+const CSV_HEADERS = [
+  "S. No.",
+  "Student Name",
+  "Email",
+  "Area of Strength",
+  "Area of Improvement",
+  "Teacher Remark / Sentence",
+  "Practice Task",
+  "Follow-up Status",
+  "Remark",
+  "Score",
+];
+const CSV_TEMPLATE_ROW = [
+  "1",
+  "Shweta Malviya",
+  "student@example.com",
+  "Confidence",
+  "Fluency",
+  "Speaks confidently but needs to reduce pauses while explaining answers.",
+  "Speak for 4 minutes daily on one topic.",
+  "Improving",
+  "Good",
+  "7",
+];
 
 // Fixed color per remark tier — shared by the pie chart + legend.
 const REMARK_COLOR: Record<RemarkEnum, string> = {
@@ -204,6 +240,24 @@ const getCurrentBatch = (s: Student): string => {
 
 const getErr = (e: unknown, fb = "Something went wrong") =>
   e instanceof Error ? e.message : fb;
+
+// Quote a CSV cell if it contains a comma, quote, or newline.
+const csvCell = (v: string) =>
+  /[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+
+// Trigger a browser download of a blank remark-tracker CSV template.
+const downloadCsvTemplate = () => {
+  const csv = [CSV_HEADERS, CSV_TEMPLATE_ROW]
+    .map((row) => row.map(csvCell).join(","))
+    .join("\r\n");
+  const blob = new Blob([`﻿${csv}`], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "communication-remarks-template.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+};
 
 function buildCandle(
   name: string,
@@ -471,6 +525,7 @@ function StatCard({
 export default function CommunicationAnalytics() {
   const router = useRouter();
   const { user } = useUser();
+  console.log('user: ', user);
 
   // ── navigation state ──
   const [view, setView] = useState<View>("overview");
@@ -507,6 +562,15 @@ export default function CommunicationAnalytics() {
   const [remark, setRemark] = useState<RemarkEnum>("Average");
   const [score, setScore] = useState<number>(7);
   const [submitting, setSubmitting] = useState(false);
+
+  // ── CSV upload modal ──
+  const [showUpload, setShowUpload] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
+
+  // bump to force a re-fetch of batch remarks (after a CSV upload)
+  const [batchRefreshTick, setBatchRefreshTick] = useState(0);
 
   // ── fetch courses ──
   useEffect(() => {
@@ -650,7 +714,7 @@ export default function CommunicationAnalytics() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, selectedCourse, batchRange]);
+  }, [view, selectedCourse, batchRange, batchRefreshTick]);
 
   // ── derived: course lookup ──
   const courseById = useMemo(() => {
@@ -1051,7 +1115,7 @@ export default function CommunicationAnalytics() {
             practiceTask,
             remark,
             score,
-            assessorClerkId: user?.id,
+            assessorId: user?.id,
           }),
         }
       );
@@ -1078,6 +1142,62 @@ export default function CommunicationAnalytics() {
       toast.error(getErr(e));
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // ── CSV upload handlers ──
+  const openUpload = () => {
+    setUploadFile(null);
+    setUploadResult(null);
+    setShowUpload(true);
+  };
+
+  const closeUpload = () => {
+    if (uploading) return;
+    setShowUpload(false);
+    setUploadFile(null);
+  };
+
+  const submitCsvUpload = async () => {
+    if (!uploadFile || !selectedCourse) return;
+    try {
+      setUploading(true);
+      setUploadResult(null);
+      const form = new FormData();
+      form.append("file", uploadFile);
+      form.append("courseId", selectedCourse._id);
+      if (user?.id) form.append("assessorId", user.id);
+
+      const res = await fetch(
+        `${API_LMS_URL}/api/student-management/upload-communication-remarks-csv`,
+        { method: "POST", body: form }
+      );
+      const json = await res.json();
+      if (!res.ok || !json.success)
+        throw new Error(json.message || "Upload failed");
+
+      setUploadResult({
+        inserted: json.inserted ?? 0,
+        skippedCount: json.skippedCount ?? 0,
+        skipped: json.skipped ?? [],
+        matchedStudents: json.matchedStudents ?? [],
+        totalRows: json.totalRows ?? 0,
+      });
+
+      if (json.inserted > 0) {
+        toast.success(`Uploaded ${json.inserted} remark(s)`);
+        // clear the file so the same CSV can't be submitted twice by accident
+        setUploadFile(null);
+        // refresh the date-range remarks (overview/course charts) and the batch
+        fetchRangeRemarks();
+        setBatchRefreshTick((t) => t + 1);
+      } else {
+        toast.warn("No remarks were inserted — check the skipped rows.");
+      }
+    } catch (e) {
+      toast.error(getErr(e));
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -1211,6 +1331,7 @@ export default function CommunicationAnalytics() {
           stats={courseStudentStats}
           openStudent={openStudent}
           onAddRemark={openAddRemarkFor}
+          onUploadRemarks={openUpload}
           batchTrend={batchTrend}
           batchPie={batchPie}
           batchSummary={batchSummary}
@@ -1368,6 +1489,172 @@ export default function CommunicationAnalytics() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {/* ─── Upload Remarks (CSV) Modal ─── */}
+      {showUpload ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          onClick={closeUpload}
+        >
+          <div
+            className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-[#312a63] bg-[#0f0b24] shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-[#312a63] px-6 py-4">
+              <div>
+                <h3 className="flex items-center gap-2 text-base font-semibold text-white">
+                  <FileSpreadsheet className="h-4 w-4 text-[#8b5cf6]" />
+                  Upload Remarks via CSV
+                </h3>
+                <p className="mt-0.5 text-xs text-[#a8a0d6]">
+                  {selectedCourse?.title} • students are matched by their{" "}
+                  <span className="text-white">email</span>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeUpload}
+                disabled={uploading}
+                className="rounded-lg p-1.5 text-[#a8a0d6] hover:bg-[#1c1642] hover:text-white disabled:opacity-50"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 space-y-4 overflow-y-auto p-6">
+              {/* Instructions */}
+              <div className="rounded-xl border border-[#312a63] bg-[#120f2d] p-4 text-xs text-[#a8a0d6]">
+                <p className="mb-2 font-medium text-white">
+                  Required columns
+                </p>
+                <p>
+                  Your CSV needs an <b className="text-white">Email</b> column
+                  (used to find each student), a{" "}
+                  <b className="text-white">Remark</b> column (Excellent / Good /
+                  Average / Bad), and a <b className="text-white">Score</b> (0–10).
+                  Optional: Student Name, Area of Strength, Area of Improvement,
+                  Teacher Remark / Sentence, Practice Task, Follow-up Status.
+                </p>
+                <button
+                  type="button"
+                  onClick={downloadCsvTemplate}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-[#312a63] bg-[#0f0b24] px-3 py-1.5 font-medium text-[#a8a0d6] transition hover:border-[#8b5cf6] hover:text-white"
+                >
+                  <Download className="h-3.5 w-3.5" /> Download CSV template
+                </button>
+              </div>
+
+              {/* File input */}
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-[#a8a0d6]">
+                  CSV file <span className="text-rose-400">*</span>
+                </label>
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  disabled={uploading}
+                  onChange={(e) => {
+                    setUploadFile(e.target.files?.[0] ?? null);
+                    setUploadResult(null);
+                  }}
+                  className="block w-full cursor-pointer rounded-xl border border-[#312a63] bg-[#120f2d] text-sm text-white outline-none file:mr-3 file:cursor-pointer file:border-0 file:bg-[#8b5cf6] file:px-4 file:py-2.5 file:text-xs file:font-semibold file:text-white hover:file:bg-[#7c3aed]"
+                />
+                {uploadFile ? (
+                  <p className="mt-1.5 text-xs text-[#a8a0d6]">
+                    Selected: <span className="text-white">{uploadFile.name}</span>
+                  </p>
+                ) : null}
+              </div>
+
+              {/* Result summary */}
+              {uploadResult ? (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 font-medium text-emerald-300 ring-1 ring-emerald-500/30">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      {uploadResult.inserted} inserted
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 font-medium text-amber-300 ring-1 ring-amber-500/30">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      {uploadResult.skippedCount} skipped
+                    </span>
+                    <span className="rounded-full bg-white/5 px-2.5 py-1 font-medium text-[#a8a0d6] ring-1 ring-[#312a63]">
+                      {uploadResult.totalRows} rows total
+                    </span>
+                  </div>
+
+                  {uploadResult.matchedStudents.length ? (
+                    <div className="rounded-xl border border-[#312a63] bg-[#120f2d] p-3">
+                      <p className="mb-2 text-xs font-medium text-white">
+                        Uploaded for {uploadResult.matchedStudents.length} student(s)
+                      </p>
+                      <div className="flex max-h-32 flex-wrap gap-1.5 overflow-y-auto">
+                        {uploadResult.matchedStudents.map((s, i) => (
+                          <span
+                            key={`${s.clerkId}-${i}`}
+                            className="rounded-full bg-violet-500/10 px-2 py-0.5 text-[11px] text-violet-200 ring-1 ring-violet-500/30"
+                          >
+                            {s.fullName || s.email}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {uploadResult.skipped.length ? (
+                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+                      <p className="mb-2 text-xs font-medium text-amber-200">
+                        Skipped rows
+                      </p>
+                      <div className="max-h-40 overflow-y-auto text-xs text-[#a8a0d6]">
+                        {uploadResult.skipped.map((s, i) => (
+                          <div
+                            key={i}
+                            className="flex justify-between gap-3 border-t border-[#312a63]/60 py-1 first:border-0"
+                          >
+                            <span>
+                              Row {s.row}
+                              {s.name ? ` — ${s.name}` : ""}
+                              {s.email ? ` (${s.email})` : ""}
+                            </span>
+                            <span className="shrink-0 text-amber-300">
+                              {s.reason}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-[#312a63] px-6 py-4">
+              <button
+                type="button"
+                onClick={closeUpload}
+                disabled={uploading}
+                className="rounded-xl border border-[#312a63] bg-[#120f2d] px-4 py-2 text-xs font-medium text-[#a8a0d6] transition hover:text-white disabled:opacity-50"
+              >
+                {uploadResult ? "Close" : "Cancel"}
+              </button>
+              <button
+                type="button"
+                onClick={submitCsvUpload}
+                disabled={uploading || !uploadFile}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[#8b5cf6] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#7c3aed] disabled:opacity-60"
+              >
+                {uploading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Upload className="h-3.5 w-3.5" />
+                )}
+                {uploadResult ? "Upload another" : "Upload"}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
@@ -1934,6 +2221,7 @@ function CourseView({
   stats,
   openStudent,
   onAddRemark,
+  onUploadRemarks,
   batchTrend,
   batchPie,
   batchSummary,
@@ -1951,6 +2239,7 @@ function CourseView({
   stats: Map<string, { avg: number; count: number; last?: RemarkEnum }>;
   openStudent: (s: Student) => void;
   onAddRemark: (s: Student) => void;
+  onUploadRemarks: () => void;
   batchTrend: BatchDay[];
   batchPie: RemarkSlice[];
   batchSummary: BatchSummary | null;
@@ -1963,16 +2252,25 @@ function CourseView({
     <div className="space-y-6">
       {/* Course header */}
       <div className="rounded-2xl border border-[#312a63] bg-gradient-to-br from-violet-500/10 via-transparent to-transparent bg-[#120f2d] p-5">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/30">
-            <BookOpen className="h-5 w-5" />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/30">
+              <BookOpen className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-white">{course.title}</h2>
+              <p className="text-xs text-[#a8a0d6]">
+                {students.length} active student(s) • Batch performance below
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-lg font-semibold text-white">{course.title}</h2>
-            <p className="text-xs text-[#a8a0d6]">
-              {students.length} active student(s) • Batch performance below
-            </p>
-          </div>
+          <button
+            type="button"
+            onClick={onUploadRemarks}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-[#8b5cf6] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#7c3aed]"
+          >
+            <Upload className="h-3.5 w-3.5" /> Upload Remarks (CSV)
+          </button>
         </div>
       </div>
 
