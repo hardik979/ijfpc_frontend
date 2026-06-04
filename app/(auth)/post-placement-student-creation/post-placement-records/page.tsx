@@ -1461,6 +1461,27 @@ const EditForm: React.FC<EditFormProps> = ({ formData, setFormData }) => {
               className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             />
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Remaining Fee
+            </label>
+            <input
+              type="number"
+              min="0"
+              value={formData.remainingFee ?? ""}
+              onChange={(e) =>
+                updateField(
+                  "remainingFee",
+                  e.target.value === "" ? 0 : parseFloat(e.target.value) || 0
+                )
+              }
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Manual override. Recalculated automatically when an installment is
+              added or edited.
+            </p>
+          </div>
         </div>
       </div>
 
