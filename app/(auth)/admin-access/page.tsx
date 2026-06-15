@@ -37,7 +37,16 @@ const ADMIN_MODULES: AdminModule[] = [
     accent: "from-emerald-500 to-emerald-600",
     tag: "Analytics",
   },
-]
+  {
+    label: "Daily Calling Report",
+    description:
+      "Review daily calling activities and performance metrics.",
+    href: "/daily-calling-report",
+    icon: BarChart3,
+    accent: "from-emerald-500 to-emerald-600",
+    tag: "Analytics",
+  },
+];
 
 export default function AdminAccessPage() {
   const router = useRouter()
