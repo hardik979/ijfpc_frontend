@@ -1,86 +1,103 @@
 "use client";
 
-import type { ResumeData, ResumeFontFamily, TemplateKey } from "@/lib/resume";
+import { useEffect, useRef, type CSSProperties } from "react";
+import { useFormContext } from "react-hook-form";
+import { Mail, Phone, Linkedin, MapPin } from "lucide-react";
 
-type ThemeKey =
-  | "blue"
-  | "slate"
-  | "emerald"
-  | "purple"
-  | "rose"
-  | "teal"
-  | "amber";
+import type { ResumeFormValues } from "@/lib/resumeForm";
+import { getThemePalette } from "@/lib/resumePdfStyles";
 
-type ResumeWithExtras = ResumeData & {
-  summary: string;
-  layout: TemplateKey;
-  profileImage?: string;
-  photo?: string;
-  theme: ThemeKey;
-  fontFamily: ResumeFontFamily;
-  fontSize: number;
-};
-
-type Props = {
-  data: ResumeWithExtras;
-  scale?: number;
-  updateField: <K extends keyof ResumeWithExtras>(
-    key: K,
-    value: ResumeWithExtras[K]
-  ) => void;
-  updateSkill: (index: number, value: string) => void;
-  updateExperienceField: (
-    expIndex: number,
-    key: "jobTitle" | "company" | "startDate" | "endDate" | "start" | "end",
-    value: string
-  ) => void;
-  updateExperienceBullet: (
-    expIndex: number,
-    bulletIndex: number,
-    value: string
-  ) => void;
-};
-
+/* Inline click-to-edit text. Single source of truth is the RHF form: we set the
+ * DOM text from `value` ONLY when the element is not focused, so the caret never
+ * jumps while the user types here, and onBlur writes back via `onSave`.
+ * Placeholder is shown via CSS ([data-ph]:empty::before in globals.css). */
 function EditableText({
   value,
   onSave,
   className = "",
   as = "div",
-  placeholder = "Click to edit",
+  placeholder = "",
+  style,
 }: {
   value?: string;
   onSave: (value: string) => void;
   className?: string;
   as?: "div" | "h1" | "h2" | "p" | "span";
   placeholder?: string;
+  style?: CSSProperties;
 }) {
-  const Tag = as;
+  const ref = useRef<HTMLElement | null>(null);
+  const Tag = as as any;
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || document.activeElement === el) return;
+    const next = value ?? "";
+    if (el.textContent !== next) el.textContent = next;
+  }, [value]);
 
   return (
     <Tag
+      ref={ref}
       contentEditable
       suppressContentEditableWarning
-      onBlur={(e) => onSave(e.currentTarget.textContent || "")}
-      className={`cursor-text rounded-md px-1 outline-none transition hover:bg-violet-50 focus:bg-violet-50 focus:ring-2 focus:ring-violet-200 ${className}`}
-    >
-      {value?.trim() ? value : placeholder}
-    </Tag>
+      data-ph={placeholder}
+      onBlur={(e: React.FocusEvent<HTMLElement>) =>
+        onSave(e.currentTarget.textContent || "")
+      }
+      style={style}
+      className={`cursor-text rounded-md px-1 outline-none transition hover:bg-violet-50/70 focus:bg-violet-50 focus:ring-2 focus:ring-violet-200 ${className}`}
+    />
   );
 }
 
+const hasText = (v?: string) => !!(v && v.trim());
+
 export default function EditableResumePreview({
-  data,
   scale = 1,
-  updateField,
-  updateSkill,
-  updateExperienceField,
-  updateExperienceBullet,
-}: Props) {
-  const safeSkills = Array.isArray(data.skills) ? data.skills : [];
-  const safeExperience = Array.isArray(data.experience) ? data.experience : [];
-  const safeLanguages = Array.isArray(data.languages) ? data.languages : [];
-  const safeProjects = Array.isArray(data.projects) ? data.projects : [];
-  const safeEducation = Array.isArray(data.education) ? data.education : [];
+}: {
+  scale?: number;
+}) {
+  const { watch, setValue } = useFormContext<ResumeFormValues>();
+  // watch() reliably reflects setValue on every field (incl. photo, which has
+  // no registered input) and re-renders this leaf on each change.
+  const data = watch();
+
+  const palette = getThemePalette(data.theme);
+
+  // All text sizes derive from the chosen font size so the Design & Style
+  // "Font Size" control (Small/Medium/Large) actually changes the preview.
+  const fs = typeof data.fontSize === "number" ? data.fontSize : 12;
+  const sz = {
+    name: fs * 2.1,
+    role: fs * 1.35,
+    heading: fs * 1.25,
+    jobTitle: fs * 1.35,
+    body: fs,
+    small: fs * 0.9,
+    chip: fs * 0.95,
+  };
+
+  const skills = (data.skills ?? []).map((s, i) => [s, i] as const);
+  const experience = data.experience ?? [];
+  const projects = data.projects ?? [];
+  const education = data.education ?? [];
+  const languages = (data.languages ?? []).map((l, i) => [l, i] as const);
+
+  const hasSkills = skills.some(([s]) => hasText(s));
+  const hasLanguages = languages.some(([l]) => hasText(l));
+
+  const headingStyle: CSSProperties = {
+    color: palette.primary,
+    fontSize: sz.heading,
+  };
+  const bulletStyle: CSSProperties = {
+    fontSize: sz.body,
+    textAlign: "justify",
+  };
+
+  const set = (path: any, v: string) =>
+    setValue(path, v as any, { shouldDirty: true });
 
   return (
     <div
@@ -96,11 +113,15 @@ export default function EditableResumePreview({
         className="h-full w-full p-10 text-gray-900"
         style={{
           fontFamily: data.fontFamily,
-          fontSize: `${data.fontSize}px`,
+          fontSize: `${fs}px`,
           lineHeight: 1.55,
         }}
       >
-        <div className="mb-8 flex items-start gap-6 border-b border-gray-200 pb-6">
+        {/* Header */}
+        <div
+          className="mb-8 flex items-start gap-6 border-b pb-6"
+          style={{ borderColor: palette.border }}
+        >
           {data.photo ? (
             <img
               src={data.photo}
@@ -117,203 +138,329 @@ export default function EditableResumePreview({
             <EditableText
               as="h1"
               value={data.fullName}
-              onSave={(val) => updateField("fullName", val)}
-              className="text-3xl font-bold text-gray-900"
+              onSave={(v) => set("fullName", v)}
+              className="font-bold text-gray-900"
+              style={{ fontSize: sz.name }}
               placeholder="Your Name"
             />
-
             <EditableText
               as="p"
               value={data.role}
-              onSave={(val) => updateField("role", val)}
-              className="mt-2 text-lg text-gray-600"
+              onSave={(v) => set("role", v)}
+              className="mt-2"
+              style={{ color: palette.subText, fontSize: sz.role }}
               placeholder="Your Role"
             />
 
-            <div className="mt-4 grid grid-cols-2 gap-2 text-sm text-gray-600">
-              <EditableText
-                as="p"
-                value={data.email}
-                onSave={(val) => updateField("email", val)}
-                placeholder="Email"
-              />
-              <EditableText
-                as="p"
-                value={data.phone}
-                onSave={(val) => updateField("phone", val)}
-                placeholder="Phone"
-              />
-              <EditableText
-                as="p"
-                value={data.address}
-                onSave={(val) => updateField("address", val)}
-                className="col-span-2"
-                placeholder="Address"
-              />
+            <div
+              className="mt-4 grid grid-cols-2 gap-x-4 gap-y-1.5"
+              style={{ color: palette.subText, fontSize: sz.small }}
+            >
+              <div className="flex items-center gap-1.5">
+                <Mail className="h-3.5 w-3.5 shrink-0" style={{ color: palette.primary }} />
+                <EditableText
+                  as="span"
+                  value={data.email}
+                  onSave={(v) => set("email", v)}
+                  placeholder="Email"
+                />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Phone className="h-3.5 w-3.5 shrink-0" style={{ color: palette.primary }} />
+                <EditableText
+                  as="span"
+                  value={data.phone}
+                  onSave={(v) => set("phone", v)}
+                  placeholder="Phone"
+                />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Linkedin className="h-3.5 w-3.5 shrink-0" style={{ color: palette.primary }} />
+                <EditableText
+                  as="span"
+                  value={data.linkedin}
+                  onSave={(v) => set("linkedin", v)}
+                  placeholder="LinkedIn"
+                />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <MapPin className="h-3.5 w-3.5 shrink-0" style={{ color: palette.primary }} />
+                <EditableText
+                  as="span"
+                  value={data.address}
+                  onSave={(v) => set("address", v)}
+                  placeholder="Address"
+                />
+              </div>
             </div>
           </div>
         </div>
 
-        <section className="mb-8">
-          <h2 className="mb-3 text-lg font-semibold text-violet-700">Summary</h2>
-          <EditableText
-            as="p"
-            value={data.summary}
-            onSave={(val) => updateField("summary", val)}
-            className="leading-7 text-gray-700"
-            placeholder="Write your professional summary here..."
-          />
-        </section>
-
-        {!!safeSkills.length && (
+        {/* Summary */}
+        {hasText(data.summary) && (
           <section className="mb-8">
-            <h2 className="mb-3 text-lg font-semibold text-violet-700">Skills</h2>
+            <h2 className="mb-3 font-semibold" style={headingStyle}>
+              Summary
+            </h2>
+            <EditableText
+              as="p"
+              value={data.summary}
+              onSave={(v) => set("summary", v)}
+              className="leading-7 text-gray-700"
+              style={{ fontSize: sz.body, textAlign: "justify" }}
+              placeholder="Write your professional summary here..."
+            />
+          </section>
+        )}
+
+        {/* Skills */}
+        {hasSkills && (
+          <section className="mb-8">
+            <h2 className="mb-3 font-semibold" style={headingStyle}>
+              Skills
+            </h2>
             <div className="flex flex-wrap gap-2">
-              {safeSkills.map((skill, index) => (
-                <EditableText
-                  key={index}
-                  as="span"
-                  value={skill}
-                  onSave={(val) => updateSkill(index, val)}
-                  className="rounded-full border border-violet-200 px-3 py-1 text-sm text-gray-700"
-                  placeholder="Skill"
-                />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {!!safeExperience.length && (
-          <section className="mb-8">
-            <h2 className="mb-3 text-lg font-semibold text-violet-700">Experience</h2>
-
-            <div className="space-y-6">
-              {safeExperience.map((exp, expIndex) => (
-                <div key={expIndex} className="rounded-xl border border-gray-200 p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0 flex-1">
-                      <EditableText
-                        as="h2"
-                        value={exp.jobTitle}
-                        onSave={(val) =>
-                          updateExperienceField(expIndex, "jobTitle", val)
-                        }
-                        className="text-xl font-semibold text-gray-900"
-                        placeholder="Job Title"
-                      />
-
-                      <EditableText
-                        as="p"
-                        value={exp.company}
-                        onSave={(val) =>
-                          updateExperienceField(expIndex, "company", val)
-                        }
-                        className="text-sm text-gray-600"
-                        placeholder="Company Name"
-                      />
-                    </div>
-
-                    <div className="min-w-[140px] text-right text-sm text-gray-500">
-                      <EditableText
-                        as="p"
-                        value={exp.startDate || exp.start}
-                        onSave={(val) =>
-                          updateExperienceField(expIndex, "startDate", val)
-                        }
-                        placeholder="Start"
-                      />
-                      <EditableText
-                        as="p"
-                        value={exp.endDate || exp.end}
-                        onSave={(val) =>
-                          updateExperienceField(expIndex, "endDate", val)
-                        }
-                        placeholder="End"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-3 space-y-2">
-                    {(exp.bullets || exp.points || []).map((bullet, bulletIndex) => (
-                      <EditableText
-                        key={bulletIndex}
-                        as="p"
-                        value={bullet}
-                        onSave={(val) =>
-                          updateExperienceBullet(expIndex, bulletIndex, val)
-                        }
-                        className="text-sm leading-6 text-gray-700"
-                        placeholder="Write bullet point"
-                      />
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {!!safeProjects.length && (
-          <section className="mb-8">
-            <h2 className="mb-3 text-lg font-semibold text-violet-700">Projects</h2>
-            <div className="space-y-4">
-              {safeProjects.map((project, index) => (
-                <div key={index} className="rounded-xl border border-gray-200 p-4">
+              {skills.map(([skill, index]) =>
+                hasText(skill) ? (
                   <EditableText
-                    as="h2"
-                    value={project?.name}
-                    onSave={() => {}}
-                    className="text-lg font-semibold"
-                    placeholder="Project Name"
+                    key={index}
+                    as="span"
+                    value={skill}
+                    onSave={(v) => set(`skills.${index}`, v)}
+                    className="rounded-full border px-3 py-1 text-gray-700"
+                    style={{ borderColor: palette.border, fontSize: sz.chip }}
+                    placeholder="Skill"
                   />
-                  <p className="mt-1 text-sm text-gray-600">
-                    {project?.techStack || "Tech stack"}
-                  </p>
-                  {!!project?.bullets?.length && (
-                    <div className="mt-3 space-y-2">
-                      {project.bullets.map((bullet, bulletIndex) => (
-                        <p key={bulletIndex} className="text-sm text-gray-700">
-                          • {bullet}
-                        </p>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
+                ) : null
+              )}
             </div>
           </section>
         )}
 
-        {!!safeEducation.length && (
+        {/* Experience */}
+        {experience.length > 0 && (
           <section className="mb-8">
-            <h2 className="mb-3 text-lg font-semibold text-violet-700">Education</h2>
-            <div className="space-y-4">
-              {safeEducation.map((edu, index) => (
-                <div key={index} className="rounded-xl border border-gray-200 p-4">
-                  <p className="font-semibold text-gray-900">{edu.degree}</p>
-                  <p className="text-sm text-gray-600">{edu.institution}</p>
-                  <p className="text-sm text-gray-500">
-                    {edu.startYear || ""} {edu.startYear || edu.endYear ? " - " : ""}
-                    {edu.endYear || ""}
-                  </p>
-                </div>
-              ))}
+            <h2 className="mb-3 font-semibold" style={headingStyle}>
+              Experience
+            </h2>
+            <div className="space-y-6">
+              {experience.map((exp, expIndex) => {
+                const bullets = exp.bullets ?? [];
+                const visible =
+                  hasText(exp.jobTitle) ||
+                  hasText(exp.company) ||
+                  bullets.some(hasText);
+                if (!visible) return null;
+
+                return (
+                  <div
+                    key={expIndex}
+                    className="rounded-xl border p-4"
+                    style={{ borderColor: palette.border }}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <EditableText
+                          as="h2"
+                          value={exp.jobTitle}
+                          onSave={(v) =>
+                            set(`experience.${expIndex}.jobTitle`, v)
+                          }
+                          className="font-semibold text-gray-900"
+                          style={{ fontSize: sz.jobTitle }}
+                          placeholder="Job Title"
+                        />
+                        <EditableText
+                          as="p"
+                          value={exp.company}
+                          onSave={(v) =>
+                            set(`experience.${expIndex}.company`, v)
+                          }
+                          style={{ color: palette.subText, fontSize: sz.small }}
+                          placeholder="Company Name"
+                        />
+                      </div>
+
+                      <div
+                        className="min-w-[140px] text-right"
+                        style={{ color: palette.subText, fontSize: sz.small }}
+                      >
+                        <EditableText
+                          as="p"
+                          value={exp.startDate}
+                          onSave={(v) =>
+                            set(`experience.${expIndex}.startDate`, v)
+                          }
+                          placeholder="Start"
+                        />
+                        <EditableText
+                          as="p"
+                          value={exp.isCurrent ? "Present" : exp.endDate}
+                          onSave={(v) =>
+                            set(`experience.${expIndex}.endDate`, v)
+                          }
+                          placeholder="End"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-3 space-y-2">
+                      {bullets.map((bullet, bulletIndex) =>
+                        hasText(bullet) ? (
+                          <EditableText
+                            key={bulletIndex}
+                            as="p"
+                            value={bullet}
+                            onSave={(v) =>
+                              set(
+                                `experience.${expIndex}.bullets.${bulletIndex}`,
+                                v
+                              )
+                            }
+                            className="leading-6 text-gray-700"
+                            style={bulletStyle}
+                            placeholder="Write bullet point"
+                          />
+                        ) : null
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </section>
         )}
 
-        {!!safeLanguages.length && (
+        {/* Projects */}
+        {projects.length > 0 && (
+          <section className="mb-8">
+            <h2 className="mb-3 font-semibold" style={headingStyle}>
+              Projects
+            </h2>
+            <div className="space-y-4">
+              {projects.map((project, index) => {
+                const bullets = project.bullets ?? [];
+                const visible =
+                  hasText(project.name) ||
+                  hasText(project.techStack) ||
+                  bullets.some(hasText);
+                if (!visible) return null;
+
+                return (
+                  <div
+                    key={index}
+                    className="rounded-xl border p-4"
+                    style={{ borderColor: palette.border }}
+                  >
+                    <EditableText
+                      as="h2"
+                      value={project.name}
+                      onSave={(v) => set(`projects.${index}.name`, v)}
+                      className="font-semibold"
+                      style={{ fontSize: sz.jobTitle }}
+                      placeholder="Project Name"
+                    />
+                    <EditableText
+                      as="p"
+                      value={project.techStack}
+                      onSave={(v) => set(`projects.${index}.techStack`, v)}
+                      className="mt-1"
+                      style={{ color: palette.subText, fontSize: sz.small }}
+                      placeholder="Tech stack"
+                    />
+                    <div className="mt-3 space-y-2">
+                      {bullets.map((bullet, bulletIndex) =>
+                        hasText(bullet) ? (
+                          <EditableText
+                            key={bulletIndex}
+                            as="p"
+                            value={bullet}
+                            onSave={(v) =>
+                              set(
+                                `projects.${index}.bullets.${bulletIndex}`,
+                                v
+                              )
+                            }
+                            className="leading-6 text-gray-700"
+                            style={bulletStyle}
+                            placeholder="Write bullet point"
+                          />
+                        ) : null
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* Education */}
+        {education.length > 0 && (
+          <section className="mb-8">
+            <h2 className="mb-3 font-semibold" style={headingStyle}>
+              Education
+            </h2>
+            <div className="space-y-4">
+              {education.map((edu, index) => {
+                const visible =
+                  hasText(edu.degree) ||
+                  hasText(edu.institution) ||
+                  hasText(edu.startYear) ||
+                  hasText(edu.endYear);
+                if (!visible) return null;
+
+                return (
+                  <div
+                    key={index}
+                    className="rounded-xl border p-4"
+                    style={{ borderColor: palette.border }}
+                  >
+                    <EditableText
+                      as="p"
+                      value={edu.degree}
+                      onSave={(v) => set(`education.${index}.degree`, v)}
+                      className="font-semibold text-gray-900"
+                      style={{ fontSize: sz.body }}
+                      placeholder="Degree / Qualification"
+                    />
+                    <EditableText
+                      as="p"
+                      value={edu.institution}
+                      onSave={(v) => set(`education.${index}.institution`, v)}
+                      style={{ color: palette.subText, fontSize: sz.small }}
+                      placeholder="Institution"
+                    />
+                    <p style={{ color: palette.subText, fontSize: sz.small }}>
+                      {edu.startYear || ""}
+                      {edu.startYear || edu.endYear ? " - " : ""}
+                      {edu.currentlyStudying ? "Present" : edu.endYear || ""}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* Languages */}
+        {hasLanguages && (
           <section>
-            <h2 className="mb-3 text-lg font-semibold text-violet-700">Languages</h2>
+            <h2 className="mb-3 font-semibold" style={headingStyle}>
+              Languages
+            </h2>
             <div className="flex flex-wrap gap-2">
-              {safeLanguages.map((lang, index) => (
-                <span
-                  key={index}
-                  className="rounded-full border border-gray-200 px-3 py-1 text-sm text-gray-700"
-                >
-                  {lang}
-                </span>
-              ))}
+              {languages.map(([lang, index]) =>
+                hasText(lang) ? (
+                  <span
+                    key={index}
+                    className="rounded-full border px-3 py-1 text-gray-700"
+                    style={{ borderColor: palette.border, fontSize: sz.chip }}
+                  >
+                    {lang}
+                  </span>
+                ) : null
+              )}
             </div>
           </section>
         )}
