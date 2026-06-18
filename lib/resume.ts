@@ -1,5 +1,3 @@
-import { UploadedPdfTemplateKey } from "@/components/resume-builder/uploadedPdfResumeTemplates";
-
 export type EducationEntry = {
   degree?: string;
   institution?: string;
@@ -17,28 +15,10 @@ export type ProjectEntry = {
 };
 
 export type TemplateKey =
-  | "classicSidebar"
-  | "accentHeader"
-  | "splitTwoColumn"
-  | "timeline"
-  | "minimalClean"
-  | "modernCorporate"
-  | "atsCompact"
-  | "elegantSidebar"
-  | "template9"
-  | "template10"
-  | "template11"
-  | "template12"
-  | "template13"
-  | "template14"
-  | "template15"
-  | "template16"
-  | "template17"
-  | "template18"
-  | "template19"
-  | "template20"
   | "naukriStyle"
-  | UploadedPdfTemplateKey;
+  | "corporateSidebar"
+  | "atsClassic"
+  | "modernBand";
 
 export type ResumeTheme =
   | "blue"

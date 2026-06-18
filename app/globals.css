@@ -7,6 +7,24 @@
   .glass-button { @apply bg-indigo-600/80 hover:bg-indigo-600 text-white font-medium py-2 px-4 rounded-lg shadow-lg shadow-indigo-500/20 backdrop-blur-sm transition-all hover:scale-[1.02] active:scale-[0.98]; }
 }
 
+/* Placeholder text for the resume builder's inline click-to-edit fields
+   (EditableResumePreview). Shown only while the editable element is empty,
+   so the saved value stays empty until the user actually types. */
+[data-ph]:empty::before {
+  content: attr(data-ph);
+  color: #9ca3af;
+  pointer-events: none;
+}
+
+/* Hide scrollbars while keeping scroll behaviour (cleaner, more pro look). */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* ═══════════════════════════════════════════════════════════════════
    CSS CUSTOM PROPERTIES
    ═══════════════════════════════════════════════════════════════════ */

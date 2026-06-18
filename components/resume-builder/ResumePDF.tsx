@@ -1,16 +1,23 @@
 import React from "react";
-import { Document, Page, View, Text, Image, Link } from "@react-pdf/renderer";
+import {
+  Document,
+  Page,
+  View,
+  Text,
+  Link,
+  Image,
+  Svg,
+  Path,
+  Rect,
+  Circle,
+} from "@react-pdf/renderer";
 import type { ResumeData } from "@/lib/resume";
 import {
   getBasePageStyle,
+  getThemePalette as resolveThemePalette,
   styles
 } from "@/lib/resumePdfStyles";
-import {
-  uploadedPdfResumeTemplates,
-  uploadedPdfTemplateOptions,
-  renderUploadedPdfTemplate,
-  type UploadedPdfTemplateKey,
-} from "./uploadedPdfResumeTemplates";
+
 type ThemePalette = {
   primary: string;
   secondary: string;
@@ -43,65 +50,181 @@ function nonEmptyArray(values?: (string | undefined | null)[] | null): string[] 
   return safeArray(values).map((v) => cleanText(v)).filter(Boolean);
 }
 
-function hasContact(data: ResumeData) {
+/* -------------------- CONTACT ICONS (lucide paths as react-pdf Svg) -------------------- */
+
+type ContactType = "mail" | "phone" | "map" | "linkedin";
+
+function PdfIcon({
+  type,
+  color,
+  size = 9,
+}: {
+  type: ContactType;
+  color: string;
+  size?: number;
+}) {
+  const s = { stroke: color, strokeWidth: 2, fill: "none" } as const;
+
+  let parts: React.ReactNode[] = [];
+  if (type === "mail") {
+    parts = [
+      <Rect key="r" x={2} y={4} width={20} height={16} rx={2} {...s} />,
+      <Path key="p" d="M22 7l-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" {...s} />,
+    ];
+  } else if (type === "phone") {
+    parts = [
+      <Path
+        key="p"
+        d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"
+        {...s}
+      />,
+    ];
+  } else if (type === "map") {
+    parts = [
+      <Path
+        key="p"
+        d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0z"
+        {...s}
+      />,
+      <Circle key="c" cx={12} cy={10} r={3} {...s} />,
+    ];
+  } else if (type === "linkedin") {
+    parts = [
+      <Path
+        key="p"
+        d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"
+        {...s}
+      />,
+      <Rect key="r" x={2} y={9} width={4} height={12} {...s} />,
+      <Circle key="c" cx={4} cy={4} r={2} {...s} />,
+    ];
+  }
+
   return (
-    hasText(data.phone) ||
-    hasText(data.email) ||
-    hasText(data.linkedin) ||
-    hasText(data.address)
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      {parts}
+    </Svg>
+  );
+}
+
+/** Icon + value. `block` (sidebar) lets the text wrap on its own line. */
+function ContactItem({
+  type,
+  value,
+  color,
+  fontSize = 8.7,
+  block,
+}: {
+  type: ContactType;
+  value: string;
+  color: string;
+  fontSize?: number;
+  block?: boolean;
+}) {
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: block ? "flex-start" : "center",
+        marginRight: block ? 0 : 10,
+        marginBottom: 3,
+      }}
+    >
+      <PdfIcon type={type} color={color} size={fontSize + 1.3} />
+      <Text
+        style={{
+          fontSize,
+          color,
+          marginLeft: 3,
+          lineHeight: 1.3,
+          ...(block ? { flex: 1 } : {}),
+        }}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+const CONTACT_TYPES: Array<{ type: ContactType; key: keyof ResumeData }> = [
+  { type: "mail", key: "email" },
+  { type: "phone", key: "phone" },
+  { type: "map", key: "address" },
+  { type: "linkedin", key: "linkedin" },
+];
+
+/** A wrapping row / stacked list of contact items with icons, shared by templates. */
+function ContactRow({
+  data,
+  color,
+  fontSize = 8.7,
+  block,
+  justify,
+}: {
+  data: ResumeData;
+  color: string;
+  fontSize?: number;
+  block?: boolean;
+  justify?: "flex-start" | "center";
+}) {
+  const items = CONTACT_TYPES.map(({ type, key }) => ({
+    type,
+    value: cleanText(data[key] as string | undefined),
+  })).filter((i) => i.value);
+
+  if (!items.length) return null;
+
+  return (
+    <View
+      style={{
+        flexDirection: block ? "column" : "row",
+        flexWrap: "wrap",
+        justifyContent: justify ?? "flex-start",
+      }}
+    >
+      {items.map((i, idx) => (
+        <ContactItem
+          key={idx}
+          type={i.type}
+          value={i.value}
+          color={color}
+          fontSize={fontSize}
+          block={block}
+        />
+      ))}
+    </View>
+  );
+}
+
+/** Rounded profile photo. Renders nothing when there is no photo. */
+function Avatar({
+  src,
+  size = 64,
+  borderColor,
+}: {
+  src?: string | null;
+  size?: number;
+  borderColor?: string;
+}) {
+  if (!hasText(src)) return null;
+  return (
+    <Image
+      src={src as string}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        objectFit: "cover",
+        ...(borderColor
+          ? { borderWidth: 1.5, borderStyle: "solid" as const, borderColor }
+          : {}),
+      }}
+    />
   );
 }
 
 function hasSummary(data: ResumeData) {
   return hasText(data.summary);
-}
-
-function hasSkills(data: ResumeData) {
-  return nonEmptyArray(data.skills).length > 0;
-}
-
-function hasLanguages(data: ResumeData) {
-  return nonEmptyArray((data as any).languages).length > 0;
-}
-
-function hasExperience(data: ResumeData) {
-  return safeArray((data as any).experience).some((exp: any) => {
-    const points = nonEmptyArray(exp?.bullets?.length ? exp.bullets : exp?.points);
-    return (
-      hasText(exp?.jobTitle) ||
-      hasText(exp?.company) ||
-      hasText(exp?.startDate) ||
-      hasText(exp?.endDate) ||
-      hasText(exp?.start) ||
-      hasText(exp?.end) ||
-      points.length > 0
-    );
-  });
-}
-
-function hasEducation(data: ResumeData) {
-  return safeArray((data as any).education).some((edu: any) => {
-    const highlights = nonEmptyArray(edu?.highlights);
-    return (
-      hasText(edu?.degree) ||
-      hasText(edu?.institution) ||
-      hasText(edu?.startYear) ||
-      hasText(edu?.endYear) ||
-      highlights.length > 0
-    );
-  });
-}
-
-function hasProjects(data: ResumeData) {
-  return safeArray((data as any).projects).some((project: any) => {
-    const bullets = nonEmptyArray(project?.bullets);
-    return (
-      hasText(project?.name) ||
-      hasText(project?.techStack) ||
-      hasText(project?.link) ||
-      bullets.length > 0
-    );
-  });
 }
 
 function hasCertifications(data: ResumeData) {
@@ -122,109 +245,6 @@ function hasExtraProfileInfo(data: ResumeData) {
   );
 }
 
-function getThemePalette(theme?: string): ThemePalette {
-  switch (theme) {
-    case "slate":
-      return {
-        primary: "#334155",
-        secondary: "#475569",
-        accent: "#0F172A",
-        text: "#111827",
-        subText: "#475569",
-        border: "#CBD5E1",
-        soft: "#F8FAFC",
-        sidebarBg: "#1E293B",
-        sidebarText: "#F8FAFC",
-        chipBg: "#E2E8F0",
-        chipText: "#0F172A",
-      };
-    case "emerald":
-      return {
-        primary: "#047857",
-        secondary: "#065F46",
-        accent: "#10B981",
-        text: "#111827",
-        subText: "#4B5563",
-        border: "#D1FAE5",
-        soft: "#ECFDF5",
-        sidebarBg: "#064E3B",
-        sidebarText: "#ECFDF5",
-        chipBg: "#D1FAE5",
-        chipText: "#065F46",
-      };
-    case "purple":
-      return {
-        primary: "#6D28D9",
-        secondary: "#5B21B6",
-        accent: "#8B5CF6",
-        text: "#111827",
-        subText: "#4B5563",
-        border: "#E9D5FF",
-        soft: "#FAF5FF",
-        sidebarBg: "#4C1D95",
-        sidebarText: "#FAF5FF",
-        chipBg: "#EDE9FE",
-        chipText: "#5B21B6",
-      };
-    case "rose":
-      return {
-        primary: "#BE185D",
-        secondary: "#9D174D",
-        accent: "#F43F5E",
-        text: "#111827",
-        subText: "#4B5563",
-        border: "#FBCFE8",
-        soft: "#FFF1F2",
-        sidebarBg: "#881337",
-        sidebarText: "#FFF1F2",
-        chipBg: "#FFE4E6",
-        chipText: "#9D174D",
-      };
-    case "teal":
-      return {
-        primary: "#0D9488",
-        secondary: "#0F766E",
-        accent: "#2DD4BF",
-        text: "#111827",
-        subText: "#4B5563",
-        border: "#CCFBF1",
-        soft: "#F0FDFA",
-        sidebarBg: "#134E4A",
-        sidebarText: "#F0FDFA",
-        chipBg: "#CCFBF1",
-        chipText: "#134E4A",
-      };
-    case "amber":
-      return {
-        primary: "#B45309",
-        secondary: "#92400E",
-        accent: "#F59E0B",
-        text: "#111827",
-        subText: "#4B5563",
-        border: "#FDE68A",
-        soft: "#FFFBEB",
-        sidebarBg: "#78350F",
-        sidebarText: "#FFFBEB",
-        chipBg: "#FEF3C7",
-        chipText: "#92400E",
-      };
-    case "blue":
-    default:
-      return {
-        primary: "#2563EB",
-        secondary: "#1D4ED8",
-        accent: "#60A5FA",
-        text: "#111827",
-        subText: "#4B5563",
-        border: "#DBEAFE",
-        soft: "#EFF6FF",
-        sidebarBg: "#1E3A8A",
-        sidebarText: "#F8FAFC",
-        chipBg: "#DBEAFE",
-        chipText: "#1E3A8A",
-      };
-  }
-}
 /* -------------------- REUSABLE BLOCKS -------------------- */
 
 function Section({
@@ -271,295 +291,11 @@ function BulletItem({ text, color }: { text: string; color: string }) {
           fontSize: 9.2,
           color,
           lineHeight: 1.5,
-          textAlign: "left",
+          textAlign: "justify",
         }}
       >
         {text}
       </Text>
-    </View>
-  );
-}
-
-function ContactBlock({
-  data,
-  palette,
-  light = false,
-}: {
-  data: ResumeData;
-  palette: ThemePalette;
-  light?: boolean;
-}) {
-  const color = light ? palette.sidebarText : palette.text;
-  if (!hasContact(data)) return null;
-  return (
-    <View style={styles.sectionTight}>
-      {hasText(data.phone) && <Text style={{ ...styles.contactLine, color }}>{data.phone}</Text>}
-      {hasText(data.email) && <Text style={{ ...styles.contactLine, color }}>{data.email}</Text>}
-      {hasText(data.linkedin) && (
-        <Link src={data.linkedin!} style={{ ...styles.contactLine, ...styles.link, color }}>
-          {data.linkedin}
-        </Link>
-      )}
-      {hasText(data.address) && <Text style={{ ...styles.contactLine, color }}>{data.address}</Text>}
-    </View>
-  );
-}
-
-function SummaryBlock({ data, palette }: { data: ResumeData; palette: ThemePalette }) {
-  if (!hasSummary(data)) return null;
-  return (
-    <View
-      style={{
-        ...styles.summaryBox,
-        backgroundColor: palette.soft,
-        borderStyle: "solid",
-        borderWidth: 1,
-        borderColor: palette.border,
-      }}
-    >
-      <Text style={{ ...styles.text, color: palette.text }}>{data.summary}</Text>
-    </View>
-  );
-}
-
-function SkillsBlock({
-  data,
-  palette,
-  light = false,
-}: {
-  data: ResumeData;
-  palette: ThemePalette;
-  light?: boolean;
-}) {
-  const skills = nonEmptyArray((data as any).skills);
-  if (!skills.length) return null;
-  return (
-    <View style={styles.skillTagWrap}>
-      {skills.map((skill, index) => (
-        <Text
-          key={`${skill}-${index}`}
-          style={{
-            ...styles.skillTag,
-            backgroundColor: light ? "rgba(255,255,255,0.15)" : palette.chipBg,
-            color: light ? palette.sidebarText : palette.chipText,
-            ...(light
-              ? {
-                borderStyle: "solid" as const,
-                borderWidth: 1,
-                borderColor: "rgba(255,255,255,0.18)",
-              }
-              : {}),
-          }}
-        >
-          {skill}
-        </Text>
-      ))}
-    </View>
-  );
-}
-
-function LanguagesBlock({
-  data,
-  palette,
-  light = false,
-}: {
-  data: ResumeData;
-  palette: ThemePalette;
-  light?: boolean;
-}) {
-  const languages = nonEmptyArray((data as any).languages);
-  if (!languages.length) return null;
-  const color = light ? palette.sidebarText : palette.text;
-
-  return (
-    <View>
-      {languages.map((lang, index) => (
-        <BulletItem key={`${lang}-${index}`} text={lang} color={color} />
-      ))}
-    </View>
-  );
-}
-
-function ExperienceBlock({ data, palette }: { data: ResumeData; palette: ThemePalette }) {
-  const experience = safeArray((data as any).experience).filter((exp: any) => {
-    const points = nonEmptyArray(exp?.bullets?.length ? exp.bullets : exp?.points);
-    return (
-      hasText(exp?.jobTitle) ||
-      hasText(exp?.company) ||
-      hasText(exp?.startDate) ||
-      hasText(exp?.endDate) ||
-      hasText(exp?.start) ||
-      hasText(exp?.end) ||
-      points.length > 0
-    );
-  });
-
-  if (!experience.length) return null;
-
-  return (
-    <View>
-      {experience.map((exp: any, index: number) => {
-        const points = nonEmptyArray(exp?.bullets?.length ? exp.bullets : exp?.points);
-        const start = cleanText(exp?.startDate || exp?.start);
-        const end = cleanText(exp?.endDate || exp?.end);
-        const hasDuration = start || end;
-
-        return (
-          <View
-            key={index}
-            style={{
-              ...styles.expCard,
-              borderBottomColor: palette.border,
-              marginBottom: 10,
-              paddingBottom: 8,
-            }}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "flex-start",
-                marginBottom: 2,
-              }}
-            >
-              <View style={{ flex: 1, paddingRight: 10 }}>
-                <Text
-                  style={{
-                    ...styles.itemTitle,
-                    color: palette.primary,
-                    marginBottom: 1,
-                  }}
-                >
-                  {cleanText(exp?.jobTitle) || "Role"}
-                </Text>
-
-                {hasText(exp?.company) && (
-                  <Text
-                    style={{
-                      fontSize: 9.2,
-                      color: palette.text,
-                      lineHeight: 1.35,
-                      marginBottom: 4,
-                    }}
-                  >
-                    {cleanText(exp?.company)}
-                  </Text>
-                )}
-              </View>
-
-              {hasDuration && (
-                <Text
-                  style={{
-                    fontSize: 8.5,
-                    color: palette.subText,
-                    textAlign: "right",
-                    minWidth: 80,
-                  }}
-                >
-                  {start}
-                  {start || end ? " - " : ""}
-                  {end || "Present"}
-                </Text>
-              )}
-            </View>
-
-            {points.map((point, i) => (
-              <BulletItem key={i} text={point} color={palette.text} />
-            ))}
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
-function EducationBlock({ data, palette }: { data: ResumeData; palette: ThemePalette }) {
-  const education = safeArray((data as any).education).filter((edu: any) => {
-    const highlights = nonEmptyArray(edu?.highlights);
-    return (
-      hasText(edu?.degree) ||
-      hasText(edu?.institution) ||
-      hasText(edu?.startYear) ||
-      hasText(edu?.endYear) ||
-      highlights.length > 0
-    );
-  });
-
-  if (!education.length) return null;
-
-  return (
-    <View>
-      {education.map((edu: any, index: number) => {
-        const highlights = nonEmptyArray(edu?.highlights);
-        const startYear = cleanText(edu?.startYear);
-        const endYear = cleanText(edu?.endYear);
-        const hasDuration = startYear || endYear || edu?.currentlyStudying;
-
-        return (
-          <View
-            key={index}
-            style={{
-              ...styles.eduCard,
-              borderBottomColor: palette.border,
-              marginBottom: 10,
-              paddingBottom: 8,
-            }}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "flex-start",
-                marginBottom: 2,
-              }}
-            >
-              <View style={{ flex: 1, paddingRight: 10 }}>
-                <Text
-                  style={{
-                    ...styles.itemTitle,
-                    color: palette.primary,
-                    marginBottom: 1,
-                  }}
-                >
-                  {cleanText(edu?.degree) || "Degree"}
-                </Text>
-
-                {hasText(edu?.institution) && (
-                  <Text
-                    style={{
-                      fontSize: 9.2,
-                      color: palette.text,
-                      lineHeight: 1.35,
-                      marginBottom: 4,
-                    }}
-                  >
-                    {cleanText(edu?.institution)}
-                  </Text>
-                )}
-              </View>
-
-              {hasDuration && (
-                <Text
-                  style={{
-                    fontSize: 8.5,
-                    color: palette.subText,
-                    textAlign: "right",
-                    minWidth: 70,
-                  }}
-                >
-                  {startYear}
-                  {startYear || endYear || edu?.currentlyStudying ? " - " : ""}
-                  {endYear || (edu?.currentlyStudying ? "Present" : "")}
-                </Text>
-              )}
-            </View>
-
-            {highlights.map((highlight, i) => (
-              <BulletItem key={i} text={highlight} color={palette.text} />
-            ))}
-          </View>
-        );
-      })}
     </View>
   );
 }
@@ -609,1390 +345,9 @@ function ProjectsBlock({ data, palette }: { data: ResumeData; palette: ThemePale
   );
 }
 
-function HeaderIntro({
-  data,
-  palette,
-  centered = false,
-  showImage = true,
-}: {
-  data: ResumeData;
-  palette: ThemePalette;
-  centered?: boolean;
-  showImage?: boolean;
-}) {
-  return (
-    <View style={centered ? styles.centerHeader : undefined}>
-      {showImage && (data as any).profileImage && (
-        <Image src={(data as any).profileImage} style={centered ? styles.heroImage : styles.image} />
-      )}
-      <Text style={{ ...styles.name, color: palette.primary, ...(centered ? styles.centerText : {}) }}>
-        {cleanText(data.fullName) || "Your Name"}
-      </Text>
-      <Text style={{ ...styles.role, color: palette.subText, ...(centered ? styles.centerText : {}) }}>
-        {cleanText(data.role) || "Your Role"}
-      </Text>
-    </View>
-  );
-}
-
-/* =====================================
-   TEMPLATE 1 — Classic Sidebar
-   ===================================== */
-function ClassicSidebarTemplate({ data }: { data: ResumeData }) {
-  const palette = getThemePalette((data as any).theme);
-  return (
-    <Document>
-      <Page size="A4" style={getBasePageStyle(data, palette)}>
-        <View style={styles.row}>
-          <View style={styles.leftCol}>
-            <View style={{ ...styles.sidebarBox, backgroundColor: palette.sidebarBg }}>
-              {(data as any).profileImage && <Image src={(data as any).profileImage} style={styles.image} />}
-              {hasContact(data) && (
-                <>
-                  <Text style={{ ...styles.heading, color: palette.sidebarText }}>Contact</Text>
-                  <ContactBlock data={data} palette={palette} light />
-                </>
-              )}
-              {hasContact(data) && (hasSkills(data) || hasLanguages(data)) && (
-                <View style={{ ...styles.divider, backgroundColor: "rgba(255,255,255,0.18)" }} />
-              )}
-              {hasSkills(data) && (
-                <>
-                  <Text style={{ ...styles.heading, color: palette.sidebarText }}>Skills</Text>
-                  <SkillsBlock data={data} palette={palette} light />
-                </>
-              )}
-              {hasSkills(data) && hasLanguages(data) && (
-                <View style={{ ...styles.divider, backgroundColor: "rgba(255,255,255,0.18)" }} />
-              )}
-              {hasLanguages(data) && (
-                <>
-                  <Text style={{ ...styles.heading, color: palette.sidebarText }}>Languages</Text>
-                  <LanguagesBlock data={data} palette={palette} light />
-                </>
-              )}
-            </View>
-          </View>
-          <View style={styles.rightCol}>
-            <HeaderIntro data={data} palette={palette} showImage={false} />
-            <View style={{ ...styles.divider, backgroundColor: palette.border }} />
-            {hasSummary(data) && (
-              <Section title="Summary" palette={palette}>
-                <SummaryBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasExperience(data) && (
-              <Section title="Experience" palette={palette}>
-                <ExperienceBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasProjects(data) && (
-              <Section title="Projects" palette={palette}>
-                <ProjectsBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasEducation(data) && (
-              <Section title="Education" palette={palette}>
-                <EducationBlock data={data} palette={palette} />
-              </Section>
-            )}
-          </View>
-        </View>
-      </Page>
-    </Document>
-  );
-}
-
-/* TEMPLATE 2 */
-function AccentHeaderTemplate({ data }: { data: ResumeData }) {
-  const palette = getThemePalette((data as any).theme);
-  return (
-    <Document>
-      <Page size="A4" style={getBasePageStyle(data, palette)}>
-        <View style={{ ...styles.headerCard, backgroundColor: palette.primary }}>
-          <Text style={{ ...styles.name, color: "#FFFFFF" }}>{cleanText(data.fullName) || "Your Name"}</Text>
-          <Text style={{ ...styles.role, color: "#E5E7EB" }}>{cleanText(data.role) || "Your Role"}</Text>
-          {hasContact(data) && (
-            <View style={{ marginTop: 8 }}>
-              {hasText(data.phone) && <Text style={{ ...styles.smallText, color: "#F3F4F6" }}>{data.phone}</Text>}
-              {hasText(data.email) && <Text style={{ ...styles.smallText, color: "#F3F4F6" }}>{data.email}</Text>}
-              {hasText(data.linkedin) && <Text style={{ ...styles.smallText, color: "#F3F4F6" }}>{data.linkedin}</Text>}
-            </View>
-          )}
-        </View>
-        {hasSummary(data) && (
-          <Section title="Summary" palette={palette}>
-            <SummaryBlock data={data} palette={palette} />
-          </Section>
-        )}
-        {hasExperience(data) && (
-          <Section title="Experience" palette={palette}>
-            <ExperienceBlock data={data} palette={palette} />
-          </Section>
-        )}
-        <View style={styles.row}>
-          <View style={{ width: "50%", paddingRight: 8 }}>
-            {hasSkills(data) && (
-              <Section title="Skills" palette={palette}>
-                <SkillsBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasLanguages(data) && (
-              <Section title="Languages" palette={palette}>
-                <LanguagesBlock data={data} palette={palette} />
-              </Section>
-            )}
-          </View>
-          <View style={{ width: "50%", paddingLeft: 8 }}>
-            {hasProjects(data) && (
-              <Section title="Projects" palette={palette}>
-                <ProjectsBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasEducation(data) && (
-              <Section title="Education" palette={palette}>
-                <EducationBlock data={data} palette={palette} />
-              </Section>
-            )}
-          </View>
-        </View>
-      </Page>
-    </Document>
-  );
-}
-
-/* TEMPLATE 3 */
-function SplitTwoColumnTemplate({ data }: { data: ResumeData }) {
-  const palette = getThemePalette((data as any).theme);
-  return (
-    <Document>
-      <Page size="A4" style={getBasePageStyle(data, palette)}>
-        <HeaderIntro data={data} palette={palette} />
-        <View style={{ ...styles.divider, backgroundColor: palette.border }} />
-        <View style={styles.row}>
-          <View style={styles.leftCol}>
-            {hasContact(data) && (
-              <Section title="Contact" palette={palette}>
-                <ContactBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasSkills(data) && (
-              <Section title="Skills" palette={palette}>
-                <SkillsBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasLanguages(data) && (
-              <Section title="Languages" palette={palette}>
-                <LanguagesBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasEducation(data) && (
-              <Section title="Education" palette={palette}>
-                <EducationBlock data={data} palette={palette} />
-              </Section>
-            )}
-          </View>
-          <View style={styles.rightCol}>
-            {hasSummary(data) && (
-              <Section title="Summary" palette={palette}>
-                <SummaryBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasExperience(data) && (
-              <Section title="Experience" palette={palette}>
-                <ExperienceBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasProjects(data) && (
-              <Section title="Projects" palette={palette}>
-                <ProjectsBlock data={data} palette={palette} />
-              </Section>
-            )}
-          </View>
-        </View>
-      </Page>
-    </Document>
-  );
-}
-
-/* TEMPLATE 4 */
-function TimelineTemplate({ data }: { data: ResumeData }) {
-  const palette = getThemePalette((data as any).theme);
-  const experience = safeArray((data as any).experience).filter((exp: any) => {
-    const points = nonEmptyArray(exp?.bullets?.length ? exp.bullets : exp?.points);
-    return (
-      hasText(exp?.jobTitle) ||
-      hasText(exp?.company) ||
-      hasText(exp?.startDate) ||
-      hasText(exp?.endDate) ||
-      hasText(exp?.start) ||
-      hasText(exp?.end) ||
-      points.length > 0
-    );
-  });
-  return (
-    <Document>
-      <Page size="A4" style={getBasePageStyle(data, palette)}>
-        <HeaderIntro data={data} palette={palette} centered />
-        <View style={{ ...styles.divider, backgroundColor: palette.border }} />
-        {hasSummary(data) && (
-          <Section title="Summary" palette={palette}>
-            <SummaryBlock data={data} palette={palette} />
-          </Section>
-        )}
-        {experience.length > 0 && (
-          <Section title="Experience Timeline" palette={palette}>
-            <View>
-              {experience.map((exp: any, index: number) => {
-                const points = nonEmptyArray(exp.bullets?.length ? exp.bullets : exp.points);
-                const start = cleanText(exp.startDate || exp.start);
-                const end = cleanText(exp.endDate || exp.end);
-                return (
-                  <View key={index} style={{ ...styles.timelineItem, borderLeftColor: palette.primary }}>
-                    <Text style={{ ...styles.itemTitle, color: palette.primary }}>
-                      {cleanText(exp.jobTitle) || "Role"}
-                      {hasText(exp.company) ? ` | ${exp.company}` : ""}
-                    </Text>
-                    {(start || end) && (
-                      <Text style={{ ...styles.subText, color: palette.subText }}>
-                        {start}
-                        {start || end ? " - " : ""}
-                        {end || "Present"}
-                      </Text>
-                    )}
-                    {points.map((point, i) => (
-                      <BulletItem key={i} text={point} color={palette.text} />
-                    ))}
-                  </View>
-                );
-              })}
-            </View>
-          </Section>
-        )}
-        <View style={styles.row}>
-          <View style={{ width: "50%", paddingRight: 8 }}>
-            {hasProjects(data) && (
-              <Section title="Projects" palette={palette}>
-                <ProjectsBlock data={data} palette={palette} />
-              </Section>
-            )}
-          </View>
-          <View style={{ width: "50%", paddingLeft: 8 }}>
-            {hasEducation(data) && (
-              <Section title="Education" palette={palette}>
-                <EducationBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasSkills(data) && (
-              <Section title="Skills" palette={palette}>
-                <SkillsBlock data={data} palette={palette} />
-              </Section>
-            )}
-          </View>
-        </View>
-      </Page>
-    </Document>
-  );
-}
-
-/* TEMPLATE 5 */
-function MinimalCleanTemplate({ data }: { data: ResumeData }) {
-  const palette = getThemePalette((data as any).theme);
-  return (
-    <Document>
-      <Page size="A4" style={getBasePageStyle(data, palette)}>
-        <View style={{ ...styles.accentStrip, backgroundColor: palette.primary }} />
-        <HeaderIntro data={data} palette={palette} />
-        <View style={{ ...styles.divider, backgroundColor: palette.border }} />
-        {hasSummary(data) && (
-          <Section title="Summary" palette={palette}>
-            <Text style={{ ...styles.text, color: palette.text }}>{data.summary}</Text>
-          </Section>
-        )}
-        {hasExperience(data) && (
-          <Section title="Experience" palette={palette}>
-            <ExperienceBlock data={data} palette={palette} />
-          </Section>
-        )}
-        {hasProjects(data) && (
-          <Section title="Projects" palette={palette}>
-            <ProjectsBlock data={data} palette={palette} />
-          </Section>
-        )}
-        <View style={styles.row}>
-          <View style={{ width: "50%", paddingRight: 8 }}>
-            {hasEducation(data) && (
-              <Section title="Education" palette={palette}>
-                <EducationBlock data={data} palette={palette} />
-              </Section>
-            )}
-          </View>
-          <View style={{ width: "50%", paddingLeft: 8 }}>
-            {hasSkills(data) && (
-              <Section title="Skills" palette={palette}>
-                <SkillsBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasLanguages(data) && (
-              <Section title="Languages" palette={palette}>
-                <LanguagesBlock data={data} palette={palette} />
-              </Section>
-            )}
-          </View>
-        </View>
-      </Page>
-    </Document>
-  );
-}
-
-/* TEMPLATE 6 */
-function ModernCorporateTemplate({ data }: { data: ResumeData }) {
-  const palette = getThemePalette((data as any).theme);
-  return (
-    <Document>
-      <Page size="A4" style={getBasePageStyle(data, palette)}>
-        <View
-          style={{
-            ...styles.headerCard,
-            backgroundColor: palette.soft,
-            borderStyle: "solid",
-            borderWidth: 1,
-            borderColor: palette.border,
-          }}
-        >
-          <View style={styles.row}>
-            <View style={{ width: "72%", paddingRight: 10 }}>
-              <Text style={{ ...styles.name, color: palette.primary }}>{cleanText(data.fullName) || "Your Name"}</Text>
-              <Text style={{ ...styles.role, color: palette.subText }}>{cleanText(data.role) || "Your Role"}</Text>
-              {hasContact(data) && (
-                <View style={{ marginTop: 8 }}>
-                  {hasText(data.phone) && <Text style={{ ...styles.smallText, color: palette.text }}>Phone: {data.phone}</Text>}
-                  {hasText(data.email) && <Text style={{ ...styles.smallText, color: palette.text }}>Email: {data.email}</Text>}
-                  {hasText(data.linkedin) && <Text style={{ ...styles.smallText, color: palette.text }}>LinkedIn: {data.linkedin}</Text>}
-                  {hasText(data.address) && <Text style={{ ...styles.smallText, color: palette.text }}>Address: {data.address}</Text>}
-                </View>
-              )}
-            </View>
-            <View style={{ width: "28%", alignItems: "flex-end" }}>
-              {(data as any).profileImage && <Image src={(data as any).profileImage} style={styles.heroImage} />}
-            </View>
-          </View>
-        </View>
-        <View style={styles.row}>
-          <View style={{ width: "65%", paddingRight: 10 }}>
-            {hasSummary(data) && (
-              <Section title="Professional Summary" palette={palette}>
-                <SummaryBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasExperience(data) && (
-              <Section title="Work Experience" palette={palette}>
-                <ExperienceBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasProjects(data) && (
-              <Section title="Projects" palette={palette}>
-                <ProjectsBlock data={data} palette={palette} />
-              </Section>
-            )}
-          </View>
-          <View style={{ width: "35%", paddingLeft: 10 }}>
-            {hasSkills(data) && (
-              <Section title="Skills" palette={palette}>
-                <SkillsBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasEducation(data) && (
-              <Section title="Education" palette={palette}>
-                <EducationBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasLanguages(data) && (
-              <Section title="Languages" palette={palette}>
-                <LanguagesBlock data={data} palette={palette} />
-              </Section>
-            )}
-          </View>
-        </View>
-      </Page>
-    </Document>
-  );
-}
-
-/* TEMPLATE 7 */
-function AtsCompactTemplate({ data }: { data: ResumeData }) {
-  const palette = getThemePalette((data as any).theme);
-  return (
-    <Document>
-      <Page size="A4" style={getBasePageStyle(data, palette)}>
-        <Text style={{ ...styles.name, color: palette.text }}>{cleanText(data.fullName) || "Your Name"}</Text>
-        <Text style={{ ...styles.role, color: palette.subText }}>{cleanText(data.role) || "Your Role"}</Text>
-        {hasContact(data) && (
-          <Text style={{ ...styles.smallText, color: palette.text, marginTop: 5 }}>
-            {[data.phone, data.email, data.linkedin, data.address]
-              .map((v) => cleanText(v))
-              .filter(Boolean)
-              .join(" | ")}
-          </Text>
-        )}
-        <View style={{ ...styles.divider, backgroundColor: palette.border }} />
-        {hasSummary(data) && (
-          <Section title="Summary" palette={palette}>
-            <Text style={{ ...styles.text, color: palette.text }}>{data.summary}</Text>
-          </Section>
-        )}
-        {hasExperience(data) && (
-          <Section title="Experience" palette={palette}>
-            <ExperienceBlock data={data} palette={palette} />
-          </Section>
-        )}
-        {hasProjects(data) && (
-          <Section title="Projects" palette={palette}>
-            <ProjectsBlock data={data} palette={palette} />
-          </Section>
-        )}
-        {hasEducation(data) && (
-          <Section title="Education" palette={palette}>
-            <EducationBlock data={data} palette={palette} />
-          </Section>
-        )}
-        {hasSkills(data) && (
-          <Section title="Skills" palette={palette}>
-            <Text style={{ ...styles.text, color: palette.text }}>{nonEmptyArray((data as any).skills).join(", ")}</Text>
-          </Section>
-        )}
-        {hasLanguages(data) && (
-          <Section title="Languages" palette={palette}>
-            <Text style={{ ...styles.text, color: palette.text }}>
-              {nonEmptyArray((data as any).languages).join(", ")}
-            </Text>
-          </Section>
-        )}
-      </Page>
-    </Document>
-  );
-}
-
-/* TEMPLATE 8 */
-function ElegantSidebarTemplate({ data }: { data: ResumeData }) {
-  const palette = getThemePalette((data as any).theme);
-  return (
-    <Document>
-      <Page size="A4" style={getBasePageStyle(data, palette)}>
-        <View style={styles.row}>
-          <View style={{ width: "30%", paddingRight: 14 }}>
-            <View
-              style={{
-                ...styles.sidebarBox,
-                backgroundColor: palette.soft,
-                borderStyle: "solid",
-                borderWidth: 1,
-                borderColor: palette.border,
-              }}
-            >
-              {(data as any).profileImage && <Image src={(data as any).profileImage} style={styles.image} />}
-              {hasContact(data) && (
-                <Section title="Contact" palette={palette}>
-                  <ContactBlock data={data} palette={palette} />
-                </Section>
-              )}
-              {hasSkills(data) && (
-                <Section title="Skills" palette={palette}>
-                  <SkillsBlock data={data} palette={palette} />
-                </Section>
-              )}
-              {hasLanguages(data) && (
-                <Section title="Languages" palette={palette}>
-                  <LanguagesBlock data={data} palette={palette} />
-                </Section>
-              )}
-            </View>
-          </View>
-          <View style={{ width: "70%", paddingLeft: 14 }}>
-            <Text style={{ ...styles.name, color: palette.primary }}>{cleanText(data.fullName) || "Your Name"}</Text>
-            <Text style={{ ...styles.role, color: palette.subText }}>{cleanText(data.role) || "Your Role"}</Text>
-            <View style={{ ...styles.divider, backgroundColor: palette.border }} />
-            {hasSummary(data) && (
-              <Section title="Profile Summary" palette={palette}>
-                <SummaryBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasExperience(data) && (
-              <Section title="Experience" palette={palette}>
-                <ExperienceBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasProjects(data) && (
-              <Section title="Projects" palette={palette}>
-                <ProjectsBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasEducation(data) && (
-              <Section title="Education" palette={palette}>
-                <EducationBlock data={data} palette={palette} />
-              </Section>
-            )}
-          </View>
-        </View>
-      </Page>
-    </Document>
-  );
-}
-
-/* TEMPLATE 9 */
-function ModernLeftBarTemplate({ data }: { data: ResumeData }) {
-  const palette = getThemePalette((data as any).theme);
-  return (
-    <Document>
-      <Page size="A4" style={getBasePageStyle(data, palette)}>
-        <View style={styles.row}>
-          <View style={{ width: "28%", backgroundColor: palette.primary, padding: 18, minHeight: "100%" }}>
-            <Text style={{ ...styles.name, color: "#fff", marginBottom: 18 }}>{cleanText(data.fullName) || "Your Name"}</Text>
-            {hasContact(data) && <ContactBlock data={data} palette={palette} light />}
-            {hasSkills(data) && <SkillsBlock data={data} palette={palette} light />}
-            {hasLanguages(data) && (
-              <>
-                <View style={{ ...styles.divider, backgroundColor: "rgba(255,255,255,0.18)" }} />
-                <LanguagesBlock data={data} palette={palette} light />
-              </>
-            )}
-          </View>
-          <View style={{ width: "72%", padding: 24 }}>
-            <Text style={{ ...styles.role, color: palette.primary, fontSize: 16, marginBottom: 12 }}>
-              {cleanText(data.role) || "Your Role"}
-            </Text>
-            {hasSummary(data) && <SummaryBlock data={data} palette={palette} />}
-            {hasExperience(data) && (
-              <Section title="Experience" palette={palette}>
-                <ExperienceBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasProjects(data) && (
-              <Section title="Projects" palette={palette}>
-                <ProjectsBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasEducation(data) && (
-              <Section title="Education" palette={palette}>
-                <EducationBlock data={data} palette={palette} />
-              </Section>
-            )}
-          </View>
-        </View>
-      </Page>
-    </Document>
-  );
-}
-
-/* TEMPLATE 10 */
-function SimpleHeaderTemplate({ data }: { data: ResumeData }) {
-  const palette = getThemePalette((data as any).theme);
-  return (
-    <Document>
-      <Page size="A4" style={getBasePageStyle(data, palette)}>
-        <View style={{ ...styles.headerCard, backgroundColor: palette.primary, marginBottom: 24 }}>
-          <Text style={{ ...styles.name, color: "#fff" }}>{cleanText(data.fullName) || "Your Name"}</Text>
-          <Text style={{ ...styles.role, color: "#E0E7FF" }}>{cleanText(data.role) || "Your Role"}</Text>
-        </View>
-        {hasSummary(data) && (
-          <Section title="Summary" palette={palette}>
-            <SummaryBlock data={data} palette={palette} />
-          </Section>
-        )}
-        {hasExperience(data) && (
-          <Section title="Experience" palette={palette}>
-            <ExperienceBlock data={data} palette={palette} />
-          </Section>
-        )}
-        {hasProjects(data) && (
-          <Section title="Projects" palette={palette}>
-            <ProjectsBlock data={data} palette={palette} />
-          </Section>
-        )}
-        {hasEducation(data) && (
-          <Section title="Education" palette={palette}>
-            <EducationBlock data={data} palette={palette} />
-          </Section>
-        )}
-        {hasSkills(data) && (
-          <Section title="Skills" palette={palette}>
-            <SkillsBlock data={data} palette={palette} />
-          </Section>
-        )}
-        {hasLanguages(data) && (
-          <Section title="Languages" palette={palette}>
-            <LanguagesBlock data={data} palette={palette} />
-          </Section>
-        )}
-      </Page>
-    </Document>
-  );
-}
-
-/* TEMPLATE 11 */
-function CompactProTemplate({ data }: { data: ResumeData }) {
-  const palette = getThemePalette((data as any).theme);
-  return (
-    <Document>
-      <Page size="A4" style={getBasePageStyle(data, palette)}>
-        <View
-          style={{
-            backgroundColor: palette.primary,
-            padding: 16,
-            marginBottom: 14,
-            flexDirection: "row",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <View>
-            <Text style={{ ...styles.name, color: "#fff", fontSize: 20 }}>{cleanText(data.fullName) || "Your Name"}</Text>
-            <Text style={{ ...styles.role, color: "#E5E7EB", marginTop: 2 }}>{cleanText(data.role) || "Role"}</Text>
-          </View>
-          <View style={{ alignItems: "flex-end" }}>
-            {hasText(data.email) && <Text style={{ ...styles.smallText, color: "#F3F4F6" }}>{data.email}</Text>}
-            {hasText(data.phone) && <Text style={{ ...styles.smallText, color: "#F3F4F6" }}>{data.phone}</Text>}
-            {hasText(data.linkedin) && <Text style={{ ...styles.smallText, color: "#F3F4F6" }}>{data.linkedin}</Text>}
-          </View>
-        </View>
-        {hasSummary(data) && (
-          <Section title="About" palette={palette}>
-            <Text style={{ ...styles.text, color: palette.text }}>{data.summary}</Text>
-          </Section>
-        )}
-        {hasExperience(data) && (
-          <Section title="Experience" palette={palette}>
-            <ExperienceBlock data={data} palette={palette} />
-          </Section>
-        )}
-        <View style={styles.row}>
-          <View style={{ width: "34%", paddingRight: 8 }}>
-            {hasSkills(data) && (
-              <Section title="Skills" palette={palette}>
-                <SkillsBlock data={data} palette={palette} />
-              </Section>
-            )}
-          </View>
-          <View style={{ width: "33%", paddingHorizontal: 8 }}>
-            {hasEducation(data) && (
-              <Section title="Education" palette={palette}>
-                <EducationBlock data={data} palette={palette} />
-              </Section>
-            )}
-          </View>
-          <View style={{ width: "33%", paddingLeft: 8 }}>
-            {hasProjects(data) && (
-              <Section title="Projects" palette={palette}>
-                <ProjectsBlock data={data} palette={palette} />
-              </Section>
-            )}
-          </View>
-        </View>
-        {hasLanguages(data) && (
-          <Section title="Languages" palette={palette}>
-            <LanguagesBlock data={data} palette={palette} />
-          </Section>
-        )}
-      </Page>
-    </Document>
-  );
-}
-
-/* TEMPLATE 12 */
-function BoldNameTemplate({ data }: { data: ResumeData }) {
-  const palette = getThemePalette((data as any).theme);
-  return (
-    <Document>
-      <Page size="A4" style={getBasePageStyle(data, palette)}>
-        <View style={{ marginBottom: 16 }}>
-          <Text style={{ fontSize: 30, fontWeight: 700, color: palette.primary, letterSpacing: 1 }}>
-            {cleanText(data.fullName) || "Your Name"}
-          </Text>
-          <Text style={{ ...styles.role, color: palette.subText, fontSize: 13 }}>{cleanText(data.role) || "Your Role"}</Text>
-          <View style={{ height: 3, backgroundColor: palette.primary, marginTop: 8, width: "100%" }} />
-          {hasContact(data) && (
-            <Text style={{ ...styles.smallText, color: palette.subText, marginTop: 5 }}>
-              {[data.phone, data.email, data.linkedin, data.address]
-                .map((v) => cleanText(v))
-                .filter(Boolean)
-                .join("  •  ")}
-            </Text>
-          )}
-        </View>
-        <View style={styles.row}>
-          <View style={{ width: "65%", paddingRight: 12 }}>
-            {hasSummary(data) && (
-              <Section title="Profile" palette={palette}>
-                <SummaryBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasExperience(data) && (
-              <Section title="Experience" palette={palette}>
-                <ExperienceBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasProjects(data) && (
-              <Section title="Projects" palette={palette}>
-                <ProjectsBlock data={data} palette={palette} />
-              </Section>
-            )}
-          </View>
-          <View style={{ width: "35%", paddingLeft: 12 }}>
-            {hasSkills(data) && (
-              <Section title="Skills" palette={palette}>
-                <SkillsBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasEducation(data) && (
-              <Section title="Education" palette={palette}>
-                <EducationBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasLanguages(data) && (
-              <Section title="Languages" palette={palette}>
-                <LanguagesBlock data={data} palette={palette} />
-              </Section>
-            )}
-          </View>
-        </View>
-      </Page>
-    </Document>
-  );
-}
-
-/* TEMPLATE 13 */
-function InfographicBarTemplate({ data }: { data: ResumeData }) {
-  const palette = getThemePalette((data as any).theme);
-  const skills = nonEmptyArray((data as any).skills);
-  return (
-    <Document>
-      <Page size="A4" style={getBasePageStyle(data, palette)}>
-        <View style={styles.row}>
-          <View style={{ width: "35%", backgroundColor: palette.sidebarBg, padding: 16, minHeight: "100%" }}>
-            {(data as any).profileImage && <Image src={(data as any).profileImage} style={styles.image} />}
-            <Text style={{ ...styles.name, color: palette.sidebarText, fontSize: 16, marginBottom: 4 }}>
-              {cleanText(data.fullName) || "Your Name"}
-            </Text>
-            <Text style={{ ...styles.role, color: palette.sidebarText, opacity: 0.75, marginBottom: 12 }}>
-              {cleanText(data.role) || "Role"}
-            </Text>
-            {hasContact(data) && (
-              <>
-                <Text style={{ ...styles.heading, color: palette.sidebarText, fontSize: 9 }}>Contact</Text>
-                <ContactBlock data={data} palette={palette} light />
-              </>
-            )}
-            <View style={{ ...styles.divider, backgroundColor: "rgba(255,255,255,0.2)" }} />
-            {skills.length > 0 && (
-              <>
-                <Text style={{ ...styles.heading, color: palette.sidebarText, fontSize: 9 }}>Skills</Text>
-                {skills.map((skill, i) => (
-                  <View key={i} style={{ marginBottom: 5 }}>
-                    <Text style={{ ...styles.smallText, color: palette.sidebarText, marginBottom: 2 }}>{skill}</Text>
-                    <View style={{ height: 4, backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 2 }}>
-                      <View
-                        style={{
-                          height: 4,
-                          width: `${Math.min(95, 65 + ((i * 7) % 35))}%`,
-                          backgroundColor: palette.accent,
-                          borderRadius: 2,
-                        }}
-                      />
-                    </View>
-                  </View>
-                ))}
-              </>
-            )}
-            {hasLanguages(data) && (
-              <>
-                <View style={{ ...styles.divider, backgroundColor: "rgba(255,255,255,0.2)" }} />
-                <Text style={{ ...styles.heading, color: palette.sidebarText, fontSize: 9 }}>Languages</Text>
-                <LanguagesBlock data={data} palette={palette} light />
-              </>
-            )}
-          </View>
-          <View style={{ width: "65%", padding: 18 }}>
-            {hasSummary(data) && (
-              <Section title="Summary" palette={palette}>
-                <SummaryBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasExperience(data) && (
-              <Section title="Experience" palette={palette}>
-                <ExperienceBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasProjects(data) && (
-              <Section title="Projects" palette={palette}>
-                <ProjectsBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasEducation(data) && (
-              <Section title="Education" palette={palette}>
-                <EducationBlock data={data} palette={palette} />
-              </Section>
-            )}
-          </View>
-        </View>
-      </Page>
-    </Document>
-  );
-}
-
-/* TEMPLATE 14 */
-function TopContactBarTemplate({ data }: { data: ResumeData }) {
-  const palette = getThemePalette((data as any).theme);
-  return (
-    <Document>
-      <Page size="A4" style={getBasePageStyle(data, palette)}>
-        <View style={{ backgroundColor: palette.soft, padding: 14, marginBottom: 10, borderRadius: 8 }}>
-          <Text style={{ ...styles.name, color: palette.primary }}>{cleanText(data.fullName) || "Your Name"}</Text>
-          <Text style={{ ...styles.role, color: palette.subText }}>{cleanText(data.role) || "Role"}</Text>
-          {hasContact(data) && (
-            <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 6 }}>
-              {hasText(data.email) && <Text style={{ ...styles.smallText, color: palette.secondary, marginRight: 12 }}>{data.email}</Text>}
-              {hasText(data.phone) && <Text style={{ ...styles.smallText, color: palette.secondary, marginRight: 12 }}>{data.phone}</Text>}
-              {hasText(data.linkedin) && <Text style={{ ...styles.smallText, color: palette.secondary, marginRight: 12 }}>{data.linkedin}</Text>}
-              {hasText(data.address) && <Text style={{ ...styles.smallText, color: palette.secondary, marginRight: 12 }}>{data.address}</Text>}
-            </View>
-          )}
-        </View>
-        {hasSummary(data) && (
-          <Section title="Summary" palette={palette}>
-            <SummaryBlock data={data} palette={palette} />
-          </Section>
-        )}
-        <View style={styles.row}>
-          <View style={{ width: "60%", paddingRight: 10 }}>
-            {hasExperience(data) && (
-              <Section title="Experience" palette={palette}>
-                <ExperienceBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasProjects(data) && (
-              <Section title="Projects" palette={palette}>
-                <ProjectsBlock data={data} palette={palette} />
-              </Section>
-            )}
-          </View>
-          <View style={{ width: "40%", paddingLeft: 10 }}>
-            {hasEducation(data) && (
-              <Section title="Education" palette={palette}>
-                <EducationBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasSkills(data) && (
-              <Section title="Skills" palette={palette}>
-                <SkillsBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasLanguages(data) && (
-              <Section title="Languages" palette={palette}>
-                <LanguagesBlock data={data} palette={palette} />
-              </Section>
-            )}
-          </View>
-        </View>
-      </Page>
-    </Document>
-  );
-}
-
-/* TEMPLATE 15 */
-function ExecutiveTemplate({ data }: { data: ResumeData }) {
-  const palette = getThemePalette((data as any).theme);
-  return (
-    <Document>
-      <Page size="A4" style={getBasePageStyle(data, palette)}>
-        <View style={{ height: 6, backgroundColor: palette.primary, marginBottom: 14 }} />
-        <View style={styles.row}>
-          <View style={{ width: "68%", paddingRight: 16 }}>
-            <Text style={{ fontSize: 26, fontWeight: 700, color: palette.primary }}>{cleanText(data.fullName) || "Your Name"}</Text>
-            <Text style={{ ...styles.role, color: palette.subText, fontSize: 12 }}>{cleanText(data.role) || "Your Role"}</Text>
-            {hasContact(data) && (
-              <Text style={{ ...styles.smallText, color: palette.subText, marginTop: 4 }}>
-                {[data.phone, data.email, data.linkedin]
-                  .map((v) => cleanText(v))
-                  .filter(Boolean)
-                  .join("  |  ")}
-              </Text>
-            )}
-            <View style={{ ...styles.divider, backgroundColor: palette.border }} />
-            {hasSummary(data) && (
-              <Section title="Executive Summary" palette={palette}>
-                <SummaryBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasExperience(data) && (
-              <Section title="Professional Experience" palette={palette}>
-                <ExperienceBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasProjects(data) && (
-              <Section title="Key Projects" palette={palette}>
-                <ProjectsBlock data={data} palette={palette} />
-              </Section>
-            )}
-          </View>
-          <View
-            style={{
-              width: "32%",
-              paddingLeft: 16,
-              borderLeftWidth: 1,
-              borderLeftColor: palette.border,
-              borderLeftStyle: "solid",
-            }}
-          >
-            {(data as any).profileImage && <Image src={(data as any).profileImage} style={{ ...styles.heroImage, marginBottom: 14 }} />}
-            {hasSkills(data) && (
-              <Section title="Core Skills" palette={palette}>
-                <SkillsBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasEducation(data) && (
-              <Section title="Education" palette={palette}>
-                <EducationBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasLanguages(data) && (
-              <Section title="Languages" palette={palette}>
-                <LanguagesBlock data={data} palette={palette} />
-              </Section>
-            )}
-          </View>
-        </View>
-      </Page>
-    </Document>
-  );
-}
-
-/* TEMPLATE 16 */
-function TwoToneSplitTemplate({ data }: { data: ResumeData }) {
-  const palette = getThemePalette((data as any).theme);
-  return (
-    <Document>
-      <Page size="A4" style={{ ...getBasePageStyle(data, palette), padding: 0 }}>
-        <View style={styles.row}>
-          <View style={{ width: "38%", backgroundColor: palette.soft, padding: 22, minHeight: "100%" }}>
-            {(data as any).profileImage && <Image src={(data as any).profileImage} style={{ ...styles.heroImage, marginBottom: 14 }} />}
-            <Text style={{ fontSize: 18, fontWeight: 700, color: palette.primary, marginBottom: 2 }}>
-              {cleanText(data.fullName) || "Your Name"}
-            </Text>
-            <Text style={{ ...styles.role, color: palette.subText, marginBottom: 10 }}>{cleanText(data.role) || "Your Role"}</Text>
-            <View style={{ height: 2, backgroundColor: palette.primary, marginBottom: 10 }} />
-            {hasContact(data) && (
-              <Section title="Contact" palette={palette}>
-                <ContactBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasSkills(data) && (
-              <Section title="Skills" palette={palette}>
-                <SkillsBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasLanguages(data) && (
-              <Section title="Languages" palette={palette}>
-                <LanguagesBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasEducation(data) && (
-              <Section title="Education" palette={palette}>
-                <EducationBlock data={data} palette={palette} />
-              </Section>
-            )}
-          </View>
-          <View style={{ width: "62%", backgroundColor: "#fff", padding: 22 }}>
-            {hasSummary(data) && (
-              <Section title="About Me" palette={palette}>
-                <SummaryBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasExperience(data) && (
-              <Section title="Experience" palette={palette}>
-                <ExperienceBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasProjects(data) && (
-              <Section title="Projects" palette={palette}>
-                <ProjectsBlock data={data} palette={palette} />
-              </Section>
-            )}
-          </View>
-        </View>
-      </Page>
-    </Document>
-  );
-}
-
-/* TEMPLATE 17 */
-function MinimalistLineTemplate({ data }: { data: ResumeData }) {
-  const palette = getThemePalette((data as any).theme);
-  return (
-    <Document>
-      <Page size="A4" style={{ ...getBasePageStyle(data, palette), padding: 36 }}>
-        <Text style={{ fontSize: 28, fontWeight: 700, color: palette.text, letterSpacing: 2 }}>
-          {cleanText(data.fullName) || "YOUR NAME"}
-        </Text>
-        <Text
-          style={{
-            ...styles.role,
-            color: palette.primary,
-            fontSize: 10,
-            letterSpacing: 1.5,
-            textTransform: "uppercase",
-          }}
-        >
-          {cleanText(data.role) || "Your Role"}
-        </Text>
-        {hasContact(data) && (
-          <Text style={{ ...styles.smallText, color: palette.subText, marginTop: 4, letterSpacing: 0.5 }}>
-            {[data.phone, data.email, data.address]
-              .map((v) => cleanText(v))
-              .filter(Boolean)
-              .join("   ·   ")}
-          </Text>
-        )}
-        <View style={{ height: 0.5, backgroundColor: palette.text, marginVertical: 10 }} />
-        {hasSummary(data) && (
-          <View style={{ marginBottom: 10 }}>
-            <Text
-              style={{
-                ...styles.smallText,
-                color: palette.primary,
-                textTransform: "uppercase",
-                letterSpacing: 1,
-                marginBottom: 4,
-              }}
-            >
-              Summary
-            </Text>
-            <Text style={{ ...styles.text, color: palette.text }}>{data.summary}</Text>
-          </View>
-        )}
-        <View style={styles.row}>
-          <View style={{ width: "60%", paddingRight: 14 }}>
-            {hasExperience(data) && (
-              <View style={{ marginBottom: 10 }}>
-                <Text
-                  style={{
-                    ...styles.smallText,
-                    color: palette.primary,
-                    textTransform: "uppercase",
-                    letterSpacing: 1,
-                    marginBottom: 4,
-                  }}
-                >
-                  Experience
-                </Text>
-                <ExperienceBlock data={data} palette={palette} />
-              </View>
-            )}
-            {hasProjects(data) && (
-              <View style={{ marginBottom: 10 }}>
-                <Text
-                  style={{
-                    ...styles.smallText,
-                    color: palette.primary,
-                    textTransform: "uppercase",
-                    letterSpacing: 1,
-                    marginBottom: 4,
-                  }}
-                >
-                  Projects
-                </Text>
-                <ProjectsBlock data={data} palette={palette} />
-              </View>
-            )}
-          </View>
-          <View style={{ width: "40%", paddingLeft: 14 }}>
-            {hasSkills(data) && (
-              <View style={{ marginBottom: 10 }}>
-                <Text
-                  style={{
-                    ...styles.smallText,
-                    color: palette.primary,
-                    textTransform: "uppercase",
-                    letterSpacing: 1,
-                    marginBottom: 4,
-                  }}
-                >
-                  Skills
-                </Text>
-                <SkillsBlock data={data} palette={palette} />
-              </View>
-            )}
-            {hasEducation(data) && (
-              <View style={{ marginBottom: 10 }}>
-                <Text
-                  style={{
-                    ...styles.smallText,
-                    color: palette.primary,
-                    textTransform: "uppercase",
-                    letterSpacing: 1,
-                    marginBottom: 4,
-                  }}
-                >
-                  Education
-                </Text>
-                <EducationBlock data={data} palette={palette} />
-              </View>
-            )}
-            {hasLanguages(data) && (
-              <View style={{ marginBottom: 10 }}>
-                <Text
-                  style={{
-                    ...styles.smallText,
-                    color: palette.primary,
-                    textTransform: "uppercase",
-                    letterSpacing: 1,
-                    marginBottom: 4,
-                  }}
-                >
-                  Languages
-                </Text>
-                <LanguagesBlock data={data} palette={palette} />
-              </View>
-            )}
-          </View>
-        </View>
-      </Page>
-    </Document>
-  );
-}
-
-/* TEMPLATE 18 */
-function CardStackTemplate({ data }: { data: ResumeData }) {
-  const palette = getThemePalette((data as any).theme);
-  const CardSection = ({ title, children }: { title: string; children: React.ReactNode }) => (
-    <View
-      style={{
-        marginBottom: 10,
-        padding: 10,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderStyle: "solid",
-        borderColor: palette.border,
-        backgroundColor: "#fff",
-      }}
-    >
-      <Text style={{ ...styles.heading, color: palette.primary, fontSize: 10, marginBottom: 6 }}>{title}</Text>
-      {children}
-    </View>
-  );
-  return (
-    <Document>
-      <Page size="A4" style={getBasePageStyle(data, palette)}>
-        <CardSection title="">
-          <Text style={{ ...styles.name, color: palette.primary }}>{cleanText(data.fullName) || "Your Name"}</Text>
-          <Text style={{ ...styles.role, color: palette.subText }}>{cleanText(data.role) || "Role"}</Text>
-          {hasContact(data) && (
-            <Text style={{ ...styles.smallText, color: palette.subText, marginTop: 4 }}>
-              {[data.phone, data.email, data.linkedin]
-                .map((v) => cleanText(v))
-                .filter(Boolean)
-                .join("  •  ")}
-            </Text>
-          )}
-        </CardSection>
-        {hasSummary(data) && (
-          <CardSection title="Summary">
-            <Text style={{ ...styles.text, color: palette.text }}>{data.summary}</Text>
-          </CardSection>
-        )}
-        <View style={styles.row}>
-          <View style={{ width: "62%", paddingRight: 8 }}>
-            {hasExperience(data) && (
-              <CardSection title="Experience">
-                <ExperienceBlock data={data} palette={palette} />
-              </CardSection>
-            )}
-            {hasProjects(data) && (
-              <CardSection title="Projects">
-                <ProjectsBlock data={data} palette={palette} />
-              </CardSection>
-            )}
-          </View>
-          <View style={{ width: "38%", paddingLeft: 8 }}>
-            {hasSkills(data) && (
-              <CardSection title="Skills">
-                <SkillsBlock data={data} palette={palette} />
-              </CardSection>
-            )}
-            {hasEducation(data) && (
-              <CardSection title="Education">
-                <EducationBlock data={data} palette={palette} />
-              </CardSection>
-            )}
-            {hasLanguages(data) && (
-              <CardSection title="Languages">
-                <LanguagesBlock data={data} palette={palette} />
-              </CardSection>
-            )}
-          </View>
-        </View>
-      </Page>
-    </Document>
-  );
-}
-
-/* TEMPLATE 19 */
-function FreshGraduateTemplate({ data }: { data: ResumeData }) {
-  const palette = getThemePalette((data as any).theme);
-  return (
-    <Document>
-      <Page size="A4" style={getBasePageStyle(data, palette)}>
-        <View style={{ ...styles.row, marginBottom: 14, alignItems: "center" }}>
-          {(data as any).profileImage && <Image src={(data as any).profileImage} style={{ ...styles.heroImage, marginRight: 16 }} />}
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 24, fontWeight: 700, color: palette.primary }}>{cleanText(data.fullName) || "Your Name"}</Text>
-            <Text style={{ ...styles.role, color: palette.subText, fontSize: 12, marginBottom: 6 }}>{cleanText(data.role) || "Role"}</Text>
-            {hasContact(data) && (
-              <View>
-                {hasText(data.email) && <Text style={{ ...styles.smallText, color: palette.text }}>{data.email}</Text>}
-                {hasText(data.phone) && <Text style={{ ...styles.smallText, color: palette.text }}>{data.phone}</Text>}
-                {hasText(data.linkedin) && <Text style={{ ...styles.smallText, color: palette.text }}>{data.linkedin}</Text>}
-              </View>
-            )}
-          </View>
-        </View>
-        <View style={{ height: 3, backgroundColor: palette.primary, marginBottom: 14 }} />
-        {hasSummary(data) && (
-          <Section title="Objective" palette={palette}>
-            <SummaryBlock data={data} palette={palette} />
-          </Section>
-        )}
-        <View style={styles.row}>
-          <View style={{ width: "55%", paddingRight: 10 }}>
-            {hasExperience(data) && (
-              <Section title="Experience" palette={palette}>
-                <ExperienceBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasProjects(data) && (
-              <Section title="Projects" palette={palette}>
-                <ProjectsBlock data={data} palette={palette} />
-              </Section>
-            )}
-          </View>
-          <View style={{ width: "45%", paddingLeft: 10 }}>
-            {hasEducation(data) && (
-              <Section title="Education" palette={palette}>
-                <EducationBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasSkills(data) && (
-              <Section title="Skills" palette={palette}>
-                <SkillsBlock data={data} palette={palette} />
-              </Section>
-            )}
-            {hasLanguages(data) && (
-              <Section title="Languages" palette={palette}>
-                <LanguagesBlock data={data} palette={palette} />
-              </Section>
-            )}
-          </View>
-        </View>
-      </Page>
-    </Document>
-  );
-}
-
-/* TEMPLATE 20 */
-function TechDarkTemplate({ data }: { data: ResumeData }) {
-  const palette = getThemePalette((data as any).theme);
-  return (
-    <Document>
-      <Page size="A4" style={{ ...getBasePageStyle(data, palette), backgroundColor: "#0F172A", color: "#F8FAFC" }}>
-        <View style={styles.row}>
-          <View style={{ width: "34%", padding: 18, backgroundColor: "#1E293B", minHeight: "100%" }}>
-            {(data as any).profileImage && <Image src={(data as any).profileImage} style={styles.image} />}
-            <Text style={{ fontSize: 16, fontWeight: 700, color: palette.accent, marginBottom: 2 }}>
-              {cleanText(data.fullName) || "Your Name"}
-            </Text>
-            <Text style={{ ...styles.smallText, color: "#94A3B8", marginBottom: 10 }}>{cleanText(data.role) || "Role"}</Text>
-            {hasContact(data) && (
-              <>
-                <Text style={{ ...styles.heading, color: palette.accent, fontSize: 9 }}>Contact</Text>
-                <ContactBlock data={data} palette={{ ...palette, sidebarText: "#CBD5E1" }} light />
-              </>
-            )}
-            {hasSkills(data) && (
-              <>
-                <View style={{ ...styles.divider, backgroundColor: "#334155" }} />
-                <Text style={{ ...styles.heading, color: palette.accent, fontSize: 9 }}>Skills</Text>
-                <SkillsBlock data={data} palette={palette} light />
-              </>
-            )}
-            {hasLanguages(data) && (
-              <>
-                <View style={{ ...styles.divider, backgroundColor: "#334155" }} />
-                <Text style={{ ...styles.heading, color: palette.accent, fontSize: 9 }}>Languages</Text>
-                <LanguagesBlock data={data} palette={{ ...palette, sidebarText: "#CBD5E1" }} light />
-              </>
-            )}
-          </View>
-          <View style={{ width: "66%", padding: 20 }}>
-            {hasSummary(data) && (
-              <View style={{ marginBottom: 10 }}>
-                <Text style={{ ...styles.heading, color: palette.accent, fontSize: 10 }}>Summary</Text>
-                <Text style={{ ...styles.text, color: "#CBD5E1" }}>{data.summary}</Text>
-              </View>
-            )}
-            {hasExperience(data) && (
-              <View style={{ marginBottom: 10 }}>
-                <Text style={{ ...styles.heading, color: palette.accent, fontSize: 10 }}>Experience</Text>
-                <ExperienceBlock
-                  data={data}
-                  palette={{
-                    ...palette,
-                    primary: palette.accent,
-                    text: "#E2E8F0",
-                    subText: "#94A3B8",
-                    border: "#334155",
-                  }}
-                />
-              </View>
-            )}
-            {hasProjects(data) && (
-              <View style={{ marginBottom: 10 }}>
-                <Text style={{ ...styles.heading, color: palette.accent, fontSize: 10 }}>Projects</Text>
-                <ProjectsBlock
-                  data={data}
-                  palette={{
-                    ...palette,
-                    primary: palette.accent,
-                    text: "#E2E8F0",
-                    subText: "#94A3B8",
-                    border: "#334155",
-                  }}
-                />
-              </View>
-            )}
-            {hasEducation(data) && (
-              <View style={{ marginBottom: 10 }}>
-                <Text style={{ ...styles.heading, color: palette.accent, fontSize: 10 }}>Education</Text>
-                <EducationBlock
-                  data={data}
-                  palette={{
-                    ...palette,
-                    primary: palette.accent,
-                    text: "#E2E8F0",
-                    subText: "#94A3B8",
-                    border: "#334155",
-                  }}
-                />
-              </View>
-            )}
-          </View>
-        </View>
-      </Page>
-    </Document>
-  );
-}
-
 /* Naukri Style */
 function NaukriStyleTemplate({ data }: { data: ResumeData }) {
-  const bluePalette = getThemePalette("blue");
+  const bluePalette = resolveThemePalette((data as any).theme);
   const skills = nonEmptyArray((data as any).skills);
 
   const experience = safeArray((data as any).experience).filter((exp: any) => {
@@ -2050,19 +405,33 @@ function NaukriStyleTemplate({ data }: { data: ResumeData }) {
           backgroundColor: "#FFFFFF",
         }}
       >
-        <View style={styles.naukriHeader}>
-          <Text style={styles.naukriName}>{cleanText(data.fullName) || "Your Name"}</Text>
-          <Text style={styles.naukriRole}>{cleanText(data.role) || "Professional Title"}</Text>
+        <View
+          style={{
+            ...styles.naukriHeader,
+            backgroundColor: bluePalette.soft,
+            borderBottomColor: bluePalette.primary,
+            flexDirection: "row",
+            alignItems: "center",
+          }}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={{ ...styles.naukriName, color: bluePalette.primary }}>
+              {cleanText(data.fullName) || "Your Name"}
+            </Text>
+            <Text style={{ ...styles.naukriRole, color: bluePalette.secondary }}>
+              {cleanText(data.role) || "Professional Title"}
+            </Text>
 
-          <View style={styles.naukriContactRow}>
-            {hasText(data.email) && <Text style={styles.naukriContactText}>{data.email}</Text>}
-            {hasText(data.phone) && <Text style={styles.naukriContactText}>{data.phone}</Text>}
-            {hasText(data.address) && <Text style={styles.naukriContactText}>{data.address}</Text>}
-            {hasText(data.linkedin) && <Text style={styles.naukriContactText}>{data.linkedin}</Text>}
-            {hasText((data as any).github) && (
-              <Text style={styles.naukriContactText}>{(data as any).github}</Text>
-            )}
+            <View style={{ ...styles.naukriContactRow, marginTop: 4 }}>
+              <ContactRow data={data} color={bluePalette.secondary} fontSize={9} />
+            </View>
           </View>
+
+          {hasText(data.photo) && (
+            <View style={{ marginLeft: 14 }}>
+              <Avatar src={data.photo} size={70} borderColor={bluePalette.primary} />
+            </View>
+          )}
         </View>
 
         <View style={{ paddingHorizontal: 18, paddingBottom: 18 }}>
@@ -2071,7 +440,7 @@ function NaukriStyleTemplate({ data }: { data: ResumeData }) {
               <Text style={{ ...styles.text, color: "#111827" }}>{data.summary}</Text>
             </Section>
           )}
-         
+
           {experience.length > 0 && (
             <Section title="Work Experience" palette={bluePalette}>
               <View>
@@ -2102,7 +471,7 @@ function NaukriStyleTemplate({ data }: { data: ResumeData }) {
                             {cleanText(exp.jobTitle) || "Role"}
                           </Text>
                           {hasText(exp.company) && (
-                            <Text style={{ fontSize: 9.1, color: "#185FA5", marginTop: 2 }}>
+                            <Text style={{ fontSize: 9.1, color: bluePalette.secondary, marginTop: 2 }}>
                               {exp.company}
                             </Text>
                           )}
@@ -2143,7 +512,15 @@ function NaukriStyleTemplate({ data }: { data: ResumeData }) {
             <Section title="Technical Skills" palette={bluePalette}>
               <View style={styles.naukriPillWrap}>
                 {skills.map((skill, i) => (
-                  <Text key={`${skill}-${i}`} style={styles.naukriPill}>
+                  <Text
+                    key={`${skill}-${i}`}
+                    style={{
+                      ...styles.naukriPill,
+                      backgroundColor: bluePalette.chipBg,
+                      color: bluePalette.chipText,
+                      borderColor: bluePalette.border,
+                    }}
+                  >
                     {skill}
                   </Text>
                 ))}
@@ -2168,7 +545,7 @@ function NaukriStyleTemplate({ data }: { data: ResumeData }) {
                           {cleanText(edu.degree) || "Degree"}
                         </Text>
                         {hasText(edu.institution) && (
-                          <Text style={{ fontSize: 9, color: "#185FA5", marginTop: 2 }}>
+                          <Text style={{ fontSize: 9, color: bluePalette.secondary, marginTop: 2 }}>
                             {edu.institution}
                           </Text>
                         )}
@@ -2239,12 +616,10 @@ function NaukriStyleTemplate({ data }: { data: ResumeData }) {
           )}
 
           {(languages.length > 0 || hasExtraProfileInfo(data)) && (
-            <Section title="Profile Info" palette={bluePalette}>
+            <Section title="Languages" palette={bluePalette}>
               {languages.length > 0 && (
                 <View style={{ marginBottom: 8 }}>
-                  <Text style={{ ...styles.smallText, color: "#6B7280", marginBottom: 4 }}>
-                    Languages
-                  </Text>
+                 
                   <View style={styles.naukriPillWrap}>
                     {languages.map((lang, i) => (
                       <Text
@@ -2307,45 +682,554 @@ function NaukriStyleTemplate({ data }: { data: ResumeData }) {
   );
 }
 
-function BlueProfessionalPhotoTemplate({ data }: { data: ResumeData }) {
-  const palette = getThemePalette((data as any).theme);
+/* -------------------- SHARED EXTRACTION + BLOCKS -------------------- */
+
+function extractSections(data: ResumeData) {
+  const skills = nonEmptyArray((data as any).skills);
+  const languages = nonEmptyArray((data as any).languages);
+
+  const experience = safeArray((data as any).experience).filter((exp: any) => {
+    const points = nonEmptyArray(exp?.bullets?.length ? exp.bullets : exp?.points);
+    return (
+      hasText(exp?.jobTitle) ||
+      hasText(exp?.company) ||
+      hasText(exp?.startDate) ||
+      hasText(exp?.endDate) ||
+      hasText(exp?.start) ||
+      hasText(exp?.end) ||
+      points.length > 0
+    );
+  });
+
+  const education = safeArray((data as any).education).filter((edu: any) => {
+    const highlights = nonEmptyArray(edu?.highlights);
+    return (
+      hasText(edu?.degree) ||
+      hasText(edu?.institution) ||
+      hasText(edu?.startYear) ||
+      hasText(edu?.endYear) ||
+      highlights.length > 0
+    );
+  });
+
+  const projects = safeArray((data as any).projects).filter((project: any) => {
+    const bullets = nonEmptyArray(project?.bullets);
+    return (
+      hasText(project?.name) ||
+      hasText(project?.techStack) ||
+      hasText(project?.link) ||
+      bullets.length > 0
+    );
+  });
+
+  const certifications = safeArray((data as any).certifications).filter((cert: any) => {
+    if (typeof cert === "string") return hasText(cert);
+    return hasText(cert?.name) || hasText(cert?.issuer);
+  });
+
+  return { skills, languages, experience, education, projects, certifications };
+}
+
+function dateRange(start?: string, end?: string, present = "Present") {
+  const s = cleanText(start);
+  const e = cleanText(end);
+  if (!s && !e) return "";
+  return `${s}${s || e ? " – " : ""}${e || present}`;
+}
+
+function ExperienceList({
+  items,
+  palette,
+}: {
+  items: any[];
+  palette: ThemePalette;
+}) {
+  return (
+    <View>
+      {items.map((exp: any, index: number) => {
+        const points = nonEmptyArray(exp?.bullets?.length ? exp.bullets : exp?.points);
+        const range = dateRange(exp.startDate || exp.start, exp.endDate || exp.end);
+        return (
+          <View key={index} style={{ marginBottom: 9 }}>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+              }}
+            >
+              <View style={{ width: "72%" }}>
+                <Text style={{ fontSize: 10.5, fontWeight: 700, color: palette.text }}>
+                  {cleanText(exp.jobTitle) || "Role"}
+                </Text>
+                {hasText(exp.company) && (
+                  <Text style={{ fontSize: 9.2, color: palette.secondary, marginTop: 2 }}>
+                    {exp.company}
+                  </Text>
+                )}
+              </View>
+              {!!range && (
+                <Text style={{ fontSize: 8.4, color: palette.subText, textAlign: "right" }}>
+                  {range}
+                </Text>
+              )}
+            </View>
+            <View style={{ marginTop: 4 }}>
+              {points.map((point, i) => (
+                <BulletItem key={i} text={point} color={palette.text} />
+              ))}
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function EducationList({
+  items,
+  palette,
+  compact,
+}: {
+  items: any[];
+  palette: ThemePalette;
+  compact?: boolean;
+}) {
+  return (
+    <View>
+      {items.map((edu: any, index: number) => {
+        const range = dateRange(edu.startYear, edu.endYear, edu.currentlyStudying ? "Present" : "");
+        return (
+          <View key={index} style={{ marginBottom: compact ? 7 : 8 }}>
+            <Text style={{ fontSize: compact ? 9.4 : 10, fontWeight: 700, color: palette.text }}>
+              {cleanText(edu.degree) || "Degree"}
+            </Text>
+            {hasText(edu.institution) && (
+              <Text style={{ fontSize: 8.8, color: palette.secondary, marginTop: 1 }}>
+                {edu.institution}
+              </Text>
+            )}
+            {!!range && (
+              <Text style={{ fontSize: 8.2, color: palette.subText, marginTop: 1 }}>{range}</Text>
+            )}
+            {!compact && (
+              <View style={{ marginTop: 3 }}>
+                {nonEmptyArray(edu.highlights).map((highlight, hi) => (
+                  <BulletItem key={hi} text={highlight} color={palette.text} />
+                ))}
+              </View>
+            )}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function CertList({
+  items,
+  palette,
+  light,
+}: {
+  items: any[];
+  palette: ThemePalette;
+  light?: boolean;
+}) {
+  return (
+    <View>
+      {items.map((cert: any, i: number) => (
+        <View key={i} style={{ marginBottom: 5 }}>
+          <Text
+            style={{
+              fontSize: 9,
+              fontWeight: 700,
+              color: light ? palette.sidebarText : palette.text,
+            }}
+          >
+            {typeof cert === "string" ? cert : cleanText(cert?.name) || "Certification"}
+          </Text>
+          {typeof cert !== "string" && hasText(cert?.issuer) && (
+            <Text style={{ fontSize: 8.2, color: light ? palette.chipBg : palette.subText }}>
+              {cert.issuer}
+            </Text>
+          )}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function ContactLines({
+  data,
+  palette,
+  light,
+}: {
+  data: ResumeData;
+  palette: ThemePalette;
+  light?: boolean;
+}) {
+  const color = light ? palette.sidebarText : palette.subText;
+  return <ContactRow data={data} color={color} fontSize={8.7} block />;
+}
+
+/* -------------------- TEMPLATE: CORPORATE SIDEBAR -------------------- */
+
+function CorporateSidebarTemplate({ data }: { data: ResumeData }) {
+  const palette = resolveThemePalette((data as any).theme);
+  const { skills, languages, experience, education, projects, certifications } =
+    extractSections(data);
+
+  const sidebarHeading = {
+    fontSize: 10,
+    fontWeight: 700 as const,
+    textTransform: "uppercase" as const,
+    letterSpacing: 0.8,
+    color: palette.sidebarText,
+    marginBottom: 6,
+  };
 
   return (
     <Document>
-      <Page size="A4" style={getBasePageStyle(data, palette)}>
-        <View style={{ flexDirection: "row" }}>
-          <View style={{ width: "32%" }}>
-            {hasContact(data) && (
-              <Section title="Contact" palette={palette}>
-                <ContactBlock data={data} palette={palette} />
+      <Page size="A4" style={{ ...getBasePageStyle(data, palette), padding: 0 }}>
+        <View style={{ flexDirection: "row", minHeight: "100%" }}>
+          {/* Sidebar */}
+          <View
+            style={{
+              width: "33%",
+              backgroundColor: palette.sidebarBg,
+              paddingVertical: 22,
+              paddingHorizontal: 16,
+            }}
+          >
+            {hasText(data.photo) && (
+              <View style={{ alignItems: "center", marginBottom: 12 }}>
+                <Avatar src={data.photo} size={88} borderColor={palette.sidebarText} />
+              </View>
+            )}
+            <Text style={{ fontSize: 17, fontWeight: 700, color: palette.sidebarText }}>
+              {cleanText(data.fullName) || "Your Name"}
+            </Text>
+            {hasText(data.role) && (
+              <Text style={{ fontSize: 9.5, color: palette.chipBg, marginTop: 3, marginBottom: 14 }}>
+                {data.role}
+              </Text>
+            )}
+
+            <View style={{ marginBottom: 16 }}>
+              <Text style={sidebarHeading}>Contact</Text>
+              <ContactLines data={data} palette={palette} light />
+            </View>
+
+            {skills.length > 0 && (
+              <View style={{ marginBottom: 16 }}>
+                <Text style={sidebarHeading}>Technical Skills</Text>
+                {skills.map((skill, i) => (
+                  <Text
+                    key={i}
+                    style={{ fontSize: 8.7, color: palette.sidebarText, marginBottom: 3 }}
+                  >
+                    • {skill}
+                  </Text>
+                ))}
+              </View>
+            )}
+
+            {education.length > 0 && (
+              <View style={{ marginBottom: 16 }}>
+                <Text style={sidebarHeading}>Education</Text>
+                {education.map((edu: any, index: number) => {
+                  const range = dateRange(
+                    edu.startYear,
+                    edu.endYear,
+                    edu.currentlyStudying ? "Present" : ""
+                  );
+                  return (
+                    <View key={index} style={{ marginBottom: 8 }}>
+                      <Text style={{ fontSize: 9, fontWeight: 700, color: palette.sidebarText }}>
+                        {cleanText(edu.degree) || "Degree"}
+                      </Text>
+                      {hasText(edu.institution) && (
+                        <Text style={{ fontSize: 8.2, color: palette.chipBg, marginTop: 1 }}>
+                          {edu.institution}
+                        </Text>
+                      )}
+                      {!!range && (
+                        <Text style={{ fontSize: 8, color: palette.chipBg, marginTop: 1 }}>
+                          {range}
+                        </Text>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
+            {certifications.length > 0 && (
+              <View style={{ marginBottom: 16 }}>
+                <Text style={sidebarHeading}>Certifications</Text>
+                <CertList items={certifications} palette={palette} light />
+              </View>
+            )}
+
+            {languages.length > 0 && (
+              <View>
+                <Text style={sidebarHeading}>Languages</Text>
+                {languages.map((lang, i) => (
+                  <Text
+                    key={i}
+                    style={{ fontSize: 8.7, color: palette.sidebarText, marginBottom: 3 }}
+                  >
+                    • {lang}
+                  </Text>
+                ))}
+              </View>
+            )}
+          </View>
+
+          {/* Main */}
+          <View style={{ width: "67%", paddingVertical: 22, paddingHorizontal: 20 }}>
+            {hasSummary(data) && (
+              <Section title="Professional Summary" palette={palette}>
+                <Text style={{ ...styles.text, color: palette.text }}>{data.summary}</Text>
               </Section>
             )}
 
-            {hasSkills(data) && (
+            {experience.length > 0 && (
+              <Section title="Work Experience" palette={palette}>
+                <ExperienceList items={experience} palette={palette} />
+              </Section>
+            )}
+
+            {projects.length > 0 && (
+              <Section title="Projects" palette={palette}>
+                <ProjectsBlock data={{ ...data, projects } as ResumeData} palette={palette} />
+              </Section>
+            )}
+          </View>
+        </View>
+      </Page>
+    </Document>
+  );
+}
+
+/* -------------------- TEMPLATE: ATS CLASSIC (single column) -------------------- */
+
+function AtsSectionTitle({ title, palette }: { title: string; palette: ThemePalette }) {
+  return (
+    <View
+      style={{
+        borderBottomWidth: 1,
+        borderBottomStyle: "solid",
+        borderBottomColor: palette.primary,
+        marginBottom: 7,
+        marginTop: 4,
+        paddingBottom: 2,
+      }}
+    >
+      <Text
+        style={{
+          fontSize: 11,
+          fontWeight: 700,
+          textTransform: "uppercase",
+          letterSpacing: 1,
+          color: palette.primary,
+        }}
+      >
+        {title}
+      </Text>
+    </View>
+  );
+}
+
+function AtsClassicTemplate({ data }: { data: ResumeData }) {
+  const palette = resolveThemePalette((data as any).theme);
+  const { skills, languages, experience, education, projects, certifications } =
+    extractSections(data);
+
+  return (
+    <Document>
+      <Page size="A4" style={{ ...getBasePageStyle(data, palette), paddingHorizontal: 38, paddingVertical: 30 }}>
+        {/* Header */}
+        <View style={{ alignItems: "center", marginBottom: 12 }}>
+          {hasText(data.photo) && (
+            <View style={{ marginBottom: 6 }}>
+              <Avatar src={data.photo} size={66} borderColor={palette.border} />
+            </View>
+          )}
+          <Text style={{ fontSize: 21, fontWeight: 700, color: palette.text, letterSpacing: 0.5 }}>
+            {cleanText(data.fullName) || "Your Name"}
+          </Text>
+          {hasText(data.role) && (
+            <Text style={{ fontSize: 11, color: palette.primary, marginTop: 3 }}>{data.role}</Text>
+          )}
+          <View style={{ marginTop: 5, maxWidth: "94%" }}>
+            <ContactRow data={data} color={palette.subText} fontSize={8.8} justify="center" />
+          </View>
+        </View>
+
+        {hasSummary(data) && (
+          <View style={{ marginBottom: 10 }}>
+            <AtsSectionTitle title="Summary" palette={palette} />
+            <Text style={{ ...styles.text, color: palette.text }}>{data.summary}</Text>
+          </View>
+        )}
+
+        {skills.length > 0 && (
+          <View style={{ marginBottom: 10 }}>
+            <AtsSectionTitle title="Technical Skills" palette={palette} />
+            <Text style={{ fontSize: 9.3, color: palette.text, lineHeight: 1.55 }}>
+              {skills.join("  •  ")}
+            </Text>
+          </View>
+        )}
+
+        {experience.length > 0 && (
+          <View style={{ marginBottom: 10 }}>
+            <AtsSectionTitle title="Professional Experience" palette={palette} />
+            <ExperienceList items={experience} palette={palette} />
+          </View>
+        )}
+
+        {projects.length > 0 && (
+          <View style={{ marginBottom: 10 }}>
+            <AtsSectionTitle title="Projects" palette={palette} />
+            <ProjectsBlock data={{ ...data, projects } as ResumeData} palette={palette} />
+          </View>
+        )}
+
+        {education.length > 0 && (
+          <View style={{ marginBottom: 10 }}>
+            <AtsSectionTitle title="Education" palette={palette} />
+            <EducationList items={education} palette={palette} />
+          </View>
+        )}
+
+        {certifications.length > 0 && (
+          <View style={{ marginBottom: 10 }}>
+            <AtsSectionTitle title="Certifications" palette={palette} />
+            <CertList items={certifications} palette={palette} />
+          </View>
+        )}
+
+        {languages.length > 0 && (
+          <View style={{ marginBottom: 10 }}>
+            <AtsSectionTitle title="Languages" palette={palette} />
+            <Text style={{ fontSize: 9.3, color: palette.text, lineHeight: 1.55 }}>
+              {languages.join("  •  ")}
+            </Text>
+          </View>
+        )}
+      </Page>
+    </Document>
+  );
+}
+
+/* -------------------- TEMPLATE: MODERN BAND (header band + two-column body) -------------------- */
+
+function ModernBandTemplate({ data }: { data: ResumeData }) {
+  const palette = resolveThemePalette((data as any).theme);
+  const { skills, languages, experience, education, projects, certifications } =
+    extractSections(data);
+
+  return (
+    <Document>
+      <Page size="A4" style={{ ...getBasePageStyle(data, palette), padding: 0 }}>
+        {/* Header band */}
+        <View
+          style={{
+            backgroundColor: palette.primary,
+            paddingVertical: 20,
+            paddingHorizontal: 28,
+            flexDirection: "row",
+            alignItems: "center",
+          }}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 23, fontWeight: 700, color: "#FFFFFF" }}>
+              {cleanText(data.fullName) || "Your Name"}
+            </Text>
+            {hasText(data.role) && (
+              <Text style={{ fontSize: 11.5, color: palette.chipBg, marginTop: 3 }}>{data.role}</Text>
+            )}
+            <View style={{ marginTop: 8 }}>
+              <ContactRow data={data} color="#FFFFFF" fontSize={8.7} />
+            </View>
+          </View>
+
+          {hasText(data.photo) && (
+            <View style={{ marginLeft: 16 }}>
+              <Avatar src={data.photo} size={74} borderColor="#FFFFFF" />
+            </View>
+          )}
+        </View>
+
+        <View style={{ flexDirection: "row", paddingHorizontal: 24, paddingVertical: 20 }}>
+          {/* Left narrow column */}
+          <View style={{ width: "34%", paddingRight: 16 }}>
+            {skills.length > 0 && (
               <Section title="Skills" palette={palette}>
-                <SkillsBlock data={data} palette={palette} />
+                <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+                  {skills.map((skill, i) => (
+                    <Text
+                      key={i}
+                      style={{
+                        fontSize: 8.2,
+                        paddingVertical: 3,
+                        paddingHorizontal: 7,
+                        borderRadius: 4,
+                        marginRight: 4,
+                        marginBottom: 4,
+                        backgroundColor: palette.chipBg,
+                        color: palette.chipText,
+                      }}
+                    >
+                      {skill}
+                    </Text>
+                  ))}
+                </View>
+              </Section>
+            )}
+
+            {education.length > 0 && (
+              <Section title="Education" palette={palette}>
+                <EducationList items={education} palette={palette} compact />
+              </Section>
+            )}
+
+            {certifications.length > 0 && (
+              <Section title="Certifications" palette={palette}>
+                <CertList items={certifications} palette={palette} />
+              </Section>
+            )}
+
+            {languages.length > 0 && (
+              <Section title="Languages" palette={palette}>
+                {languages.map((lang, i) => (
+                  <Text key={i} style={{ fontSize: 8.8, color: palette.text, marginBottom: 3 }}>
+                    • {lang}
+                  </Text>
+                ))}
               </Section>
             )}
           </View>
 
-          <View style={{ width: "68%" }}>
-            <Text style={{ ...styles.name, color: palette.primary }}>
-              {cleanText(data.fullName) || "Your Name"}
-            </Text>
-
-            <Text style={{ ...styles.role, color: palette.subText }}>
-              {cleanText(data.role) || "Your Role"}
-            </Text>
-
+          {/* Right main column */}
+          <View style={{ width: "66%" }}>
             {hasSummary(data) && (
-              <Section title="Summary" palette={palette}>
-                <SummaryBlock data={data} palette={palette} />
+              <Section title="Profile" palette={palette}>
+                <Text style={{ ...styles.text, color: palette.text }}>{data.summary}</Text>
               </Section>
             )}
 
-            {hasExperience(data) && (
+            {experience.length > 0 && (
               <Section title="Experience" palette={palette}>
-                <ExperienceBlock data={data} palette={palette} />
+                <ExperienceList items={experience} palette={palette} />
+              </Section>
+            )}
+
+            {projects.length > 0 && (
+              <Section title="Projects" palette={palette}>
+                <ProjectsBlock data={{ ...data, projects } as ResumeData} palette={palette} />
               </Section>
             )}
           </View>
@@ -2357,63 +1241,16 @@ function BlueProfessionalPhotoTemplate({ data }: { data: ResumeData }) {
 
 /* ROUTER */
 export function ResumeDocumentRouter({ data }: { data: ResumeData }) {
-  const layout = (data as any).layout;
-
-  // FIRST check uploaded templates
-  if (layout && layout in uploadedPdfResumeTemplates) {
-    return renderUploadedPdfTemplate(
-      layout as UploadedPdfTemplateKey,
-      data
-    );
-  }
-
-  switch (layout) {
-    case "classicSidebar":
-      return <ClassicSidebarTemplate data={data} />;
-    case "accentHeader":
-      return <AccentHeaderTemplate data={data} />;
-    case "splitTwoColumn":
-      return <SplitTwoColumnTemplate data={data} />;
-    case "timeline":
-      return <TimelineTemplate data={data} />;
-    case "minimalClean":
-      return <MinimalCleanTemplate data={data} />;
-    case "modernCorporate":
-      return <ModernCorporateTemplate data={data} />;
-    case "atsCompact":
-      return <AtsCompactTemplate data={data} />;
-    case "elegantSidebar":
-      return <ElegantSidebarTemplate data={data} />;
-    case "template9":
-      return <ModernLeftBarTemplate data={data} />;
-    case "template10":
-      return <SimpleHeaderTemplate data={data} />;
-    case "template11":
-      return <CompactProTemplate data={data} />;
-    case "template12":
-      return <BoldNameTemplate data={data} />;
-    case "template13":
-      return <InfographicBarTemplate data={data} />;
-    case "template14":
-      return <TopContactBarTemplate data={data} />;
-    case "template15":
-      return <ExecutiveTemplate data={data} />;
-    case "template16":
-      return <TwoToneSplitTemplate data={data} />;
-    case "template17":
-      return <MinimalistLineTemplate data={data} />;
-    case "template18":
-      return <CardStackTemplate data={data} />;
-    case "template19":
-      return <FreshGraduateTemplate data={data} />;
-    case "template20":
-      return <TechDarkTemplate data={data} />;
+  switch ((data as any).layout) {
+    case "corporateSidebar":
+      return <CorporateSidebarTemplate data={data} />;
+    case "atsClassic":
+      return <AtsClassicTemplate data={data} />;
+    case "modernBand":
+      return <ModernBandTemplate data={data} />;
     case "naukriStyle":
-      return <NaukriStyleTemplate data={data} />;
-     case "BlueProfessionalPhoto":
-      return <BlueProfessionalPhotoTemplate data={data} />;
     default:
-      return <ClassicSidebarTemplate data={data} />;
+      return <NaukriStyleTemplate data={data} />;
   }
 }
 
