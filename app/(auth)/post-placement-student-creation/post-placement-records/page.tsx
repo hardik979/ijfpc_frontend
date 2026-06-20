@@ -13,6 +13,7 @@ import {
   Save,
   Trash2,
   CreditCard,
+  Download,
 } from "lucide-react";
 import { API_BASE_URL } from "@/lib/api";
 import Link from "next/link";
@@ -193,6 +194,119 @@ const PostPlacementDashboard: React.FC = () => {
     });
   };
 
+  // Format a date as YYYY-MM-DD for CSV (empty string if missing/invalid)
+  const toYMDCsv = (d?: string | null): string => {
+    if (!d) return "";
+    const dt = new Date(d);
+    if (Number.isNaN(dt.getTime())) return "";
+    const local = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 10);
+  };
+
+  // Wrap a value as a safe CSV field (handles commas, quotes, newlines)
+  const csvField = (value: unknown): string => {
+    const s =
+      value === null || value === undefined ? "" : String(value);
+    return `"${s.replace(/"/g, '""')}"`;
+  };
+
+  const exportToCSV = (): void => {
+    const rows = filteredStudents;
+    if (rows.length === 0) {
+      setError("No records to export.");
+      return;
+    }
+
+    const headers = [
+      "Student Name",
+      "Company Name",
+      "Location",
+      "Package (LPA)",
+      "Offer Date",
+      "Joining Date",
+      "HR Name",
+      "HR Contact",
+      "HR Email",
+      "Experience Company",
+      "Years of Experience",
+      "PF",
+      "Experience DOJ",
+      "Experience DOE",
+      "Total Post Placement Fee",
+      "Remaining Pre-Placement Fee",
+      "Discount",
+      "Remaining Fee",
+      "Remaining Fee Note",
+      "Total Paid",
+      "Installments Count",
+      "Installments",
+      "Source",
+      "Created At",
+      "Updated At",
+    ];
+
+    const lines = rows.map((s) => {
+      const ce = s.companyExperience || {};
+      const pfLabel =
+        ce.pf === true ? "Yes" : ce.pf === false ? "No" : "Unknown";
+      const totalPaid = (s.installments || []).reduce(
+        (sum, it) => sum + (Number(it.amount) || 0),
+        0
+      );
+      const installmentsText = (s.installments || [])
+        .map(
+          (it) =>
+            `${it.label} | ${it.amount} | ${it.mode} | ${toYMDCsv(
+              it.date
+            )}${it.note ? ` | ${it.note}` : ""}`
+        )
+        .join(" ;; ");
+
+      return [
+        s.studentName,
+        s.companyName,
+        s.location,
+        s.packageLPA,
+        toYMDCsv(s.offerDate),
+        toYMDCsv(s.joiningDate),
+        s.hr?.name,
+        s.hr?.contactNumber,
+        s.hr?.email,
+        ce.companyName,
+        ce.yearsOfExperience,
+        pfLabel,
+        toYMDCsv(ce.doj),
+        toYMDCsv(ce.doe),
+        s.totalPostPlacementFee,
+        s.remainingPrePlacementFee,
+        s.discount,
+        s.remainingFee,
+        s.remainingFeeNote,
+        totalPaid,
+        (s.installments || []).length,
+        installmentsText,
+        s.source,
+        toYMDCsv(s.createdAt),
+        toYMDCsv(s.updatedAt),
+      ]
+        .map(csvField)
+        .join(",");
+    });
+
+    // Prepend BOM so Excel reads UTF-8 correctly
+    const csv = "﻿" + [headers.map(csvField).join(","), ...lines].join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const stamp = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = `post-placement-offers-${stamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const createStudent = async (
     studentData: Partial<PostPlacementOffer>
   ): Promise<boolean> => {
@@ -364,13 +478,21 @@ const PostPlacementDashboard: React.FC = () => {
                 </p>
               </div>
             </div>
-            <Link href="/post-placement-student-creation/student-data-fill">
-              {" "}
-              <button className="flex items-center space-x-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-colors">
-                <Plus className="h-5 w-5" />
-                <span>New Student</span>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={exportToCSV}
+                className="flex items-center space-x-2 bg-white border border-purple-200 hover:bg-purple-50 text-purple-700 px-4 py-2 rounded-lg transition-colors"
+              >
+                <Download className="h-5 w-5" />
+                <span>Export CSV</span>
               </button>
-            </Link>
+              <Link href="/post-placement-student-creation/student-data-fill">
+                <button className="flex items-center space-x-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-colors">
+                  <Plus className="h-5 w-5" />
+                  <span>New Student</span>
+                </button>
+              </Link>
+            </div>
           </div>
         </div>
       </div>
