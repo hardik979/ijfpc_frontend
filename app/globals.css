@@ -26,6 +26,76 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+   PREMIUM SCROLLBAR — thin, rounded, gradient thumb.
+   Translucent purple→indigo so it reads well on both light & dark.
+   ═══════════════════════════════════════════════════════════════════ */
+.premium-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(139, 92, 246, 0.45) transparent;
+}
+.premium-scrollbar::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+.premium-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 4px 0;
+}
+.premium-scrollbar::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: linear-gradient(180deg, rgba(168, 85, 247, 0.55), rgba(99, 102, 241, 0.55));
+  background-clip: padding-box;
+}
+.premium-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(168, 85, 247, 0.95), rgba(99, 102, 241, 0.95));
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   STUDENT LIST ROW — premium interactive styling.
+   Animated left accent bar that grows on hover/active, a soft gradient
+   sweep, and a subtle content slide. Translucent fills layer over the
+   card surface, so it stays correct in both light & dark themes.
+   ═══════════════════════════════════════════════════════════════════ */
+.student-row {
+  position: relative;
+  cursor: pointer;
+  transition: background 0.25s ease;
+}
+.student-row::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 0;
+  width: 3px;
+  border-radius: 0 4px 4px 0;
+  background: linear-gradient(180deg, #a855f7, #6366f1);
+  transform: translateY(-50%);
+  transition: height 0.28s ease;
+}
+.student-row > * {
+  transition: transform 0.25s ease;
+}
+.student-row:hover {
+  background: linear-gradient(90deg, rgba(139, 92, 246, 0.1), transparent 75%);
+}
+.student-row:hover::before {
+  height: 52%;
+}
+.student-row:hover > * {
+  transform: translateX(4px);
+}
+.student-row--active {
+  background: linear-gradient(90deg, rgba(139, 92, 246, 0.16), transparent 80%);
+}
+.student-row--active::before {
+  height: 78%;
+}
+.student-row--active > * {
+  transform: translateX(4px);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    CSS CUSTOM PROPERTIES
    ═══════════════════════════════════════════════════════════════════ */
 :root {
@@ -481,8 +551,27 @@ body {
 /* ── Indigo support for Avg Call Duration card ───────────────────── */
 [data-theme="dark"] .from-indigo-50   { --tw-gradient-from: rgba(99, 102, 241, 0.12) !important; }
 [data-theme="dark"] .to-indigo-50     { --tw-gradient-to:   rgba(99, 102, 241, 0.06) !important; }
+[data-theme="dark"] .from-indigo-100  { --tw-gradient-from: rgba(99, 102, 241, 0.16) !important; }
+[data-theme="dark"] .to-indigo-100    { --tw-gradient-to:   rgba(99, 102, 241, 0.08) !important; }
 [data-theme="dark"] .bg-indigo-100    { background-color: rgba(99, 102, 241, 0.18) !important; }
 [data-theme="dark"] .border-indigo-200 { border-color: rgba(99, 102, 241, 0.30) !important; }
 [data-theme="dark"] .text-indigo-700  { color: #818cf8 !important; }
 [data-theme="dark"] .text-indigo-900  { color: #c7d2fe !important; }
 [data-theme="dark"] .text-indigo-600  { color: #a5b4fc !important; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   LIGHT HOVER BACKGROUNDS — dark-mode coverage
+   These light hover utilities had no dark override, so on hover they
+   flashed near-white and washed out the light text (e.g. the
+   post-placement student list rows, Export CSV / Add Payment / Cancel
+   buttons). Dark-only + additive — cannot affect light mode.
+   ═══════════════════════════════════════════════════════════════════ */
+[data-theme="dark"] .hover\:bg-purple-50:hover  { background-color: var(--bg-accent) !important; }
+[data-theme="dark"] .hover\:bg-purple-100:hover { background-color: rgba(168, 85, 247, 0.18) !important; }
+[data-theme="dark"] .hover\:bg-purple-200:hover { background-color: rgba(168, 85, 247, 0.24) !important; }
+[data-theme="dark"] .hover\:bg-gray-50:hover    { background-color: var(--bg-accent) !important; }
+[data-theme="dark"] .hover\:bg-gray-200:hover   { background-color: var(--bg-accent) !important; }
+
+/* Payment-status accent colours (remaining fee paid / due) */
+[data-theme="dark"] .text-emerald-600 { color: #34d399 !important; }
+[data-theme="dark"] .text-amber-600   { color: #fbbf24 !important; }
