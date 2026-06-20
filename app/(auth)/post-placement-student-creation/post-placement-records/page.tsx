@@ -14,9 +14,11 @@ import {
   Trash2,
   CreditCard,
   Download,
+  ArrowLeft,
 } from "lucide-react";
 import { API_BASE_URL } from "@/lib/api";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 const PAYMENT_MODES = [
   "CASH",
@@ -135,7 +137,17 @@ interface CreateStudentFormProps {
   onCancel: () => void;
 }
 
+const getInitials = (name: string): string =>
+  name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase() || "?";
+
 const PostPlacementDashboard: React.FC = () => {
+  const router = useRouter();
   const [students, setStudents] = useState<PostPlacementOffer[]>([]);
   const [filteredStudents, setFilteredStudents] = useState<
     PostPlacementOffer[]
@@ -466,6 +478,14 @@ const PostPlacementDashboard: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
+              <button
+                onClick={() => router.back()}
+                title="Go back"
+                aria-label="Go back"
+                className="group flex h-10 w-10 items-center justify-center rounded-lg border border-purple-200 bg-white text-purple-600 transition-all hover:-translate-x-0.5 hover:border-purple-300 hover:bg-purple-50"
+              >
+                <ArrowLeft className="h-5 w-5 transition-transform group-hover:-translate-x-0.5" />
+              </button>
               <div className="p-2 bg-purple-100 rounded-lg">
                 <User className="h-6 w-6 text-purple-600" />
               </div>
@@ -515,7 +535,7 @@ const PostPlacementDashboard: React.FC = () => {
         <div className="flex gap-6">
           {/* Students List */}
           <div className="w-1/3">
-            <div className="bg-white rounded-xl shadow-sm border border-purple-100">
+            <div className="bg-white rounded-xl shadow-sm border border-purple-100 overflow-hidden">
               <div className="p-6 border-b border-gray-100">
                 <div className="relative">
                   <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
@@ -527,47 +547,72 @@ const PostPlacementDashboard: React.FC = () => {
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
+                <p className="mt-3 text-xs font-medium text-gray-500">
+                  {filteredStudents.length}{" "}
+                  {filteredStudents.length === 1 ? "student" : "students"}
+                </p>
               </div>
 
-              <div className="max-h-96 overflow-y-auto">
+              <div className="max-h-[30rem] overflow-y-auto premium-scrollbar">
                 {filteredStudents.length === 0 ? (
-                  <div className="p-6 text-center text-gray-500">
+                  <div className="p-10 text-center text-gray-500">
                     <User className="h-12 w-12 text-gray-300 mx-auto mb-3" />
                     <p>No students found</p>
                   </div>
                 ) : (
-                  filteredStudents.map((student) => (
-                    <div
-                      key={student._id}
-                      onClick={() => {
-                        setSelectedStudent(student);
-                        setIsEditing(false);
-                      }}
-                      className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-purple-50 transition-colors ${
-                        selectedStudent?._id === student._id
-                          ? "bg-purple-50 border-l-4 border-l-purple-500"
-                          : ""
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="font-semibold text-gray-900">
-                            {student.studentName}
-                          </h3>
-                          <p className="text-sm text-gray-600 flex items-center mt-1">
-                            <Building className="h-4 w-4 mr-1" />
-                            {student.companyName || "No company"}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-medium text-purple-600">
-                            {formatCurrency(student.remainingFee)}
-                          </p>
-                          <p className="text-xs text-gray-500">Remaining</p>
+                  filteredStudents.map((student) => {
+                    const isActive = selectedStudent?._id === student._id;
+                    const isPaid = (student.remainingFee || 0) <= 0;
+                    return (
+                      <div
+                        key={student._id}
+                        onClick={() => {
+                          setSelectedStudent(student);
+                          setIsEditing(false);
+                        }}
+                        className={`student-row border-b border-gray-100 px-4 py-3.5 ${
+                          isActive ? "student-row--active" : ""
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div
+                              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white shadow-sm transition-transform ${
+                                isActive
+                                  ? "bg-gradient-to-br from-purple-500 to-indigo-600 scale-105"
+                                  : "bg-gradient-to-br from-purple-400 to-indigo-500"
+                              }`}
+                            >
+                              {getInitials(student.studentName)}
+                            </div>
+                            <div className="min-w-0">
+                              <h3 className="truncate font-semibold text-gray-900">
+                                {student.studentName}
+                              </h3>
+                              <p className="mt-0.5 flex items-center truncate text-sm text-gray-600">
+                                <Building className="mr-1 h-3.5 w-3.5 shrink-0" />
+                                <span className="truncate">
+                                  {student.companyName || "No company"}
+                                </span>
+                              </p>
+                            </div>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <p
+                              className={`text-sm font-semibold ${
+                                isPaid ? "text-emerald-600" : "text-amber-600"
+                              }`}
+                            >
+                              {formatCurrency(student.remainingFee)}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {isPaid ? "Paid" : "Remaining"}
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
