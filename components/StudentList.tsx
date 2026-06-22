@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Eye, X, GraduationCap, BarChart3 } from "lucide-react";
-import AcademicResults from "./AcademicResults";
 import ZoneStudentAnalytics from "./ZoneStudentAnalytics";
 import {
   Bar,
@@ -138,7 +137,6 @@ const safeDate = (val?: string) => {
 const StudentsListPage = () => {
   const router = useRouter();
   const searchBoxRef = useRef<HTMLDivElement | null>(null);
-  const [showAcademicResults, setShowAcademicResults] = useState(false);
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -146,7 +144,12 @@ const StudentsListPage = () => {
   const [courseCounts, setCourseCounts] = useState<Record<string, number>>({});
   const [courseStudents, setCourseStudents] = useState<Student[]>([]);
   const skipNextSuggestionRef = useRef(false);
-  const [allStudentsForChart, setAllStudentsForChart] = useState<Student[]>([]);
+  const [chartData, setChartData] = useState<
+    { month: string; admissions: number }[]
+  >([]);
+  const [availableYears, setAvailableYears] = useState<number[]>([
+    new Date().getFullYear(),
+  ]);
   const [chartYear, setChartYear] = useState<number>(new Date().getFullYear());
 
   // --- Active/Placed students fetched once with status="all" (all enrolled) ---
@@ -601,12 +604,14 @@ const StudentsListPage = () => {
 
     getCourses();
     fetchAllEnrolledStudents();
+  }, []);
 
-    // Chart data
+  // Admissions-by-month chart — aggregated server-side by createdAt (IST).
+  useEffect(() => {
     (async () => {
       try {
         const r = await fetch(
-          `${API_LMS_URL}/api/student-info/get-student-list?page=1&limit=10000`,
+          `${API_LMS_URL}/api/student-info/admissions-by-month?year=${chartYear}`,
           {
             headers: {
               "Content-Type": "application/json",
@@ -617,17 +622,16 @@ const StudentsListPage = () => {
         );
         const j = await r.json();
         if (r.ok) {
-          const chartList = (Array.isArray(j.data) ? j.data : []).filter(
-            (s: Student) => s.isRealUser !== true
-          );
-          setAllStudentsForChart(chartList);
-         
+          setChartData(Array.isArray(j.data) ? j.data : []);
+          if (Array.isArray(j.years) && j.years.length) {
+            setAvailableYears(j.years);
+          }
         }
       } catch (e) {
-        console.error("chart fetch error:", e);
+        console.error("admissions chart fetch error:", e);
       }
     })();
-  }, []);
+  }, [chartYear]);
 
   useEffect(() => {
     setCourseStudents([]);
@@ -683,33 +687,6 @@ const StudentsListPage = () => {
   }, []);
 
   // ── Helpers ──────────────────────────────────
-
-  const availableYears = useMemo(() => {
-    const set = new Set<number>();
-    allStudentsForChart.forEach((s) => {
-      if (!s.joinedMonth) return;
-      const d = new Date(s.joinedMonth);
-      if (!Number.isNaN(d.getTime())) set.add(d.getFullYear());
-    });
-    set.add(new Date().getFullYear());
-    return Array.from(set).sort((a, b) => b - a);
-  }, [allStudentsForChart]);
-
-  const chartData = useMemo(() => {
-    const months = [
-      "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-    ];
-    const counts = Array(12).fill(0);
-    allStudentsForChart.forEach((s) => {
-      if (!s.joinedMonth) return;
-      const d = new Date(s.joinedMonth);
-      if (Number.isNaN(d.getTime())) return;
-      if (d.getFullYear() !== chartYear) return;
-      counts[d.getMonth()] += 1;
-    });
-    return months.map((m, i) => ({ month: m, admissions: counts[i] }));
-  }, [allStudentsForChart, chartYear]);
 
   const handlePageChange = (newPage: number) => {
     const maxPages = isAllView ? allViewTotalPages : totalPages;
@@ -800,13 +777,13 @@ const StudentsListPage = () => {
             Call Recording Annalysiss Dashboard
           </button>
 
-          <button
-            onClick={() => setShowAcademicResults((v) => !v)}
+          <Link
+            href="/academic-results"
             className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-[#312a63] bg-[#0f0b24] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#1b1640]"
           >
             <GraduationCap className="h-4 w-4" />
-            {showAcademicResults ? "Hide Academic Results" : "Academic Results"}
-          </button>
+            Academic Results
+          </Link>
 
           <Link
             href="/communication-analytics"
@@ -816,12 +793,6 @@ const StudentsListPage = () => {
             Communication Analytics
           </Link>
         </div>
-
-        {showAcademicResults && (
-          <div className="mb-6 overflow-hidden rounded-2xl border border-[#312a63] bg-white shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
-            <AcademicResults />
-          </div>
-        )}
 
         {/* ── Cards ── */}
         {!selectedCourseId && (
