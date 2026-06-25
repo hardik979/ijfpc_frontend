@@ -4,8 +4,11 @@ import type { Column } from "@/healper/DataPresentationTable";
 import {
   formatDuration,
   formatIST,
+  MOCK_LEVEL_LABEL,
   type QuizAttemptRow,
   type MockAttemptRow,
+  type MockLevel,
+  type MockStudentRow,
   type AiCallingRow,
   type RealHrRow,
 } from "./data";
@@ -194,6 +197,110 @@ export const mockColumns: Column<MockAttemptRow>[] = [
     accessor: "createdAt",
     sortable: true,
     render: (r) => formatIST(r.createdAt),
+  },
+];
+
+/* ------------------ Mock Interview — unique students ------------------ */
+const LEVEL_BADGE: Record<MockLevel, string> = {
+  strong: "bg-emerald-50 text-emerald-700",
+  average: "bg-amber-50 text-amber-700",
+  needs: "bg-rose-50 text-rose-700",
+};
+
+/** Colored pill for a Strong / Average / Needs-work level. */
+export function mockLevelBadge(level: MockLevel) {
+  return badge(MOCK_LEVEL_LABEL[level], LEVEL_BADGE[level]);
+}
+
+// Solid saturated badges with white text so they stay high-contrast on both the
+// light table and a darkened page; the colored box-shadow gives the glow.
+const LEVEL_SOLID: Record<MockLevel, { bg: string; glow: string }> = {
+  strong: { bg: "bg-emerald-600", glow: "rgba(16,185,129,0.75)" },
+  average: { bg: "bg-amber-600", glow: "rgba(245,158,11,0.75)" },
+  needs: { bg: "bg-rose-600", glow: "rgba(244,63,94,0.75)" },
+};
+
+const levelPill = (level: MockLevel, count: number) => {
+  const g = LEVEL_SOLID[level];
+  return (
+    <span
+      key={level}
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold text-white ${g.bg}`}
+      style={{ boxShadow: `0 0 10px 0 ${g.glow}` }}
+    >
+      {MOCK_LEVEL_LABEL[level]}
+      {count > 1 ? ` ×${count}` : ""}
+    </span>
+  );
+};
+
+// One compact "Result" cell: a glowing label per level the student actually hit
+// (no sea of dashes), e.g. [Average] or [Strong ×2] [Needs work ×1].
+const resultBadges = (r: MockStudentRow) => {
+  const levels = (["strong", "average", "needs"] as MockLevel[]).filter(
+    (l) => r[l] > 0
+  );
+  if (levels.length === 0) return dash;
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-1.5">
+      {levels.map((l) => levelPill(l, r[l]))}
+    </div>
+  );
+};
+
+const glowTotal = (n: number) => (
+  <span
+    className="inline-flex h-7 min-w-[1.75rem] items-center justify-center rounded-full bg-indigo-600 px-2 text-sm font-bold text-white"
+    style={{ boxShadow: "0 0 10px 0 rgba(99,102,241,0.75)" }}
+  >
+    {n}
+  </span>
+);
+
+export const mockStudentColumns: Column<MockStudentRow>[] = [
+  {
+    key: "name",
+    header: "Student",
+    accessor: (r) => r.name ?? r.email ?? "—",
+    sortable: true,
+    searchable: true,
+    render: (r) => {
+      const hasName = Boolean(r.name && r.name.trim());
+      return (
+        <div className="flex flex-col">
+          <span className="font-medium text-gray-900">
+            {hasName ? r.name : r.email ?? "Unknown student"}
+          </span>
+          {hasName && r.email && (
+            <span className="text-xs text-gray-500">{r.email}</span>
+          )}
+        </div>
+      );
+    },
+  },
+  {
+    key: "total",
+    header: "Interviews",
+    accessor: (r) => r.total,
+    sortable: true,
+    align: "center",
+    render: (r) => glowTotal(r.total),
+  },
+  {
+    key: "result",
+    header: "Result",
+    // Sort by performance: more/stronger results rank higher.
+    accessor: (r) => r.strong * 100 + r.average * 10 + r.needs,
+    sortable: true,
+    align: "center",
+    render: (r) => resultBadges(r),
+  },
+  {
+    key: "lastAttemptAt",
+    header: "Last Attempt",
+    accessor: "lastAttemptAt",
+    sortable: true,
+    render: (r) => formatIST(r.lastAttemptAt),
   },
 ];
 

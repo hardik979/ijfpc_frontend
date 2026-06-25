@@ -103,6 +103,7 @@ export const ACCENTS = {
   emerald: { value: "text-emerald-400", ring: "from-emerald-500/20 to-transparent", bar: "bg-emerald-500" },
   amber: { value: "text-amber-400", ring: "from-amber-500/20 to-transparent", bar: "bg-amber-500" },
   violet: { value: "text-violet-400", ring: "from-violet-500/20 to-transparent", bar: "bg-violet-500" },
+  rose: { value: "text-rose-400", ring: "from-rose-500/20 to-transparent", bar: "bg-rose-500" },
 } as const;
 
 export type Accent = keyof typeof ACCENTS;
@@ -113,9 +114,24 @@ export type StatItem = {
   accent: Accent;
 };
 
-export function StatCards({ items }: { items: StatItem[] }) {
+export function StatCards({
+  items,
+  columns = 4,
+}: {
+  items: StatItem[];
+  /** Max columns at the widest breakpoint (so 5-card layouts don't squash). */
+  columns?: 2 | 3 | 4 | 5;
+}) {
+  const grid =
+    columns === 5
+      ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5"
+      : columns === 3
+      ? "grid-cols-2 sm:grid-cols-3"
+      : columns === 2
+      ? "grid-cols-2"
+      : "grid-cols-2 sm:grid-cols-4";
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div className={`grid ${grid} gap-3`}>
       {items.map((it) => (
         <StatCard key={it.label} {...it} />
       ))}

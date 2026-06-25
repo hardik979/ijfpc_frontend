@@ -41,6 +41,20 @@ export type MockByDateRow = {
   uniqueUserCount: number;
 };
 
+/**
+ * Rich rubric pulled from structuredData.interview_evaluation. The shape varies
+ * by interview track, so only a few fields are guaranteed; the rest (e.g.
+ * `linux_score`, `sql_score`, `technical_correctness`) are read dynamically.
+ */
+export type MockEvaluationDetail = {
+  summary?: string;
+  verdict?: string;
+  strengths?: string;
+  readiness_percent?: number;
+  meets_threshold?: boolean;
+  [key: string]: unknown;
+};
+
 export type MockAttemptRow = {
   id: string;
   email: string | null;
@@ -51,10 +65,33 @@ export type MockAttemptRow = {
   durationSeconds: number;
   endedReason: string | null;
   evaluation: string | number | null;
+  evaluationDetail: MockEvaluationDetail | null;
   completed: boolean;
   recordingUrl: string | null;
   summaryPreview: string;
   createdAt: string;
+};
+
+/** Performance level for a mock interview, mirroring the daily report. */
+export type MockLevel = "strong" | "average" | "needs";
+
+export const MOCK_LEVEL_LABEL: Record<MockLevel, string> = {
+  strong: "Strong",
+  average: "Average",
+  needs: "Needs work",
+};
+
+/** One row per unique student for a selected day, with their interviews + tallies. */
+export type MockStudentRow = {
+  key: string;
+  name: string | null;
+  email: string | null;
+  interviews: MockAttemptRow[];
+  total: number;
+  strong: number;
+  average: number;
+  needs: number;
+  lastAttemptAt: string | null;
 };
 
 /* --------------------------- AI HR Calling ---------------------------- */
@@ -163,6 +200,122 @@ export function downloadCsv(
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/* ═══════════════════════════ MOCK SCORING ══════════════════════ */
+// Frontend port of the daily-report logic (lms-backend services/reportPdf.js):
+// turn a mock interview's evaluation into a 0–100 score, then a Strong/Average/
+// Needs-work level. successEvaluation is usually just a pass/fail flag
+// ("true"/"false"), so most interviews resolve to Average (pass) or Needs work
+// (fail); Strong only appears when a genuine numeric score ≥75 is present.
+
+const clampScore = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
+
+function parseScoreFromAny(val: string | number | null | undefined): number | null {
+  if (val == null) return null;
+  if (typeof val === "number") return Number.isFinite(val) ? val : null;
+  const slash = val.match(/(\d+(?:\.\d+)?)\s*\/\s*(\d+)/);
+  if (slash) {
+    const n = parseFloat(slash[1]);
+    const d = parseFloat(slash[2]);
+    if (d > 0) return Math.round((n / d) * 100);
+  }
+  const m = val.match(/(\d+(?:\.\d+)?)/);
+  if (m) {
+    const n = parseFloat(m[1]);
+    // A bare number ≤10 is treated as an out-of-10 rating, e.g. "7" → 70.
+    return n <= 10 ? Math.round(n * 10) : Math.round(n);
+  }
+  return null;
+}
+
+function scoreFromSummary(text: string | null | undefined): number | null {
+  if (!text) return null;
+  const t = String(text);
+  let m = t.match(
+    /out of\s*(\d+)\s*questions?[^.]*?(\d+)\s*(?:were|was|are|got)?[^.]*?answered\s*correct/i
+  );
+  if (m && +m[1] > 0) return clampScore(Math.round((+m[2] / +m[1]) * 100));
+  m = t.match(
+    /(\d+)\s*(?:out of|\/)\s*(\d+)\s*(?:questions?\s*)?(?:were\s*)?(?:answered\s*)?correct/i
+  );
+  if (m && +m[2] > 0) return clampScore(Math.round((+m[1] / +m[2]) * 100));
+  m = t.match(/answered\s*(?:about\s*)?(\d+)[^.]*?correct[^.]*?out of\s*(\d+)/i);
+  if (m && +m[2] > 0) return clampScore(Math.round((+m[1] / +m[2]) * 100));
+  return null;
+}
+
+function scoreFromPassFail(val: string | number | null | undefined): number | null {
+  const s = String(val ?? "").trim().toLowerCase();
+  if (["true", "pass", "passed", "yes", "success"].includes(s)) return 70;
+  if (["false", "fail", "failed", "no"].includes(s)) return 30;
+  return null;
+}
+
+/** 0–100 score for a mock interview (mirrors mockInterviewScore in reportPdf.js). */
+export function mockInterviewScore(
+  row: Pick<MockAttemptRow, "evaluation" | "summaryPreview" | "evaluationDetail">
+): number {
+  // Prefer the rubric's own readiness percentage when the record has one — it's
+  // the real overall score, far better than the pass/fail fallback below.
+  const readiness = row.evaluationDetail?.readiness_percent;
+  if (typeof readiness === "number" && Number.isFinite(readiness)) {
+    return clampScore(readiness);
+  }
+  const fromEval = parseScoreFromAny(row.evaluation);
+  if (fromEval != null) return clampScore(fromEval);
+  const fromText = scoreFromSummary(row.summaryPreview);
+  if (fromText != null) return fromText;
+  const fromPF = scoreFromPassFail(row.evaluation);
+  if (fromPF != null) return fromPF;
+  return 0;
+}
+
+/** Strong (≥75) / Average (≥50) / Needs work — same thresholds as the report. */
+export function mockInterviewLevel(
+  row: Pick<MockAttemptRow, "evaluation" | "summaryPreview" | "evaluationDetail">
+): MockLevel {
+  const s = mockInterviewScore(row);
+  if (s >= 75) return "strong";
+  if (s >= 50) return "average";
+  return "needs";
+}
+
+/** Group a day's attempts into unique students, each with per-level tallies. */
+export function groupMockByStudent(rows: MockAttemptRow[]): MockStudentRow[] {
+  const map = new Map<string, MockStudentRow>();
+  for (const r of rows) {
+    const key = (r.email?.toLowerCase() || r.name || r.id || "unknown").trim();
+    let g = map.get(key);
+    if (!g) {
+      g = {
+        key,
+        name: r.name,
+        email: r.email,
+        interviews: [],
+        total: 0,
+        strong: 0,
+        average: 0,
+        needs: 0,
+        lastAttemptAt: null,
+      };
+      map.set(key, g);
+    }
+    g.interviews.push(r);
+    g.total += 1;
+    g[mockInterviewLevel(r)] += 1;
+    if (!g.name && r.name) g.name = r.name;
+    if (!g.email && r.email) g.email = r.email;
+    if (!g.lastAttemptAt || (r.createdAt && r.createdAt > g.lastAttemptAt)) {
+      g.lastAttemptAt = r.createdAt;
+    }
+  }
+  for (const g of map.values()) {
+    // Newest interview first within each student.
+    g.interviews.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+  }
+  // Students with the most interviews first.
+  return Array.from(map.values()).sort((a, b) => b.total - a.total);
 }
 
 /* ════════════════════════════ FETCHERS ═════════════════════════ */
