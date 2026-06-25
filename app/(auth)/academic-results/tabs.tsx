@@ -4,13 +4,15 @@
 // calendar + monthly chart, a day table, and a drill-down modal — driven by
 // the useMonthDay hook. Kept in one file so the pattern is easy to compare.
 import { useMemo, useState } from "react";
-import { Download } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 import DataPresentationTable from "@/healper/DataPresentationTable";
 import {
   useMonthDay,
   formatDuration,
   formatIST,
   downloadCsv,
+  groupMockByStudent,
+  mockInterviewLevel,
   fetchQuizMonth,
   fetchQuizDay,
   fetchMockMonth,
@@ -23,12 +25,20 @@ import {
   type QuizAttemptRow,
   type MockByDateRow,
   type MockAttemptRow,
+  type MockStudentRow,
   type AiCallingByDateRow,
   type AiCallingRow,
   type RealHrByDateRow,
   type RealHrRow,
 } from "./data";
-import { quizColumns, mockColumns, aiColumns, realHrColumns } from "./columns";
+import {
+  quizColumns,
+  mockStudentColumns,
+  mockLevelBadge,
+  aiColumns,
+  realHrColumns,
+} from "./columns";
+import { MockEvaluationPanel } from "./mockEvaluation";
 import {
   StatCards,
   MonthlyChart,
@@ -189,9 +199,30 @@ export function MockInterviewTab({
       [courseId, refreshKey]
     );
 
+  // Drill-down state: a student (level 2) and, within them, one interview (level 3).
+  const [student, setStudent] = useState<MockStudentRow | null>(null);
   const [selected, setSelected] = useState<MockAttemptRow | null>(null);
 
-  const totals = useMemo(
+  // Unique students for the selected day, with per-level tallies.
+  const students = useMemo(() => groupMockByStudent(dayRows), [dayRows]);
+
+  // Day-level Strong/Average/Needs totals (each interview counted once).
+  const dayStats = useMemo(
+    () =>
+      students.reduce(
+        (acc, g) => {
+          acc.strong += g.strong;
+          acc.average += g.average;
+          acc.needs += g.needs;
+          return acc;
+        },
+        { strong: 0, average: 0, needs: 0 }
+      ),
+    [students]
+  );
+
+  // Month-level totals shown before a day is picked.
+  const monthTotals = useMemo(
     () =>
       byDate.reduce(
         (acc, r) => {
@@ -204,14 +235,32 @@ export function MockInterviewTab({
     [byDate]
   );
 
+  const closeStudent = () => {
+    setStudent(null);
+    setSelected(null);
+  };
+
   return (
     <div className="space-y-6">
-      <StatCards
-        items={[
-          { label: "Total Interviews", value: totals.totalAttempts, accent: "blue" },
-          { label: "Student-days", value: totals.uniqueUserCount, accent: "emerald" },
-        ]}
-      />
+      {selectedDate ? (
+        <StatCards
+          columns={5}
+          items={[
+            { label: "Total Students", value: students.length, accent: "blue" },
+            { label: "Total Mock Interviews", value: dayRows.length, accent: "violet" },
+            { label: "Strong", value: dayStats.strong, accent: "emerald" },
+            { label: "Average", value: dayStats.average, accent: "amber" },
+            { label: "Needs Work", value: dayStats.needs, accent: "rose" },
+          ]}
+        />
+      ) : (
+        <StatCards
+          items={[
+            { label: "Total Interviews", value: monthTotals.totalAttempts, accent: "blue" },
+            { label: "Student-days", value: monthTotals.uniqueUserCount, accent: "emerald" },
+          ]}
+        />
+      )}
 
       <div className="space-y-4">
         <MonthlyChart
@@ -237,8 +286,12 @@ export function MockInterviewTab({
       </div>
 
       <TablePanel
-        title={selectedDate ? `Mock interviews on ${selectedDate}` : "Mock interviews"}
-        subtitle={selectedDate ? `${dayRows.length} attempt${dayRows.length === 1 ? "" : "s"}` : undefined}
+        title={selectedDate ? `Students on ${selectedDate}` : "Mock interviews"}
+        subtitle={
+          selectedDate
+            ? `${students.length} student${students.length === 1 ? "" : "s"} · ${dayRows.length} interview${dayRows.length === 1 ? "" : "s"}`
+            : undefined
+        }
         empty={!selectedDate}
         action={
           selectedDate && dayRows.length > 0 ? (
@@ -246,13 +299,14 @@ export function MockInterviewTab({
               onClick={() =>
                 downloadCsv(
                   `mock-interviews-${selectedDate}.csv`,
-                  ["Name", "Email", "Interview Type", "Duration", "Attempt Time", "Status"],
+                  ["Name", "Email", "Interview Type", "Duration", "Attempt Time", "Result", "Status"],
                   dayRows.map((r) => [
                     r.name ?? "",
                     r.email ?? "",
                     r.interviewType ?? "",
                     formatDuration(r.durationSeconds),
                     formatIST(r.startedAt),
+                    mockInterviewLevel(r),
                     r.completed ? "Completed" : "Incomplete",
                   ])
                 )
@@ -265,67 +319,83 @@ export function MockInterviewTab({
           ) : null
         }
       >
-        <DataPresentationTable<MockAttemptRow>
-          data={dayRows}
-          columns={mockColumns}
+        <DataPresentationTable<MockStudentRow>
+          data={students}
+          columns={mockStudentColumns}
           loading={loadingDay}
           searchable
           paginated
           pageSize={15}
-          rowKey="id"
+          rowKey="key"
           stickyHeader
-          onRowClick={(r) => setSelected(r)}
+          onRowClick={(r) => {
+            setStudent(r);
+            setSelected(null);
+          }}
           emptyMessage="No mock interviews for this date"
         />
       </TablePanel>
 
+      {/* Two-level drill-down: a student's interviews → one interview's details. */}
       <DrillDownModal
-        open={!!selected}
-        title={selected?.name ?? selected?.email ?? "Mock interview"}
-        subtitle={selected?.interviewType ?? undefined}
-        onClose={() => setSelected(null)}
+        open={!!student}
+        title={student?.name ?? student?.email ?? "Student"}
+        subtitle={
+          selected
+            ? selected.interviewType ?? undefined
+            : student
+            ? `${student.total} interview${student.total === 1 ? "" : "s"}${selectedDate ? ` on ${selectedDate}` : ""}`
+            : undefined
+        }
+        onClose={closeStudent}
       >
-        {selected && (
+        {student && !selected && (
+          <div className="space-y-2">
+            {student.interviews.map((iv) => (
+              <button
+                key={iv.id}
+                onClick={() => setSelected(iv)}
+                className="flex w-full items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 text-left transition hover:border-blue-300 hover:bg-blue-50/40"
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {mockLevelBadge(mockInterviewLevel(iv))}
+                    {iv.interviewType && (
+                      <span className="text-xs text-gray-500">{iv.interviewType}</span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">{formatIST(iv.createdAt)}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <span className="text-xs text-gray-600">
+                    {formatDuration(iv.durationSeconds)}
+                  </span>
+                  <span
+                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                      iv.completed
+                        ? "bg-green-50 text-green-700"
+                        : "bg-amber-50 text-amber-700"
+                    }`}
+                  >
+                    {iv.completed ? "Completed" : "Incomplete"}
+                  </span>
+                  <ChevronRight className="h-4 w-4 text-gray-400" />
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {student && selected && (
           <div className="space-y-4">
-            <div>
-              <DetailRow label="Student" value={selected.name ?? "—"} />
-              <DetailRow label="Email" value={selected.email ?? "—"} />
-              <DetailRow label="Interview Type" value={selected.interviewType ?? "—"} />
-              <DetailRow label="Duration" value={formatDuration(selected.durationSeconds)} />
-              <DetailRow
-                label="Evaluation"
-                value={selected.evaluation == null ? "—" : String(selected.evaluation)}
-              />
-              <DetailRow label="Status" value={selected.completed ? "Completed" : "Incomplete"} />
-              <DetailRow label="Ended Reason" value={selected.endedReason ?? "—"} />
-              <DetailRow label="Started" value={formatIST(selected.startedAt)} />
-              <DetailRow label="Ended" value={formatIST(selected.endedAt)} />
-              <DetailRow
-                label="Recording"
-                value={
-                  selected.recordingUrl ? (
-                    <a
-                      href={selected.recordingUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-blue-600 hover:underline"
-                    >
-                      Listen
-                    </a>
-                  ) : (
-                    "—"
-                  )
-                }
-              />
-            </div>
-            {selected.summaryPreview && (
-              <div>
-                <p className="mb-1 text-sm font-medium text-gray-700">Summary</p>
-                <p className="rounded-lg bg-gray-50 p-3 text-sm text-gray-600">
-                  {selected.summaryPreview}
-                </p>
-              </div>
-            )}
+            <button
+              onClick={() => setSelected(null)}
+              className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Back to interviews
+            </button>
+            <MockEvaluationPanel interview={selected} />
           </div>
         )}
       </DrillDownModal>
