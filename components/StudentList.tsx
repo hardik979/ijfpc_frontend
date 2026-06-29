@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Eye, X, GraduationCap, BarChart3 } from "lucide-react";
+import { Search, Eye, X, GraduationCap, BarChart3, Layers } from "lucide-react";
 import ZoneStudentAnalytics from "./ZoneStudentAnalytics";
 import {
   Bar,
@@ -762,6 +762,14 @@ const StudentsListPage = () => {
               View all students, search them, and open complete details
             </p>
           </div>
+
+          <Link
+            href="/batch-section"
+            className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-[#312a63] bg-[#0f0b24] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#1b1640]"
+          >
+            <Layers className="h-4 w-4" />
+            Batch Section
+          </Link>
 
           <button
             onClick={() => { router.push('/batch-section/students-zone-update') }}

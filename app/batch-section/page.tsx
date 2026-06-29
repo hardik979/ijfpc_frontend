@@ -3,9 +3,10 @@
 import { motion, type Variants } from "framer-motion";
 import { useMemo, useState } from "react";
 import {
+  ArrowLeft,
   ChevronRight,
   Plus,
-  Vault,
+  UserPlus,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -25,31 +26,22 @@ export default function BatchSectionPage(): JSX.Element {
   const dashboardCards = useMemo<DashboardCard[]>(
     () => [
       {
-        id: "it-jobs-factory-BC",
-        title: "IT Jobs Factory Batch Creation",
+        id: "it-jobs-factory-create-batch",
+        title: "Create Batch",
         description:
-          "Design, launch, and manage training batches with control over course structure, trainers, schedules, and batch status.",
+          "Pick a course and status to launch a new batch. Optionally add students enrolled in that course right away.",
         icon: Plus,
-        gradient: "from-slate-700 to-indigo-600",
-        path: "/batch-section/batch-list",
+        gradient: "from-cyan-500 to-blue-600",
+        path: "/batch-section/create-batch",
       },
       {
-        id: "it-jobs-factory-BA",
-        title: "IT Jobs Factory Batch Assignment",
+        id: "it-jobs-factory-add-students",
+        title: "Add Students to Batch",
         description:
-          "Assign students to the right batch and update batch changes anytime with a few clicks.",
-        icon: Vault,
+          "Select an existing batch, filter students by course, and add them to the batch in bulk.",
+        icon: UserPlus,
         gradient: "from-teal-500 to-cyan-600",
-        path: "/batch-section/student-list",
-      },
-      {
-        id: "it-jobs-factory-SM",
-        title: "IT Jobs Factory Permission",
-        description:
-          "Grant Permission for students to the getting Leads for calling.",
-        icon: Vault,
-        gradient: "from-teal-500 to-cyan-600",
-        path: "/batch-section/update-zone",
+        path: "/batch-section/add-students",
       },
     ],
     []
@@ -107,6 +99,15 @@ export default function BatchSectionPage(): JSX.Element {
         initial="hidden"
         animate="visible"
       >
+        {/* Back */}
+        <Link
+          href="/studentOverview"
+          className="group mb-8 inline-flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-slate-300 backdrop-blur-sm transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
+        >
+          <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+          <span>Back to Students Overview</span>
+        </Link>
+
         {/* Header */}
         <motion.div className="text-center" variants={titleVariants}>
           <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-slate-100">
