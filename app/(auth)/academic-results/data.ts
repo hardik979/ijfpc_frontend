@@ -34,6 +34,19 @@ export type QuizAttemptRow = {
   attemptedAt: string;
 };
 
+/** One row per unique student for a selected day, with their attempts + tallies. */
+export type QuizStudentRow = {
+  key: string;
+  studentName: string;
+  section: string | null;
+  attempts: QuizAttemptRow[];
+  total: number;
+  evaluated: number;
+  pending: number;
+  bestPercentage: number;
+  lastAttemptAt: string | null;
+};
+
 /* --------------------------- Mock Interview --------------------------- */
 export type MockByDateRow = {
   date: string;
@@ -72,13 +85,18 @@ export type MockAttemptRow = {
   createdAt: string;
 };
 
-/** Performance level for a mock interview, mirroring the daily report. */
-export type MockLevel = "strong" | "average" | "needs";
+/**
+ * Performance level for a mock interview, mirroring the daily report.
+ * `unanalyzed` is a non-performance state: Vapi returned no report at all, so
+ * the attempt can't be graded (it must never be shown as "Needs work").
+ */
+export type MockLevel = "strong" | "average" | "needs" | "unanalyzed";
 
 export const MOCK_LEVEL_LABEL: Record<MockLevel, string> = {
   strong: "Strong",
   average: "Average",
   needs: "Needs work",
+  unanalyzed: "Not analyzed",
 };
 
 /** One row per unique student for a selected day, with their interviews + tallies. */
@@ -91,6 +109,7 @@ export type MockStudentRow = {
   strong: number;
   average: number;
   needs: number;
+  unanalyzed: number;
   lastAttemptAt: string | null;
 };
 
@@ -116,6 +135,35 @@ export type AiCallingRow = {
   analysis: unknown | null;
   hasTranscript: boolean;
 };
+
+/** One row per unique candidate for a selected day, with their calls + tallies. */
+export type AiStudentRow = {
+  key: string;
+  candidateName: string | null;
+  phone: string | null;
+  calls: AiCallingRow[];
+  total: number;
+  analyzed: number;
+  notAnswered: number;
+  pending: number;
+  lastCallAt: string | null;
+};
+
+/**
+ * A "Did Not Pick" (DNP) AI HR call: the candidate never answered, so the call
+ * produced no conversation and will never be analyzed. Showing "Pending" for
+ * these is misleading — it's a terminal state, not a queued one. Mirrors
+ * isAiCallDnp in lms-backend services/reportPdf.js so the families stay in sync.
+ */
+export function isAiCallDnp(row: Pick<AiCallingRow, "endReason">): boolean {
+  const reason = String(row.endReason || "")
+    .toLowerCase()
+    .replace(/[-_]+/g, " ")
+    .trim();
+  return /\b(no answer|did ?n[o']?t answer|no pick ?up|not picked|unanswered|voicemail|busy|unreachable)\b/.test(
+    reason
+  );
+}
 
 /* ------------------- Real HR Calling (call recordings) ---------------- */
 export type RealHrByDateRow = {
@@ -145,6 +193,39 @@ export type RealHrRow = {
   analysis: unknown | null;
   hasTranscript: boolean;
   createdAt: string;
+};
+
+/**
+ * One row per unique lead/student for a selected day, with their calls + tallies.
+ * `analyzed` + `pending` + `manual` partition `total` (each call counted once).
+ */
+export type RealHrStudentRow = {
+  key: string;
+  studentName: string;
+  email: string | null;
+  phone: string | null;
+  calls: RealHrRow[];
+  total: number;
+  analyzed: number; // calls with an analysis
+  pending: number; // recordings not yet analyzed
+  manual: number; // manual log entries (no recording / analysis)
+  lastCallAt: string | null;
+};
+
+/* ------------------------- Absent students ---------------------------- */
+// An *expected* active student (zone-based, per the daily report) who did not
+// participate on the selected day. Same shape for all four tabs.
+export type AbsentRow = {
+  id: string;
+  studentName: string;
+  email: string | null;
+  zone: string | null;
+};
+
+export type AbsentResult = {
+  students: AbsentRow[];
+  /** Size of the expected roster for the tab (absent + attended). */
+  expected: number;
 };
 
 /* ------------------------------ Courses ------------------------------- */
@@ -252,6 +333,49 @@ function scoreFromPassFail(val: string | number | null | undefined): number | nu
   return null;
 }
 
+/**
+ * The literal placeholder the backend stores (lms-backend routes/ai.routes.js)
+ * when Vapi's end-of-call report arrives with no analysis/summary. It's a
+ * provider-side failure — not the student's fault — so the UI must never show
+ * it as real feedback or treat it as a low score.
+ */
+export const NO_VAPI_SUMMARY = "No summary from Vapi";
+
+/** True when `text` is a real, student-facing summary (not empty / not the placeholder). */
+export function hasVapiSummary(text: string | null | undefined): boolean {
+  const t = String(text ?? "").trim();
+  return t.length > 0 && t.toLowerCase() !== NO_VAPI_SUMMARY.toLowerCase();
+}
+
+/** True when an evaluation rubric carries at least one usable field. */
+function hasEvaluationDetail(
+  d: MockEvaluationDetail | null | undefined
+): boolean {
+  if (!d) return false;
+  return Object.values(d).some(
+    (v) =>
+      (typeof v === "number" && Number.isFinite(v)) ||
+      typeof v === "boolean" ||
+      (typeof v === "string" && v.trim().length > 0)
+  );
+}
+
+/**
+ * True when Vapi never produced any analysis for this attempt — no pass/fail
+ * evaluation, no rubric, and no real summary. These attempts must NOT be scored
+ * as "Needs work" (a 0 score): the student did nothing wrong, the provider
+ * simply failed to return a report.
+ */
+export function isMockInterviewUnanalyzed(
+  row: Pick<MockAttemptRow, "evaluation" | "summaryPreview" | "evaluationDetail">
+): boolean {
+  return (
+    row.evaluation == null &&
+    !hasEvaluationDetail(row.evaluationDetail) &&
+    !hasVapiSummary(row.summaryPreview)
+  );
+}
+
 /** 0–100 score for a mock interview (mirrors mockInterviewScore in reportPdf.js). */
 export function mockInterviewScore(
   row: Pick<MockAttemptRow, "evaluation" | "summaryPreview" | "evaluationDetail">
@@ -275,6 +399,8 @@ export function mockInterviewScore(
 export function mockInterviewLevel(
   row: Pick<MockAttemptRow, "evaluation" | "summaryPreview" | "evaluationDetail">
 ): MockLevel {
+  // Vapi never returned a report → not a performance level, can't be graded.
+  if (isMockInterviewUnanalyzed(row)) return "unanalyzed";
   const s = mockInterviewScore(row);
   if (s >= 75) return "strong";
   if (s >= 50) return "average";
@@ -297,6 +423,7 @@ export function groupMockByStudent(rows: MockAttemptRow[]): MockStudentRow[] {
         strong: 0,
         average: 0,
         needs: 0,
+        unanalyzed: 0,
         lastAttemptAt: null,
       };
       map.set(key, g);
@@ -315,6 +442,146 @@ export function groupMockByStudent(rows: MockAttemptRow[]): MockStudentRow[] {
     g.interviews.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
   }
   // Students with the most interviews first.
+  return Array.from(map.values()).sort((a, b) => b.total - a.total);
+}
+
+/** Group a day's quiz attempts into unique students, each with per-status tallies. */
+export function groupQuizByStudent(rows: QuizAttemptRow[]): QuizStudentRow[] {
+  const map = new Map<string, QuizStudentRow>();
+  for (const r of rows) {
+    const key = (r.userId || r.studentName || r.attemptId || "unknown").trim();
+    let g = map.get(key);
+    if (!g) {
+      g = {
+        key,
+        studentName: r.studentName,
+        section: r.section,
+        attempts: [],
+        total: 0,
+        evaluated: 0,
+        pending: 0,
+        bestPercentage: 0,
+        lastAttemptAt: null,
+      };
+      map.set(key, g);
+    }
+    g.attempts.push(r);
+    g.total += 1;
+    if (r.isEvaluated) g.evaluated += 1;
+    else g.pending += 1;
+    if (r.percentage > g.bestPercentage) g.bestPercentage = r.percentage;
+    if (!g.section && r.section) g.section = r.section;
+    if (!g.lastAttemptAt || (r.attemptedAt && r.attemptedAt > g.lastAttemptAt)) {
+      g.lastAttemptAt = r.attemptedAt;
+    }
+  }
+  for (const g of map.values()) {
+    // Newest attempt first within each student.
+    g.attempts.sort((a, b) =>
+      (b.attemptedAt ?? "").localeCompare(a.attemptedAt ?? "")
+    );
+  }
+  // Students with the most attempts first.
+  return Array.from(map.values()).sort((a, b) => b.total - a.total);
+}
+
+/** Group a day's AI HR calls into unique candidates, each with per-status tallies. */
+export function groupAiByStudent(rows: AiCallingRow[]): AiStudentRow[] {
+  const map = new Map<string, AiStudentRow>();
+  for (const r of rows) {
+    const key = (
+      r.clerkId ||
+      r.phone ||
+      r.candidateName ||
+      r.id ||
+      "unknown"
+    ).trim();
+    let g = map.get(key);
+    if (!g) {
+      g = {
+        key,
+        candidateName: r.candidateName,
+        phone: r.phone,
+        calls: [],
+        total: 0,
+        analyzed: 0,
+        notAnswered: 0,
+        pending: 0,
+        lastCallAt: null,
+      };
+      map.set(key, g);
+    }
+    g.calls.push(r);
+    g.total += 1;
+    if (r.analyzed) g.analyzed += 1;
+    else if (isAiCallDnp(r)) g.notAnswered += 1;
+    else g.pending += 1;
+    if (!g.candidateName && r.candidateName) g.candidateName = r.candidateName;
+    if (!g.phone && r.phone) g.phone = r.phone;
+    if (!g.lastCallAt || (r.startedAt && r.startedAt > g.lastCallAt)) {
+      g.lastCallAt = r.startedAt;
+    }
+  }
+  for (const g of map.values()) {
+    // Newest call first within each candidate.
+    g.calls.sort((a, b) =>
+      (b.startedAt ?? "").localeCompare(a.startedAt ?? "")
+    );
+  }
+  // Candidates with the most calls first.
+  return Array.from(map.values()).sort((a, b) => b.total - a.total);
+}
+
+/** Group a day's HR recordings into unique leads/students, each with per-status tallies. */
+export function groupRealHrByStudent(rows: RealHrRow[]): RealHrStudentRow[] {
+  const map = new Map<string, RealHrStudentRow>();
+  for (const r of rows) {
+    const key = (
+      r.leadId ||
+      r.email?.toLowerCase() ||
+      r.phone ||
+      r.studentName ||
+      r.id ||
+      "unknown"
+    ).trim();
+    let g = map.get(key);
+    if (!g) {
+      g = {
+        key,
+        studentName: r.studentName,
+        email: r.email,
+        phone: r.phone,
+        calls: [],
+        total: 0,
+        analyzed: 0,
+        pending: 0,
+        manual: 0,
+        lastCallAt: null,
+      };
+      map.set(key, g);
+    }
+    g.calls.push(r);
+    g.total += 1;
+    // Clean partition of total: analyzed → pending recording → manual log.
+    if (r.analyzed) g.analyzed += 1;
+    else if (r.type === "manual") g.manual += 1;
+    else g.pending += 1;
+    if ((!g.studentName || g.studentName === "—") && r.studentName) {
+      g.studentName = r.studentName;
+    }
+    if (!g.email && r.email) g.email = r.email;
+    if (!g.phone && r.phone) g.phone = r.phone;
+    if (!g.lastCallAt || (r.createdAt && r.createdAt > g.lastCallAt)) {
+      g.lastCallAt = r.createdAt;
+    }
+  }
+  for (const g of map.values()) {
+    // Newest call first within each lead/student.
+    g.calls.sort((a, b) =>
+      (b.createdAt ?? "").localeCompare(a.createdAt ?? "")
+    );
+  }
+  // Leads/students with the most calls first.
   return Array.from(map.values()).sort((a, b) => b.total - a.total);
 }
 
@@ -413,6 +680,23 @@ export async function fetchCourses(): Promise<Course[]> {
   return Array.isArray(data) ? data : [];
 }
 
+/* -------------------------- Absent students --------------------------- */
+// The absent roster is zone-based (mirrors the daily report) and therefore
+// course-independent, so no courseId is sent.
+export async function fetchAbsent(
+  tab: TabKey,
+  date: string
+): Promise<AbsentResult> {
+  const { data } = await axios.get(
+    `${LMS}/api/academic-results/absent/${tab}`,
+    { params: { date } }
+  );
+  return {
+    students: data?.students ?? [],
+    expected: typeof data?.expected === "number" ? data.expected : 0,
+  };
+}
+
 /* ══════════════════════════ useMonthDay ════════════════════════ */
 
 // A tab loads a monthly summary (calendar/chart data) and, when a date is
@@ -488,4 +772,48 @@ export function useMonthDay<MRow, DRow>(
     loadDay,
     clearDay,
   };
+}
+
+/* ══════════════════════════════ useAbsent ══════════════════════════════ */
+
+// Loads the absent roster for a tab whenever a day is selected (or refreshed).
+// Returns nothing until a date is picked. Eager so the toggle can show counts.
+export function useAbsent(
+  tab: TabKey,
+  date: string | null,
+  refreshKey: number
+) {
+  const [rows, setRows] = useState<AbsentRow[]>([]);
+  const [expected, setExpected] = useState(0);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!date) {
+      setRows([]);
+      setExpected(0);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    fetchAbsent(tab, date)
+      .then((res) => {
+        if (cancelled) return;
+        setRows(res.students);
+        setExpected(res.expected);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error("[useAbsent] load failed", err);
+        setRows([]);
+        setExpected(0);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, date, refreshKey]);
+
+  return { rows, expected, loading };
 }

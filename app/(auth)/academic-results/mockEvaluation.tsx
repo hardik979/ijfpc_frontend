@@ -16,10 +16,13 @@ import {
   Workflow,
   CheckCircle2,
   XCircle,
+  Info,
 } from "lucide-react";
 import {
   formatDuration,
   formatIST,
+  hasVapiSummary,
+  isMockInterviewUnanalyzed,
   mockInterviewLevel,
   type MockAttemptRow,
 } from "./data";
@@ -175,9 +178,81 @@ function TextBlock({ label, text }: { label: string; text: string }) {
   );
 }
 
+// Shown when Vapi returned no analysis at all. Makes it explicit that this is a
+// provider-side failure, not a poor performance by the student.
+function VapiUnavailableNotice({ hasRecording }: { hasRecording: boolean }) {
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-200 text-slate-600">
+        <Info className="h-4 w-4" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-slate-800">
+          Analysis unavailable
+        </p>
+        <p className="mt-0.5 text-sm leading-relaxed text-slate-600">
+          The interview provider didn’t return an evaluation for this attempt.
+          This is a processing issue on the provider’s side and does{" "}
+          <span className="font-medium">not</span> reflect the student’s
+          performance — the attempt simply could not be scored.
+          {hasRecording
+            ? " You can still review the recording below to assess it manually."
+            : ""}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// Call metadata (type, duration, status, timing, recording) — shared by the
+// full evaluation view and the "analysis unavailable" fallback.
+function CallFacts({ interview }: { interview: MockAttemptRow }) {
+  return (
+    <div>
+      <DetailRow label="Interview Type" value={interview.interviewType ?? "—"} />
+      <DetailRow label="Duration" value={formatDuration(interview.durationSeconds)} />
+      <DetailRow
+        label="Status"
+        value={interview.completed ? "Completed" : "Incomplete"}
+      />
+      <DetailRow label="Ended Reason" value={interview.endedReason ?? "—"} />
+      <DetailRow label="Started" value={formatIST(interview.startedAt)} />
+      <DetailRow label="Ended" value={formatIST(interview.endedAt)} />
+      <DetailRow
+        label="Recording"
+        value={
+          interview.recordingUrl ? (
+            <a
+              href={interview.recordingUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-blue-600 hover:underline"
+            >
+              Listen
+            </a>
+          ) : (
+            "—"
+          )
+        }
+      />
+    </div>
+  );
+}
+
 export function MockEvaluationPanel({ interview }: { interview: MockAttemptRow }) {
   const d = interview.evaluationDetail;
   const level = mockInterviewLevel(interview);
+
+  // Vapi produced nothing to grade: show a neutral notice + the call facts
+  // instead of an empty rubric topped with a misleading "Needs work" badge.
+  if (isMockInterviewUnanalyzed(interview)) {
+    return (
+      <div className="space-y-5">
+        <VapiUnavailableNotice hasRecording={Boolean(interview.recordingUrl)} />
+        <CallFacts interview={interview} />
+      </div>
+    );
+  }
 
   // Numeric rubric fields, split into subjects (*_score) and competencies.
   const numeric = d
@@ -272,36 +347,10 @@ export function MockEvaluationPanel({ interview }: { interview: MockAttemptRow }
       {strengths && <TextBlock label="Strengths" text={strengths} />}
 
       {/* Call facts */}
-      <div>
-        <DetailRow label="Interview Type" value={interview.interviewType ?? "—"} />
-        <DetailRow label="Duration" value={formatDuration(interview.durationSeconds)} />
-        <DetailRow
-          label="Status"
-          value={interview.completed ? "Completed" : "Incomplete"}
-        />
-        <DetailRow label="Ended Reason" value={interview.endedReason ?? "—"} />
-        <DetailRow label="Started" value={formatIST(interview.startedAt)} />
-        <DetailRow label="Ended" value={formatIST(interview.endedAt)} />
-        <DetailRow
-          label="Recording"
-          value={
-            interview.recordingUrl ? (
-              <a
-                href={interview.recordingUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="text-blue-600 hover:underline"
-              >
-                Listen
-              </a>
-            ) : (
-              "—"
-            )
-          }
-        />
-      </div>
+      <CallFacts interview={interview} />
 
-      {summary && <TextBlock label="Summary" text={summary} />}
+      {/* Only show a real summary — never the "No summary from Vapi" placeholder. */}
+      {hasVapiSummary(summary) && <TextBlock label="Summary" text={summary} />}
     </div>
   );
 }

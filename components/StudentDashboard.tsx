@@ -10,6 +10,15 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December",
 ];
 
+// Vapi sometimes fails to return an end-of-call report; the backend then stores
+// this literal placeholder and defaults the attempt to "FAIL". Such attempts
+// weren't graded, so they must not be shown to the student as a failure.
+const NO_VAPI_SUMMARY = "No summary from Vapi";
+function hasVapiSummary(text?: string | null): boolean {
+  const t = (text ?? "").trim();
+  return t.length > 0 && t.toLowerCase() !== NO_VAPI_SUMMARY.toLowerCase();
+}
+
 interface MockAttempt {
   _id: string;
   callId?: string;
@@ -760,6 +769,8 @@ export default function StudentDashboard() {
             ) : (
               filtered.map((item, i) => {
                 const when = item.date || item.createdAt || item.startedAt;
+                // No Vapi report → the "FAIL" is a default, not a real result.
+                const analyzed = hasVapiSummary(item.feedback || item.summary);
                 const isPass = item.status === "PASS";
                 return (
                   <div key={item._id} className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
@@ -776,14 +787,18 @@ export default function StudentDashboard() {
                       <div className="flex flex-col items-end gap-1">
                         <span
                           className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                            isPass
-                              ? "bg-emerald-500/20 text-emerald-300"
-                              : "bg-rose-500/20 text-rose-300"
+                            !analyzed
+                              ? "bg-slate-600/40 text-slate-300"
+                              : isPass
+                                ? "bg-emerald-500/20 text-emerald-300"
+                                : "bg-rose-500/20 text-rose-300"
                           }`}
                         >
-                          {item.status || "—"}
+                          {!analyzed ? "Not analyzed" : item.status || "—"}
                         </span>
-                        {typeof item.percentage === "number" && item.totalQuestions ? (
+                        {analyzed &&
+                        typeof item.percentage === "number" &&
+                        item.totalQuestions ? (
                           <span className="text-xs text-slate-400">
                             {item.correctAnswers}/{item.totalQuestions} ({item.percentage}%)
                           </span>
@@ -794,9 +809,19 @@ export default function StudentDashboard() {
                       <p className="mb-1 text-xs font-medium uppercase tracking-wider text-slate-400">
                         Feedback Summary
                       </p>
-                      <p className="whitespace-pre-wrap text-sm text-slate-200">
-                        {item.feedback || item.summary || "No summary available"}
-                      </p>
+                      {analyzed ? (
+                        <p className="whitespace-pre-wrap text-sm text-slate-200">
+                          {item.feedback || item.summary}
+                        </p>
+                      ) : (
+                        <p className="text-sm leading-relaxed text-slate-300">
+                          Our interview system couldn’t generate a report for this
+                          attempt — a technical issue on the provider’s side. This
+                          does <span className="font-semibold">not</span> count
+                          against you or mean you failed. Please try again, and tell
+                          your mentor if it keeps happening.
+                        </p>
+                      )}
                     </div>
                   </div>
                 );

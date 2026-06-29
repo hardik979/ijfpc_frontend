@@ -29,6 +29,7 @@ type Student = {
   email?: string;
   zone?: string;
   batchCode?: string | null;
+  isPlaced?: boolean;
 };
 
 const zoneBadge = (zone?: string) => {
@@ -138,8 +139,9 @@ export default function AddStudentsToBatch() {
 
   const filteredStudents = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return students;
-    return students.filter(
+    const notPlaced = students.filter((s) => !s.isPlaced);
+    if (!q) return notPlaced;
+    return notPlaced.filter(
       (s) =>
         (s.fullName || "").toLowerCase().includes(q) ||
         (s.email || "").toLowerCase().includes(q)

@@ -23,6 +23,7 @@ type Student = {
   email?: string;
   zone?: string;
   batchCode?: string | null;
+  isPlaced?: boolean;
 };
 
 const STATUS_OPTIONS = ["Upcoming", "Active", "Completed"] as const;
@@ -109,12 +110,9 @@ export default function CreateBatch() {
 
   const filteredStudents = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return students;
-    return students.filter(
-      (s) =>
-        (s.fullName || "").toLowerCase().includes(q) ||
-        (s.email || "").toLowerCase().includes(q)
-    );
+    const notPlaced = students.filter((s) => !s.isPlaced);
+    if (!q) return notPlaced;
+    return notPlaced.filter((s) =>(s.fullName || "").toLowerCase().includes(q) || (s.email || "").toLowerCase().includes(q));
   }, [students, search]);
 
   const allFilteredSelected =
