@@ -25,7 +25,15 @@ import {
   YAxis,
 } from "recharts";
 import CalendarFormate from "@/healper/calendarFormate";
-import { fetchCourses, type Course, type TabKey } from "./data";
+import DataPresentationTable from "@/healper/DataPresentationTable";
+import {
+  fetchCourses,
+  useAbsent,
+  type Course,
+  type TabKey,
+  type AbsentRow,
+} from "./data";
+import { absentColumns } from "./columns";
 
 /* ═══════════════════════════ CourseFilter ══════════════════════ */
 export function CourseFilter({
@@ -104,6 +112,7 @@ export const ACCENTS = {
   amber: { value: "text-amber-400", ring: "from-amber-500/20 to-transparent", bar: "bg-amber-500" },
   violet: { value: "text-violet-400", ring: "from-violet-500/20 to-transparent", bar: "bg-violet-500" },
   rose: { value: "text-rose-400", ring: "from-rose-500/20 to-transparent", bar: "bg-rose-500" },
+  slate: { value: "text-slate-400", ring: "from-slate-500/20 to-transparent", bar: "bg-slate-500" },
 } as const;
 
 export type Accent = keyof typeof ACCENTS;
@@ -120,10 +129,12 @@ export function StatCards({
 }: {
   items: StatItem[];
   /** Max columns at the widest breakpoint (so 5-card layouts don't squash). */
-  columns?: 2 | 3 | 4 | 5;
+  columns?: 2 | 3 | 4 | 5 | 6;
 }) {
   const grid =
-    columns === 5
+    columns === 6
+      ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6"
+      : columns === 5
       ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5"
       : columns === 3
       ? "grid-cols-2 sm:grid-cols-3"
@@ -399,6 +410,120 @@ export function TablePanel({
         <div className="p-4">{children}</div>
       )}
     </div>
+  );
+}
+
+/* ════════════════════════════ DrillDownModal ═══════════════════ */
+/* ════════════════════════════ AttendancePanel ══════════════════════ */
+// A TablePanel with an Attended / Absent toggle. "Attended" shows the per-day
+// table passed as children; "Absent" shows the expected-but-didn't-participate
+// roster (zone-based, loaded lazily once a day is selected).
+function AttendanceToggle({
+  view,
+  onChange,
+  attendedCount,
+  absentCount,
+}: {
+  view: "attended" | "absent";
+  onChange: (v: "attended" | "absent") => void;
+  attendedCount: number;
+  absentCount: number;
+}) {
+  return (
+    <div className="inline-flex shrink-0 rounded-lg border border-gray-300 bg-gray-50 p-0.5 text-sm">
+      <button
+        onClick={() => onChange("attended")}
+        className={`rounded-md px-3 py-1 font-medium transition ${
+          view === "attended"
+            ? "bg-white text-gray-900 shadow-sm"
+            : "text-gray-500 hover:text-gray-700"
+        }`}
+      >
+        Attended <span className="text-xs text-gray-400">({attendedCount})</span>
+      </button>
+      <button
+        onClick={() => onChange("absent")}
+        className={`rounded-md px-3 py-1 font-medium transition ${
+          view === "absent"
+            ? "bg-white text-rose-700 shadow-sm"
+            : "text-gray-500 hover:text-gray-700"
+        }`}
+      >
+        Absent <span className="text-xs text-gray-400">({absentCount})</span>
+      </button>
+    </div>
+  );
+}
+
+export function AttendancePanel({
+  tab,
+  selectedDate,
+  refreshKey,
+  title,
+  attendedSubtitle,
+  attendedCount,
+  extraAction,
+  children,
+}: {
+  tab: TabKey;
+  selectedDate: string | null;
+  refreshKey: number;
+  /** Header title shown in the "Attended" view. */
+  title: string;
+  attendedSubtitle?: string;
+  attendedCount: number;
+  /** Extra control (e.g. a download button) shown only in the Attended view. */
+  extraAction?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const [view, setView] = useState<"attended" | "absent">("attended");
+  const { rows: absentRows, expected, loading: absentLoading } = useAbsent(
+    tab,
+    selectedDate,
+    refreshKey
+  );
+
+  return (
+    <TablePanel
+      title={view === "absent" && selectedDate ? `Absent on ${selectedDate}` : title}
+      subtitle={
+        !selectedDate
+          ? undefined
+          : view === "absent"
+          ? `${absentRows.length} absent · ${expected} expected`
+          : attendedSubtitle
+      }
+      empty={!selectedDate}
+      action={
+        selectedDate ? (
+          <div className="flex items-center gap-2">
+            {view === "attended" && extraAction}
+            <AttendanceToggle
+              view={view}
+              onChange={setView}
+              attendedCount={attendedCount}
+              absentCount={absentRows.length}
+            />
+          </div>
+        ) : null
+      }
+    >
+      {view === "absent" ? (
+        <DataPresentationTable<AbsentRow>
+          data={absentRows}
+          columns={absentColumns}
+          loading={absentLoading}
+          searchable
+          paginated
+          pageSize={15}
+          rowKey="id"
+          stickyHeader
+          emptyMessage="No absent students for this date 🎉"
+        />
+      ) : (
+        children
+      )}
+    </TablePanel>
   );
 }
 
