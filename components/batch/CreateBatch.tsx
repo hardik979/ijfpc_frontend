@@ -51,6 +51,8 @@ export default function CreateBatch() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
 
+  const [courseName, setCourseName] = useState("");
+
   const [submitting, setSubmitting] = useState(false);
 
   // Load course list
@@ -112,7 +114,7 @@ export default function CreateBatch() {
     const q = search.trim().toLowerCase();
     const notPlaced = students.filter((s) => !s.isPlaced);
     if (!q) return notPlaced;
-    return notPlaced.filter((s) =>(s.fullName || "").toLowerCase().includes(q) || (s.email || "").toLowerCase().includes(q));
+    return notPlaced.filter((s) => (s.fullName || "").toLowerCase().includes(q) || (s.email || "").toLowerCase().includes(q));
   }, [students, search]);
 
   const allFilteredSelected =
@@ -148,6 +150,7 @@ export default function CreateBatch() {
           course: courseId,
           status,
           students: Array.from(selected),
+          batchName: courseName.trim() || undefined,
         }),
       });
       const json = await res.json();
@@ -217,6 +220,24 @@ export default function CreateBatch() {
             <div className="space-y-6">
               {/* Course + Status */}
               <div className="grid gap-6 sm:grid-cols-2">
+
+
+                <div>
+                  <label className="mb-2.5 flex items-center gap-2 text-sm font-semibold text-slate-200">
+                    <CheckCircle className="h-4 w-4 text-emerald-400" />
+                    Batch Name
+                  </label>
+                  <div className="rounded-2xl border-2 border-white/10 bg-white/[0.02] transition-all focus-within:border-emerald-500/50 hover:border-white/20">
+                    <input
+                      type="text"
+                      value={courseName}
+                      onChange={(e) => setCourseName(e.target.value)}
+                      placeholder="Enter course name"
+                      className="w-full bg-transparent px-4 py-3.5 text-sm text-slate-100 outline-none"
+                    />
+                  </div>
+                </div>
+
                 <div>
                   <label className="mb-2.5 flex items-center gap-2 text-sm font-semibold text-slate-200">
                     <BookOpen className="h-4 w-4 text-blue-400" />
@@ -323,9 +344,8 @@ export default function CreateBatch() {
                               <li
                                 key={s._id}
                                 onClick={() => toggle(s._id)}
-                                className={`flex cursor-pointer items-center gap-3 px-4 py-3 transition ${
-                                  checked ? "bg-indigo-500/10" : "hover:bg-white/5"
-                                }`}
+                                className={`flex cursor-pointer items-center gap-3 px-4 py-3 transition ${checked ? "bg-indigo-500/10" : "hover:bg-white/5"
+                                  }`}
                               >
                                 <input
                                   type="checkbox"

@@ -7,6 +7,8 @@ import {
   ChevronRight,
   Plus,
   UserPlus,
+  RefreshCw,
+  Pencil,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -42,6 +44,24 @@ export default function BatchSectionPage(): JSX.Element {
         icon: UserPlus,
         gradient: "from-teal-500 to-cyan-600",
         path: "/batch-section/add-students",
+      },
+      {
+        id: "it-jobs-factory-update-status",
+        title: "Update Batch Status",
+        description:
+          "Move an existing batch between Upcoming, Active, and Completed as it progresses.",
+        icon: RefreshCw,
+        gradient: "from-violet-500 to-fuchsia-600",
+        path: "/batch-section/update-status",
+      },
+      {
+        id: "it-jobs-factory-update-name",
+        title: "Update Batch Name",
+        description:
+          "Select an existing batch and rename it without touching its students or status.",
+        icon: Pencil,
+        gradient: "from-amber-500 to-orange-600",
+        path: "/batch-section/update-name",
       },
     ],
     []
