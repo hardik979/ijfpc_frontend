@@ -1011,6 +1011,16 @@ const StudentDetailPanel: React.FC<StudentDetailPanelProps> = ({
               </p>
             </div>
           </div>
+          {student.remainingFeeNote && (
+            <div className="mt-4">
+              <label className="text-sm font-medium text-gray-500">
+                Remaining Fee Note
+              </label>
+              <p className="text-gray-900 whitespace-pre-wrap">
+                {student.remainingFeeNote}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Installments */}
