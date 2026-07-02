@@ -20,7 +20,7 @@ interface AdminModule {
 
 const ADMIN_MODULES: AdminModule[] = [
   {
-    label: "Pre-Placement Dashboard",
+    label: "Placement Dashboard",
     description:
       "Create, review, and manage pre-placement student records and onboarding data.",
     href: "/post-placement-student-creation",
