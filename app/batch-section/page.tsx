@@ -1,124 +1,103 @@
 "use client";
 
-import { motion, type Variants } from "framer-motion";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { motion } from "framer-motion";
+import { toast } from "react-toastify";
+import { API_LMS_URL } from "@/lib/api";
 import {
   ArrowLeft,
-  ChevronRight,
   Plus,
-  UserPlus,
+  Search,
+  Users,
+  BookOpen,
+  Layers,
+  ChevronRight,
   RefreshCw,
-  Pencil,
-  type LucideIcon,
+  LayoutGrid,
 } from "lucide-react";
-import Link from "next/link";
 
-type DashboardCard = {
-  id: string;
-  title: string;
-  description: string;
-  icon: LucideIcon;
-  gradient: string;
-  path: string;
+type Batch = {
+  _id: string;
+  batch?: string;
+  status?: string;
+  students?: string[];
+  course?: { _id: string; title?: string } | string | null;
+  createdAt?: string;
 };
 
-export default function BatchSectionPage(): JSX.Element {
-  const [hoveredCard, setHoveredCard] = useState<string | null>(null);
+const STATUS_FILTERS = ["All", "Active", "Upcoming", "Completed"] as const;
+type StatusFilter = (typeof STATUS_FILTERS)[number];
 
-  const dashboardCards = useMemo<DashboardCard[]>(
-    () => [
-      {
-        id: "it-jobs-factory-create-batch",
-        title: "Create Batch",
-        description:
-          "Pick a course and status to launch a new batch. Optionally add students enrolled in that course right away.",
-        icon: Plus,
-        gradient: "from-cyan-500 to-blue-600",
-        path: "/batch-section/create-batch",
-      },
-      {
-        id: "it-jobs-factory-add-students",
-        title: "Add Students to Batch",
-        description:
-          "Select an existing batch, filter students by course, and add them to the batch in bulk.",
-        icon: UserPlus,
-        gradient: "from-teal-500 to-cyan-600",
-        path: "/batch-section/add-students",
-      },
-      {
-        id: "it-jobs-factory-update-status",
-        title: "Update Batch Status",
-        description:
-          "Move an existing batch between Upcoming, Active, and Completed as it progresses.",
-        icon: RefreshCw,
-        gradient: "from-violet-500 to-fuchsia-600",
-        path: "/batch-section/update-status",
-      },
-      {
-        id: "it-jobs-factory-update-name",
-        title: "Update Batch Name",
-        description:
-          "Select an existing batch and rename it without touching its students or status.",
-        icon: Pencil,
-        gradient: "from-amber-500 to-orange-600",
-        path: "/batch-section/update-name",
-      },
-    ],
-    []
+const statusStyles = (status?: string) => {
+  const s = (status || "").toLowerCase();
+  if (s === "active")
+    return { dot: "bg-emerald-400", badge: "bg-emerald-500/15 text-emerald-200 ring-1 ring-emerald-500/30" };
+  if (s === "completed")
+    return { dot: "bg-sky-400", badge: "bg-sky-500/15 text-sky-200 ring-1 ring-sky-500/30" };
+  return { dot: "bg-amber-400", badge: "bg-amber-500/15 text-amber-200 ring-1 ring-amber-500/30" };
+};
+
+const courseTitle = (course: Batch["course"]) => {
+  if (!course) return "";
+  if (typeof course === "string") return "";
+  return course.title || "";
+};
+
+export default function BatchSectionPage() {
+  const [batches, setBatches] = useState<Batch[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState<StatusFilter>("All");
+
+  const loadBatches = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_LMS_URL}/api/batches/get-batches?limit=100`, {
+        headers: { "Content-Type": "application/json" },
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.message || "Failed to load batches");
+      setBatches(Array.isArray(json?.data) ? json.data : []);
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to load batches");
+      setBatches([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadBatches();
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return batches.filter((b) => {
+      if (status !== "All" && (b.status || "").toLowerCase() !== status.toLowerCase())
+        return false;
+      if (!q) return true;
+      return (
+        (b.batch || "").toLowerCase().includes(q) ||
+        courseTitle(b.course).toLowerCase().includes(q)
+      );
+    });
+  }, [batches, search, status]);
+
+  const totalStudents = useMemo(
+    () => batches.reduce((sum, b) => sum + (b.students?.length || 0), 0),
+    [batches]
   );
 
-  const containerVariants: Variants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: { duration: 0.6, staggerChildren: 0.12 },
-    },
-  };
-
-  const cardVariants: Variants = {
-    hidden: { opacity: 0, y: 16, scale: 0.98 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      scale: 1,
-      transition: { duration: 0.45, ease: "easeOut" },
-    },
-    hover: {
-      y: -6,
-      scale: 1.01,
-      transition: { duration: 0.25, ease: "easeInOut" },
-    },
-  };
-
-  const titleVariants: Variants = {
-    hidden: { opacity: 0, y: -18 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      transition: { duration: 0.55, ease: [0.16, 1, 0.3, 1] },
-    },
-  };
-
   return (
-    <div className="relative min-h-screen bg-gradient-to-b from-slate-950 via-slate-950 to-slate-900">
-      {/* Subtle background decoration */}
+    <div className="relative min-h-screen bg-gradient-to-b from-slate-950 via-slate-950 to-slate-900 text-slate-100">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -top-24 -left-24 h-72 w-72 rounded-full bg-cyan-500/10 blur-3xl" />
         <div className="absolute top-20 -right-24 h-72 w-72 rounded-full bg-indigo-500/10 blur-3xl" />
         <div className="absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-teal-500/10 blur-3xl" />
-
-        {/* light dots */}
-        <div className="absolute top-20 left-20 h-1.5 w-1.5 rounded-full bg-white/25 animate-pulse" />
-        <div className="absolute top-44 right-32 h-1 w-1 rounded-full bg-white/20 animate-pulse [animation-delay:0.6s]" />
-        <div className="absolute bottom-40 right-24 h-1.5 w-1.5 rounded-full bg-white/15 animate-pulse [animation-delay:1.2s]" />
       </div>
 
-      <motion.div
-        className="relative z-10 mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 sm:py-14"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-      >
+      <div className="relative z-10 mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
         {/* Back */}
         <Link
           href="/studentOverview"
@@ -129,101 +108,173 @@ export default function BatchSectionPage(): JSX.Element {
         </Link>
 
         {/* Header */}
-        <motion.div className="text-center" variants={titleVariants}>
-          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-slate-100">
-            <span className="text-yellow-400">IT</span>{" "}
-            <span className="text-sky-400">Jobs Factory</span>{" "}
-            <span className="text-slate-200">Dashboards</span>
-          </h1>
-          <p className="mt-3 text-sm sm:text-base text-slate-400 max-w-2xl mx-auto leading-relaxed">
-            Centralized tools for batch creation and student assignment—built for
-            speed, clarity, and control.
-          </p>
-        </motion.div>
+        <div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="relative">
+              <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 blur-xl" />
+              <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl border border-white/20 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 backdrop-blur-sm">
+                <LayoutGrid className="h-7 w-7 text-cyan-400" />
+              </div>
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">Batches</h1>
+              <p className="mt-1 text-sm text-slate-400">
+                {loading
+                  ? "Loading batches…"
+                  : `${batches.length} batch${batches.length === 1 ? "" : "es"} · ${totalStudents} student${
+                      totalStudents === 1 ? "" : "s"
+                    } assigned`}
+              </p>
+            </div>
+          </div>
 
-        {/* Grid */}
-        <motion.div
-          className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-6"
-          variants={containerVariants}
-        >
-          {dashboardCards.map((card) => {
-            const IconComponent = card.icon;
+          <div className="flex items-center gap-2">
+            <button
+              onClick={loadBatches}
+              title="Refresh"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-300 transition hover:bg-white/10 hover:text-white"
+            >
+              <RefreshCw className={`h-4.5 w-4.5 ${loading ? "animate-spin" : ""}`} />
+            </button>
+            <Link
+              href="/batch-section/create-batch"
+              className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-gradient-to-r from-cyan-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-cyan-500/25 transition hover:shadow-xl hover:shadow-cyan-500/40 active:scale-[0.98]"
+            >
+              <Plus className="h-4 w-4" />
+              Create Batch
+            </Link>
+          </div>
+        </div>
 
-            return (
-              <motion.div
-                key={card.id}
-                className="group"
-                variants={cardVariants}
-                whileHover="hover"
-                onHoverStart={() => setHoveredCard(card.id)}
-                onHoverEnd={() => setHoveredCard(null)}
+        {/* Filters */}
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search batches by name or course…"
+              className="w-full rounded-xl border border-white/10 bg-white/[0.03] py-3 pl-10 pr-3 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-cyan-500/50"
+            />
+          </div>
+          <div className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] p-1">
+            {STATUS_FILTERS.map((s) => (
+              <button
+                key={s}
+                onClick={() => setStatus(s)}
+                className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                  status === s
+                    ? "bg-white/10 text-white"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
               >
-                <Link href={card.path} className="block">
-                  <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] shadow-sm backdrop-blur">
-                    {/* top gradient strip */}
-                    <div className="relative h-1.5 w-full bg-gradient-to-r from-white/10 to-white/0">
-                      <div
-                        className={`absolute inset-0 bg-gradient-to-r ${card.gradient} opacity-70`}
-                      />
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Content */}
+        {loading ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-40 animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]"
+              />
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          <EmptyState hasBatches={batches.length > 0} />
+        ) : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {filtered.map((b, i) => {
+              const st = statusStyles(b.status);
+              const count = b.students?.length || 0;
+              const title = courseTitle(b.course);
+              return (
+                <motion.div
+                  key={b._id}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: Math.min(i * 0.04, 0.4) }}
+                >
+                  <Link
+                    href={`/batch-section/${b._id}`}
+                    className="group block h-full overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] transition-all hover:-translate-y-1 hover:border-white/20 hover:bg-white/[0.06] hover:shadow-2xl"
+                  >
+                    <div className="flex items-center justify-between border-b border-white/5 px-5 py-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5">
+                          <Layers className="h-5 w-5 text-cyan-400" />
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="truncate text-base font-semibold text-white">
+                            {b.batch || "Untitled batch"}
+                          </h3>
+                        </div>
+                      </div>
+                      <span
+                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold ${st.badge}`}
+                      >
+                        <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} />
+                        {b.status || "—"}
+                      </span>
                     </div>
 
-                    <div className="p-6 sm:p-7">
-                      <div className="flex items-start justify-between gap-4">
-                        <motion.div
-                          className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/5"
-                          animate={{
-                            rotate: hoveredCard === card.id ? 8 : 0,
-                            scale: hoveredCard === card.id ? 1.03 : 1,
-                          }}
-                          transition={{ duration: 0.25, ease: "easeInOut" }}
-                        >
-                          <IconComponent className="h-6 w-6 text-slate-100" />
-                        </motion.div>
-
-                        <motion.div
-                          className="mt-1"
-                          animate={{
-                            x: hoveredCard === card.id ? 6 : 0,
-                            opacity: hoveredCard === card.id ? 1 : 0.65,
-                          }}
-                          transition={{ duration: 0.2 }}
-                        >
-                          <ChevronRight className="h-6 w-6 text-slate-200" />
-                        </motion.div>
+                    <div className="space-y-3 px-5 py-4">
+                      <div className="flex items-center gap-2 text-sm text-slate-400">
+                        <BookOpen className="h-4 w-4 text-slate-500" />
+                        <span className="truncate">{title || "No course linked"}</span>
                       </div>
-
-                      <h3 className="mt-4 text-lg sm:text-xl font-semibold text-slate-100">
-                        {card.title}
-                      </h3>
-
-                      <p className="mt-2 text-sm text-slate-400 leading-relaxed">
-                        {card.description}
-                      </p>
-
-                      {/* subtle hover wash */}
-                      <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-                        <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent" />
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-sm text-slate-300">
+                          <Users className="h-4 w-4 text-indigo-400" />
+                          <span className="font-semibold text-white">{count}</span>
+                          <span className="text-slate-500">
+                            student{count === 1 ? "" : "s"}
+                          </span>
+                        </div>
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-cyan-300/80 transition group-hover:text-cyan-200">
+                          Manage
+                          <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                        </span>
                       </div>
                     </div>
-                  </div>
-                </Link>
-              </motion.div>
-            );
-          })}
-        </motion.div>
+                  </Link>
+                </motion.div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
-        {/* Footer */}
-        <motion.div
-          className="text-center mt-10"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.4, duration: 0.5 }}
+function EmptyState({ hasBatches }: { hasBatches: boolean }) {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-white/10 bg-white/[0.02] px-6 py-20 text-center">
+      <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
+        <Layers className="h-8 w-8 text-slate-400" />
+      </div>
+      <h3 className="text-lg font-semibold text-white">
+        {hasBatches ? "No batches match your filters" : "No batches yet"}
+      </h3>
+      <p className="mt-1.5 max-w-sm text-sm text-slate-400">
+        {hasBatches
+          ? "Try clearing the search or switching the status filter."
+          : "Create your first batch to start assigning students to it."}
+      </p>
+      {!hasBatches && (
+        <Link
+          href="/batch-section/create-batch"
+          className="mt-6 inline-flex items-center gap-2 rounded-xl border border-white/20 bg-gradient-to-r from-cyan-500 to-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-500/25 transition hover:shadow-xl hover:shadow-cyan-500/40 active:scale-[0.98]"
         >
-          <p className="text-xs sm:text-sm text-slate-500">
-            Select a dashboard to continue.
-          </p>
-        </motion.div>
-      </motion.div>
+          <Plus className="h-4 w-4" />
+          Create your first batch
+        </Link>
+      )}
     </div>
   );
 }
