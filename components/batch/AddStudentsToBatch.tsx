@@ -28,8 +28,16 @@ type Student = {
   fullName?: string;
   email?: string;
   zone?: string;
-  batchCode?: string | null;
+  batchCode?: { _id: string; batch?: string } | string | null;
   isPlaced?: boolean;
+};
+
+// batchCode is populated to { _id, batch } by the API, but may still be a raw
+// id (or null) for older records. Normalise it to the batch's id + name.
+const getBatchInfo = (batchCode: Student["batchCode"]) => {
+  if (!batchCode) return { id: "", name: "" };
+  if (typeof batchCode === "string") return { id: batchCode, name: "" };
+  return { id: batchCode._id, name: batchCode.batch || "" };
 };
 
 const zoneBadge = (zone?: string) => {
@@ -139,14 +147,18 @@ export default function AddStudentsToBatch() {
 
   const filteredStudents = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const notPlaced = students.filter((s) => !s.isPlaced);
-    if (!q) return notPlaced;
-    return notPlaced.filter(
+    let list = students.filter((s) => !s.isPlaced);
+    // Hide students who are already in the selected batch
+    if (batchId) {
+      list = list.filter((s) => getBatchInfo(s.batchCode).id !== batchId);
+    }
+    if (!q) return list;
+    return list.filter(
       (s) =>
         (s.fullName || "").toLowerCase().includes(q) ||
         (s.email || "").toLowerCase().includes(q)
     );
-  }, [students, search]);
+  }, [students, search, batchId]);
 
   const allFilteredSelected =
     filteredStudents.length > 0 && filteredStudents.every((s) => selected.has(s._id));
@@ -404,11 +416,15 @@ export default function AddStudentsToBatch() {
                                     {s.email || "—"}
                                   </div>
                                 </div>
-                                {s.batchCode ? (
-                                  <span className="hidden shrink-0 rounded-full bg-amber-500/15 px-2 py-1 text-[10px] font-semibold text-amber-200 ring-1 ring-amber-500/30 sm:inline">
-                                    Already in a batch
-                                  </span>
-                                ) : null}
+                                {(() => {
+                                  const { id, name } = getBatchInfo(s.batchCode);
+                                  if (!id) return null;
+                                  return (
+                                    <span className="shrink-0 rounded-full bg-amber-500/15 px-2 py-1 text-[10px] font-semibold text-amber-200 ring-1 ring-amber-500/30">
+                                      {name ? `In batch: ${name}` : "Already in a batch"}
+                                    </span>
+                                  );
+                                })()}
                                 <span
                                   className={`hidden shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold sm:inline ${zoneBadge(
                                     s.zone
