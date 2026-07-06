@@ -43,6 +43,7 @@ interface ActiveStudent {
   email: string;
   zone?: string;
   isPlaced?: boolean;
+  isPaused?: boolean;
   isRealUser?: boolean;
   purchasedCourses?: unknown[];
 }
@@ -180,6 +181,7 @@ export default function StudentCommunicationRemarksPage() {
           (s) =>
             s.isRealUser !== true &&
             s.isPlaced !== true &&
+            s.isPaused !== true &&
             Array.isArray(s.purchasedCourses) &&
             s.purchasedCourses.length > 0
         );

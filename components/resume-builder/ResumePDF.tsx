@@ -11,6 +11,7 @@ import {
   Rect,
   Circle,
 } from "@react-pdf/renderer";
+import type { Style } from "@react-pdf/types";
 import type { ResumeData } from "@/lib/resume";
 import {
   getBasePageStyle,
@@ -258,8 +259,12 @@ function Section({
 }) {
   return (
     <View style={styles.section}>
-      <View style={{ ...styles.sectionBar, backgroundColor: palette.primary }} />
-      <Text style={{ ...styles.heading, color: palette.primary }}>{title}</Text>
+      {/* minPresenceAhead: if less than ~40pt of space is left below the heading,
+          push the whole heading to the next page instead of orphaning it */}
+      <View minPresenceAhead={40}>
+        <View style={{ ...styles.sectionBar, backgroundColor: palette.primary }} />
+        <Text style={{ ...styles.heading, color: palette.primary }}>{title}</Text>
+      </View>
       {children}
     </View>
   );
@@ -300,6 +305,164 @@ function BulletItem({ text, color }: { text: string; color: string }) {
   );
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Common tech + role phrases that get bolded in the summary even when the
+ * user did not add them to the Skills section.
+ */
+const COMMON_HIGHLIGHT_TERMS = [
+  // roles
+  "Full Stack Developer",
+  "Frontend Developer",
+  "Front End Developer",
+  "Backend Developer",
+  "Back End Developer",
+  "MERN Stack Developer",
+  "Software Engineer",
+  "Software Developer",
+  "Web Developer",
+  "Data Analyst",
+  "Data Scientist",
+  "Data Engineer",
+  "DevOps Engineer",
+  "QA Engineer",
+  // tech
+  "JavaScript",
+  "TypeScript",
+  "Node.js",
+  "Express.js",
+  "React.js",
+  "Next.js",
+  "Vue.js",
+  "Angular",
+  "MongoDB",
+  "MySQL",
+  "PostgreSQL",
+  "NoSQL",
+  "SQL",
+  "Python",
+  "Java",
+  "HTML",
+  "CSS",
+  "Tailwind CSS",
+  "Bootstrap",
+  "Redux",
+  "REST APIs",
+  "REST API",
+  "GraphQL",
+  "AWS",
+  "Azure",
+  "Docker",
+  "Kubernetes",
+  "Git",
+  "GitHub",
+  "CI/CD",
+  "Linux",
+  "PHP",
+  "Django",
+  "Flask",
+  "Spring Boot",
+  "Power BI",
+  "Tableau",
+  "Excel",
+  "Machine Learning",
+  "Data Analysis",
+];
+
+/**
+ * Turns a term into a separator-tolerant regex so "Node.js", "NodeJS" and
+ * "node js" all match each other; a trailing "js" is optional so the skill
+ * "React.js" still matches plain "React" in the text. Only non-capturing
+ * groups here — HighlightedSummary relies on the outer group being the
+ * single capture.
+ */
+function flexibleTermPattern(term: string): string | null {
+  const tokens = cleanText(term).split(/[\s./\\_-]+/).filter(Boolean);
+  if (!tokens.length) return null;
+
+  const SEP = "[\\s./-]*";
+  return tokens
+    .map((token, i) => {
+      const isLast = i === tokens.length - 1;
+      if (isLast && tokens.length > 1 && /^js$/i.test(token)) return "(?:js)?";
+      if (isLast && token.length > 3 && /js$/i.test(token)) {
+        return `${escapeRegExp(token.slice(0, -2))}${SEP}(?:js)?`;
+      }
+      return escapeRegExp(token);
+    })
+    .join(SEP);
+}
+
+/**
+ * Builds a regex matching phrases worth emphasizing in the summary:
+ * - years-of-experience phrases ("3.9-year", "3+ years of experience", "2 yrs")
+ * - the resume's job title (data.role)
+ * - skills from the Skills section + common tech/role terms
+ */
+function buildHighlightRegex(skills: string[], role?: string) {
+  const experiencePattern =
+    "\\d+(?:\\.\\d+)?[\\s-]*\\+?[\\s-]*(?:years?|yrs?)(?:[\\s-]+of[\\s-]+experience)?(?![A-Za-z])";
+
+  const seen = new Set<string>();
+  const termPatterns = [cleanText(role ?? ""), ...skills, ...COMMON_HIGHLIGHT_TERMS]
+    .map((term) => cleanText(term))
+    .filter(Boolean)
+    // longest first so "JavaScript" wins over "Java" in the alternation
+    .sort((a, b) => b.length - a.length)
+    .filter((term) => {
+      const key = term.toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map(flexibleTermPattern)
+    .filter((p): p is string => Boolean(p));
+
+  try {
+    // lookarounds keep partial words from matching (e.g. "SQL" inside "MySQL")
+    const bounded = termPatterns.map(
+      (p) => `(?<![A-Za-z0-9+#.])${p}(?![A-Za-z0-9+#])`
+    );
+    return new RegExp(`(${[experiencePattern, ...bounded].join("|")})`, "gi");
+  } catch {
+    // older engines without lookbehind support
+    return new RegExp(`(${[experiencePattern, ...termPatterns].join("|")})`, "gi");
+  }
+}
+
+/** Summary paragraph with experience phrases and skill names rendered bold. */
+function HighlightedSummary({
+  data,
+  style,
+}: {
+  data: ResumeData;
+  style: Style;
+}) {
+  const summary = cleanText(data.summary);
+  const skills = nonEmptyArray((data as any).skills);
+  const regex = buildHighlightRegex(skills, cleanText(data.role));
+
+  // split with a capturing group: odd indices are the matched phrases
+  const segments = summary.split(regex);
+
+  return (
+    <Text style={style}>
+      {segments.map((segment, i) =>
+        i % 2 === 1 ? (
+          <Text key={i} style={{ fontWeight: 700 }}>
+            {segment}
+          </Text>
+        ) : (
+          segment
+        )
+      )}
+    </Text>
+  );
+}
+
 function ProjectsBlock({ data, palette }: { data: ResumeData; palette: ThemePalette }) {
   const projects = safeArray((data as any).projects).filter((project: any) => {
     const bullets = nonEmptyArray(project?.bullets);
@@ -317,24 +480,27 @@ function ProjectsBlock({ data, palette }: { data: ResumeData; palette: ThemePale
     <View>
       {projects.map((project: any, index: number) => (
         <View key={index} style={{ ...styles.expCard, borderBottomColor: palette.border }}>
-          <Text style={{ ...styles.itemTitle, color: palette.primary }}>
-            {cleanText(project.name) || "Project"}
-          </Text>
-
-          {hasText(project.techStack) && (
-            <Text style={{ ...styles.subText, color: palette.subText }}>
-              Tech: {project.techStack}
+          {/* keep project name + meta together with at least a couple of bullets */}
+          <View minPresenceAhead={30}>
+            <Text style={{ ...styles.itemTitle, color: palette.primary }}>
+              {cleanText(project.name) || "Project"}
             </Text>
-          )}
 
-          {hasText(project.link) && (
-            <Link
-              src={project.link!}
-              style={{ ...styles.subText, ...styles.link, color: palette.secondary }}
-            >
-              {project.link}
-            </Link>
-          )}
+            {hasText(project.techStack) && (
+              <Text style={{ ...styles.subText, color: palette.subText }}>
+                Tech: {project.techStack}
+              </Text>
+            )}
+
+            {hasText(project.link) && (
+              <Link
+                src={project.link!}
+                style={{ ...styles.subText, ...styles.link, color: palette.secondary }}
+              >
+                {project.link}
+              </Link>
+            )}
+          </View>
 
           {nonEmptyArray(project.bullets).map((bullet, i) => (
             <BulletItem key={i} text={bullet} color={palette.text} />
@@ -402,6 +568,10 @@ function NaukriStyleTemplate({ data }: { data: ResumeData }) {
         style={{
           ...getBasePageStyle(data, bluePalette),
           padding: 0,
+          // page padding repeats on every page, so content continued on page 2+
+          // starts with a proper top/bottom margin instead of touching the edge
+          paddingTop: 16,
+          paddingBottom: 18,
           backgroundColor: "#FFFFFF",
         }}
       >
@@ -412,6 +582,8 @@ function NaukriStyleTemplate({ data }: { data: ResumeData }) {
             borderBottomColor: bluePalette.primary,
             flexDirection: "row",
             alignItems: "center",
+            // cancel the page's top padding so the header band stays edge-to-edge on page 1
+            marginTop: -16,
           }}
         >
           <View style={{ flex: 1 }}>
@@ -434,10 +606,10 @@ function NaukriStyleTemplate({ data }: { data: ResumeData }) {
           )}
         </View>
 
-        <View style={{ paddingHorizontal: 18, paddingBottom: 18 }}>
+        <View style={{ paddingHorizontal: 18 }}>
           {hasSummary(data) && (
             <Section title="Profile Summary" palette={bluePalette}>
-              <Text style={{ ...styles.text, color: "#111827" }}>{data.summary}</Text>
+              <HighlightedSummary data={data} style={{ ...styles.text, color: "#111827" }} />
             </Section>
           )}
 
@@ -460,6 +632,7 @@ function NaukriStyleTemplate({ data }: { data: ResumeData }) {
                       }}
                     >
                       <View
+                        minPresenceAhead={30}
                         style={{
                           flexDirection: "row",
                           justifyContent: "space-between",
@@ -752,6 +925,7 @@ function ExperienceList({
         return (
           <View key={index} style={{ marginBottom: 9 }}>
             <View
+              minPresenceAhead={30}
               style={{
                 flexDirection: "row",
                 justifyContent: "space-between",
@@ -800,7 +974,7 @@ function EducationList({
       {items.map((edu: any, index: number) => {
         const range = dateRange(edu.startYear, edu.endYear, edu.currentlyStudying ? "Present" : "");
         return (
-          <View key={index} style={{ marginBottom: compact ? 7 : 8 }}>
+          <View key={index} wrap={false} style={{ marginBottom: compact ? 7 : 8 }}>
             <Text style={{ fontSize: compact ? 9.4 : 10, fontWeight: 700, color: palette.text }}>
               {cleanText(edu.degree) || "Degree"}
             </Text>
@@ -890,8 +1064,18 @@ function CorporateSidebarTemplate({ data }: { data: ResumeData }) {
 
   return (
     <Document>
-      <Page size="A4" style={{ ...getBasePageStyle(data, palette), padding: 0 }}>
-        <View style={{ flexDirection: "row", minHeight: "100%" }}>
+      <Page
+        size="A4"
+        style={{
+          ...getBasePageStyle(data, palette),
+          padding: 0,
+          // repeats on every page → proper top/bottom margin on page 2+
+          paddingTop: 16,
+          paddingBottom: 16,
+        }}
+      >
+        {/* negative top margin keeps the sidebar flush with the page top on page 1 */}
+        <View style={{ flexDirection: "row", minHeight: "100%", marginTop: -16 }}>
           {/* Sidebar */}
           <View
             style={{
@@ -990,7 +1174,7 @@ function CorporateSidebarTemplate({ data }: { data: ResumeData }) {
           <View style={{ width: "67%", paddingVertical: 22, paddingHorizontal: 20 }}>
             {hasSummary(data) && (
               <Section title="Professional Summary" palette={palette}>
-                <Text style={{ ...styles.text, color: palette.text }}>{data.summary}</Text>
+                <HighlightedSummary data={data} style={{ ...styles.text, color: palette.text }} />
               </Section>
             )}
 
@@ -1017,6 +1201,7 @@ function CorporateSidebarTemplate({ data }: { data: ResumeData }) {
 function AtsSectionTitle({ title, palette }: { title: string; palette: ThemePalette }) {
   return (
     <View
+      minPresenceAhead={40}
       style={{
         borderBottomWidth: 1,
         borderBottomStyle: "solid",
@@ -1070,7 +1255,7 @@ function AtsClassicTemplate({ data }: { data: ResumeData }) {
         {hasSummary(data) && (
           <View style={{ marginBottom: 10 }}>
             <AtsSectionTitle title="Summary" palette={palette} />
-            <Text style={{ ...styles.text, color: palette.text }}>{data.summary}</Text>
+            <HighlightedSummary data={data} style={{ ...styles.text, color: palette.text }} />
           </View>
         )}
 
@@ -1133,7 +1318,16 @@ function ModernBandTemplate({ data }: { data: ResumeData }) {
 
   return (
     <Document>
-      <Page size="A4" style={{ ...getBasePageStyle(data, palette), padding: 0 }}>
+      <Page
+        size="A4"
+        style={{
+          ...getBasePageStyle(data, palette),
+          padding: 0,
+          // repeats on every page → proper top/bottom margin on page 2+
+          paddingTop: 16,
+          paddingBottom: 20,
+        }}
+      >
         {/* Header band */}
         <View
           style={{
@@ -1142,6 +1336,8 @@ function ModernBandTemplate({ data }: { data: ResumeData }) {
             paddingHorizontal: 28,
             flexDirection: "row",
             alignItems: "center",
+            // cancel page top padding so the band stays edge-to-edge on page 1
+            marginTop: -16,
           }}
         >
           <View style={{ flex: 1 }}>
@@ -1163,7 +1359,7 @@ function ModernBandTemplate({ data }: { data: ResumeData }) {
           )}
         </View>
 
-        <View style={{ flexDirection: "row", paddingHorizontal: 24, paddingVertical: 20 }}>
+        <View style={{ flexDirection: "row", paddingHorizontal: 24, paddingTop: 20 }}>
           {/* Left narrow column */}
           <View style={{ width: "34%", paddingRight: 16 }}>
             {skills.length > 0 && (
@@ -1217,7 +1413,7 @@ function ModernBandTemplate({ data }: { data: ResumeData }) {
           <View style={{ width: "66%" }}>
             {hasSummary(data) && (
               <Section title="Profile" palette={palette}>
-                <Text style={{ ...styles.text, color: palette.text }}>{data.summary}</Text>
+                <HighlightedSummary data={data} style={{ ...styles.text, color: palette.text }} />
               </Section>
             )}
 
