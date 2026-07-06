@@ -25,10 +25,11 @@ interface Student {
   joinedMonth: string;
   zone: string;
   isPlaced?: boolean;
+  isPaused?: boolean;
   purchasedCourses?: any[];
 }
 
-type ZoneOption = "blue" | "green" | "yellow";
+type ZoneOption = "blue" | "green" | "yellow" | "newly_enrolled";
 
 const pill = "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold";
 
@@ -40,6 +41,8 @@ const zoneBadge = (zone?: string) => {
     return "bg-yellow-500/15 text-yellow-200 ring-1 ring-yellow-500/30";
   if (z === "green")
     return "bg-emerald-500/15 text-emerald-200 ring-1 ring-emerald-500/30";
+  if (z === "newly_enrolled")
+    return "bg-violet-500/15 text-violet-200 ring-1 ring-violet-500/30";
   return "bg-slate-500/15 text-slate-200 ring-1 ring-slate-500/30";
 };
 
@@ -68,7 +71,17 @@ const ZONE_META: Record<
     bg: "bg-yellow-500/10 hover:bg-yellow-500/20",
     text: "text-yellow-200",
   },
+  newly_enrolled: {
+    label: "Newly Enrolled",
+    dot: "bg-violet-500",
+    ring: "ring-violet-400",
+    bg: "bg-violet-500/10 hover:bg-violet-500/20",
+    text: "text-violet-200",
+  },
 };
+
+const zoneLabel = (zone?: string) =>
+  zone ? zone.replace(/_/g, " ").toUpperCase() : "—";
 
 const StudentsZoneUpdatePage: React.FC = () => {
   const router = useRouter();
@@ -154,7 +167,7 @@ const StudentsZoneUpdatePage: React.FC = () => {
         ? json.students
         : [];
       setAllStudents(
-        enrolled.filter((s: any) => s.isRealUser !== true)
+        enrolled.filter((s: any) => s.isRealUser !== true && s.isPaused !== true)
       );
     } catch (err) {
       console.error(err);
@@ -321,6 +334,9 @@ const StudentsZoneUpdatePage: React.FC = () => {
                 <option value="yellow" className="bg-slate-900">
                   Yellow
                 </option>
+                <option value="newly_enrolled" className="bg-slate-900">
+                  Newly Enrolled
+                </option>
               </select>
 
               <button
@@ -466,7 +482,7 @@ const StudentsZoneUpdatePage: React.FC = () => {
                             <span
                               className={`${pill} ${zoneBadge(student.zone)}`}
                             >
-                              {student?.zone?.toUpperCase() || "—"}
+                              {zoneLabel(student?.zone)}
                             </span>
                           </td>
                         </tr>

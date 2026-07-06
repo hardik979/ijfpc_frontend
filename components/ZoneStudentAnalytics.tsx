@@ -5,7 +5,7 @@ import { Loader2, X } from "lucide-react";
 
 const API_LMS_URL = process.env.NEXT_PUBLIC_LMS_URL;
 
-type ZoneKey = "blue" | "yellow" | "green";
+type ZoneKey = "blue" | "yellow" | "green" | "newly_enrolled";
 type SubKey = "PS" | "DE" | "DS" | "DA";
 
 type ZoneBreakdown = {
@@ -18,21 +18,21 @@ type ZoneCountMap = Record<ZoneKey, ZoneBreakdown>;
 type ZoneMeta = {
   key: ZoneKey;
   label: string;
-  card: string;
-  text: string;
-  number: string;
+  dot: string;
 };
 
 type SubMeta = {
   key: SubKey;
-  pill: string;
+  color: string;
 };
 
+// One hue per course, matching COURSE_COLORS in StudentList.tsx so a course
+// reads the same everywhere on the page.
 const SUBS: SubMeta[] = [
-  { key: "PS", pill: "bg-teal-500/15 text-teal-300 ring-1 ring-teal-500/30" },
-  { key: "DE", pill: "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30" },
-  { key: "DS", pill: "bg-purple-500/15 text-purple-300 ring-1 ring-purple-500/30" },
-  { key: "DA", pill: "bg-red-500/15 text-red-300 ring-1 ring-red-500/30" },
+  { key: "PS", color: "#199e70" },
+  { key: "DE", color: "#d95926" },
+  { key: "DS", color: "#d55181" },
+  { key: "DA", color: "#e66767" },
 ];
 
 type Student = {
@@ -41,6 +41,8 @@ type Student = {
   fullName?: string;
   email?: string;
   joinedMonth?: string;
+  courses?: string[];
+  isPaused?: boolean;
 };
 
 type ZoneCountApiValue = number | Partial<ZoneBreakdown>;
@@ -78,27 +80,10 @@ type ZoneStudentsResponse = {
 };
 
 const ZONES: ZoneMeta[] = [
-  {
-    key: "blue",
-    label: "BLUE ZONE",
-    card: "bg-blue-950/40 ring-1 ring-blue-500/40 hover:ring-blue-400/70",
-    text: "text-blue-400",
-    number: "text-blue-400",
-  },
-  {
-    key: "yellow",
-    label: "YELLOW ZONE",
-    card: "bg-yellow-950/30 ring-1 ring-yellow-500/40 hover:ring-yellow-400/70",
-    text: "text-yellow-400",
-    number: "text-yellow-400",
-  },
-  {
-    key: "green",
-    label: "GREEN ZONE",
-    card: "bg-emerald-950/30 ring-1 ring-emerald-500/40 hover:ring-emerald-400/70",
-    text: "text-emerald-400",
-    number: "text-emerald-400",
-  },
+  { key: "blue", label: "Blue", dot: "#3987e5" },
+  { key: "yellow", label: "Yellow", dot: "#c98500" },
+  { key: "green", label: "Green", dot: "#1f9d1f" },
+  { key: "newly_enrolled", label: "Newly enrolled", dot: "#9085e9" },
 ];
 
 const EMPTY_BREAKDOWN: ZoneBreakdown = {
@@ -110,11 +95,37 @@ function getErrorMessage(error: unknown, fallback = "Something went wrong") {
   return error instanceof Error ? error.message : fallback;
 }
 
+// The backend's Atlas connection occasionally drops mid-query; one retry
+// after a short pause usually succeeds.
+async function fetchJsonWithRetry<T extends { success: boolean; message?: string }>(
+  url: string,
+  retries = 2
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(url);
+      const json = (await res.json()) as T;
+      if (!res.ok || !json.success) {
+        throw new Error(json.message || "Request failed");
+      }
+      return json;
+    } catch (error) {
+      lastError = error;
+      if (attempt < retries) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
+    }
+  }
+  throw lastError;
+}
+
 export default function ZoneStudentAnalytics() {
   const [counts, setCounts] = useState<ZoneCountMap>({
     blue: { ...EMPTY_BREAKDOWN, subs: { ...EMPTY_BREAKDOWN.subs } },
     yellow: { ...EMPTY_BREAKDOWN, subs: { ...EMPTY_BREAKDOWN.subs } },
     green: { ...EMPTY_BREAKDOWN, subs: { ...EMPTY_BREAKDOWN.subs } },
+    newly_enrolled: { ...EMPTY_BREAKDOWN, subs: { ...EMPTY_BREAKDOWN.subs } },
   });
 
   const [total, setTotal] = useState<number>(0);
@@ -155,6 +166,7 @@ export default function ZoneStudentAnalytics() {
           blue: normalizeBreakdown(json.data?.blue),
           yellow: normalizeBreakdown(json.data?.yellow),
           green: normalizeBreakdown(json.data?.green),
+          newly_enrolled: normalizeBreakdown(json.data?.newly_enrolled),
         });
 
         setTotal(json.total ?? 0);
@@ -218,66 +230,143 @@ export default function ZoneStudentAnalytics() {
 
   const activeMeta = ZONES.find((zone) => zone.key === activeZone);
 
+  const subTotals = SUBS.map((sub) =>
+    ZONES.reduce((sum, zone) => sum + counts[zone.key].subs[sub.key], 0)
+  );
+
+  const cellButton =
+    "rounded-md px-2 py-1 text-sm tabular-nums transition hover:bg-[#8b5cf6]/15 hover:font-semibold hover:text-[#8b5cf6]";
+
   return (
     <>
-      <div className="rounded-2xl bg-slate-900/60 p-5 ring-1 ring-slate-700/60">
-       {countsError ? (
+      <div className="flex h-full flex-col rounded-xl border border-[#312a63] bg-[#120f2d] p-5">
+        <div className="mb-3">
+          <h2 className="text-sm font-semibold text-white">
+            Active students by zone and course
+          </h2>
+          <p className="mt-0.5 text-xs text-[#a8a0d6]">
+            Click any count to see those students
+          </p>
+        </div>
+
+        {countsError ? (
           <div className="text-sm text-red-400">{countsError}</div>
+        ) : loadingCounts ? (
+          <div className="flex flex-1 items-center justify-center py-10 text-[#a8a0d6]">
+            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+            Loading zones...
+          </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            {ZONES.map((zone) => {
-              const breakdown = counts[zone.key];
-              return (
-                <button
-                  key={zone.key}
-                  type="button"
-                  onClick={() => openZone(zone.key)}
-                  disabled={loadingCounts}
-                  className={`group rounded-2xl ${zone.card} p-5 text-left transition disabled:opacity-60`}
-                >
-                  <div className="mb-4 flex items-start justify-between gap-2">
-                    <span className={`text-sm font-bold tracking-wider ${zone.text}`}>
-                      {zone.label}
-                    </span>
-                    <span className={`text-2xl font-bold leading-none ${zone.number}`}>
-                      {loadingCounts ? (
-                        <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
-                      ) : (
-                        breakdown.total
-                      )}
-                    </span>
-                  </div>
-
-                  <div className="mb-3 flex flex-wrap gap-2">
-                    {SUBS.map((sub) => (
-                      <span
-                        key={sub.key}
-                        role="button"
-                        tabIndex={0}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          openZone(zone.key, sub.key);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            openZone(zone.key, sub.key);
-                          }
-                        }}
-                        className={`cursor-pointer rounded-full px-2.5 py-0.5 text-xs font-medium ${sub.pill} hover:brightness-125`}
-                      >
-                        {sub.key}: {breakdown.subs[sub.key]}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[520px] text-sm tabular-nums">
+              <thead>
+                <tr className="border-b border-[#312a63] text-[11px] font-semibold uppercase tracking-wider text-[#9a92c9]">
+                  <th className="pb-2 pr-2 text-left font-semibold">Zone</th>
+                  {SUBS.map((sub) => (
+                    <th key={sub.key} className="pb-2 text-right font-semibold">
+                      <span className="inline-flex items-center gap-1.5">
+                        <span
+                          className="h-1.5 w-1.5 rounded-full"
+                          style={{ backgroundColor: sub.color }}
+                        />
+                        {sub.key}
                       </span>
-                    ))}
-                  </div>
-
-                  <div className="text-xs text-slate-400">Tap to filter</div>
-                </button>
-              );
-            })}
+                    </th>
+                  ))}
+                  <th className="pb-2 text-right font-semibold">Total</th>
+                  <th className="pb-2 pl-4 text-right font-semibold">
+                    Share of active
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {ZONES.map((zone) => {
+                  const breakdown = counts[zone.key];
+                  const share =
+                    total > 0
+                      ? Math.round((breakdown.total / total) * 100)
+                      : 0;
+                  return (
+                    <tr
+                      key={zone.key}
+                      className="border-b border-[#312a63]/50 transition hover:bg-[#1b1640]/60"
+                    >
+                      <td className="whitespace-nowrap py-2.5 pr-2 font-medium text-white">
+                        <span
+                          className="mr-2 inline-block h-2 w-2 rounded-full align-[1px]"
+                          style={{ backgroundColor: zone.dot }}
+                        />
+                        {zone.label}
+                      </td>
+                      {SUBS.map((sub) => {
+                        const value = breakdown.subs[sub.key];
+                        return (
+                          <td key={sub.key} className="py-1.5 text-right">
+                            <button
+                              type="button"
+                              onClick={() => openZone(zone.key, sub.key)}
+                              className={`${cellButton} ${
+                                value === 0
+                                  ? "text-[#9a92c9]"
+                                  : "text-white"
+                              }`}
+                            >
+                              {value}
+                            </button>
+                          </td>
+                        );
+                      })}
+                      <td className="py-1.5 text-right">
+                        <button
+                          type="button"
+                          onClick={() => openZone(zone.key)}
+                          className={`${cellButton} font-bold text-white`}
+                        >
+                          {breakdown.total}
+                        </button>
+                      </td>
+                      <td className="py-2.5 pl-4">
+                        <span className="flex items-center justify-end gap-2">
+                          <span className="h-1.5 w-16 overflow-hidden rounded-full bg-white/10">
+                            <span
+                              className="block h-full rounded-full"
+                              style={{
+                                width: `${share}%`,
+                                backgroundColor: zone.dot,
+                              }}
+                            />
+                          </span>
+                          <span className="w-8 text-right text-xs text-[#a8a0d6]">
+                            {share}%
+                          </span>
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="text-sm font-semibold text-[#a8a0d6]">
+                  <td className="pt-2.5 pr-2">All active</td>
+                  {subTotals.map((value, i) => (
+                    <td key={SUBS[i].key} className="pt-2.5 pr-2 text-right">
+                      {value}
+                    </td>
+                  ))}
+                  <td className="pt-2.5 pr-2 text-right font-bold text-white">
+                    {total}
+                  </td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
           </div>
         )}
+
+        <p className="mt-auto pt-3 text-[11px] text-[#9a92c9]">
+          PS = Job-Assistance · DE = Data Engineering · DS = Data Science · DA =
+          Data Analyst
+        </p>
       </div>
 
       {activeZone ? (
@@ -287,24 +376,23 @@ export default function ZoneStudentAnalytics() {
           role="presentation"
         >
           <div
-            className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-slate-900 shadow-xl ring-1 ring-slate-700"
+            className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-[#120f2d] shadow-xl ring-1 ring-[#312a63]"
             onClick={(event) => event.stopPropagation()}
             role="dialog"
             aria-modal="true"
             aria-label={`${activeMeta?.label ?? "Zone"} students`}
           >
-            <div className="flex items-center justify-between border-b border-slate-700/70 px-5 py-4">
+            <div className="flex items-center justify-between border-b border-[#312a63] px-5 py-4">
               <div className="flex items-center gap-2">
                 <span
-                  className={`h-2.5 w-2.5 rounded-full ${
-                    activeMeta?.number?.replace("text-", "bg-") ?? "bg-slate-400"
-                  }`}
+                  className="h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: activeMeta?.dot ?? "#9a92c9" }}
                 />
-                <h4 className="text-sm font-semibold text-slate-100">
-                  {activeMeta?.label ?? "Zone"} Students
+                <h4 className="text-sm font-semibold text-white">
+                  {activeMeta?.label ?? "Zone"} zone students
                   {activeSub ? ` — ${activeSub}` : ""}
                 </h4>
-                <span className="ml-2 text-xs text-slate-400">
+                <span className="ml-2 text-xs text-[#a8a0d6]">
                   ({students.length})
                 </span>
               </div>
@@ -312,7 +400,7 @@ export default function ZoneStudentAnalytics() {
               <button
                 type="button"
                 onClick={closeModal}
-                className="rounded-md p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+                className="rounded-md p-1 text-[#a8a0d6] hover:bg-[#1b1640] hover:text-white"
                 aria-label="Close student list"
               >
                 <X className="h-4 w-4" />
@@ -321,7 +409,7 @@ export default function ZoneStudentAnalytics() {
 
             <div className="flex-1 overflow-y-auto">
               {loadingStudents ? (
-                <div className="flex items-center justify-center py-12 text-slate-400">
+                <div className="flex items-center justify-center py-12 text-[#a8a0d6]">
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                   Loading students...
                 </div>
@@ -330,16 +418,19 @@ export default function ZoneStudentAnalytics() {
                   {studentsError}
                 </div>
               ) : students.length === 0 ? (
-                <div className="p-6 text-center text-sm text-slate-400">
+                <div className="p-6 text-center text-sm text-[#a8a0d6]">
                   No students found in this zone.
                 </div>
               ) : (
                 <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-slate-900/95 text-xs uppercase text-slate-400 backdrop-blur">
+                  <thead className="sticky top-0 bg-[#120f2d]/95 text-xs uppercase text-[#9a92c9] backdrop-blur">
                     <tr>
                       <th className="px-5 py-2 text-left font-medium">#</th>
                       <th className="px-5 py-2 text-left font-medium">Name</th>
                       <th className="px-5 py-2 text-left font-medium">Email</th>
+                      <th className="px-5 py-2 text-left font-medium">
+                        Course
+                      </th>
                       <th className="px-5 py-2 text-left font-medium">
                         Joined
                       </th>
@@ -354,18 +445,39 @@ export default function ZoneStudentAnalytics() {
                           student.clerkId ??
                           `${student.email}-${index}`
                         }
-                        className="border-t border-slate-800 hover:bg-slate-800/40"
+                        className="border-t border-[#312a63]/60 hover:bg-[#1b1640]/60"
                       >
-                        <td className="px-5 py-2 text-slate-400">
+                        <td className="px-5 py-2 text-[#9a92c9]">
                           {index + 1}
                         </td>
-                        <td className="px-5 py-2 text-slate-100">
+                        <td className="px-5 py-2 text-white">
                           {student.fullName || "—"}
+                          {student.isPaused ? (
+                            <span className="ml-2 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-300 ring-1 ring-amber-500/30">
+                              Paused
+                            </span>
+                          ) : null}
                         </td>
-                        <td className="px-5 py-2 text-slate-300">
+                        <td className="px-5 py-2 text-[#a8a0d6]">
                           {student.email || "—"}
                         </td>
-                        <td className="px-5 py-2 text-slate-400">
+                        <td className="px-5 py-2">
+                          {student.courses && student.courses.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {student.courses.map((course) => (
+                                <span
+                                  key={course}
+                                  className="rounded-full bg-white/[0.06] px-2 py-0.5 text-xs font-medium text-[#a8a0d6] ring-1 ring-[#312a63]"
+                                >
+                                  {course}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-[#9a92c9]">—</span>
+                          )}
+                        </td>
+                        <td className="px-5 py-2 text-[#9a92c9]">
                           {student.joinedMonth || "—"}
                         </td>
                       </tr>

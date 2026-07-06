@@ -2,12 +2,26 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Eye, X, GraduationCap, BarChart3, Layers } from "lucide-react";
+import {
+  Search,
+  Eye,
+  GraduationCap,
+  BarChart3,
+  Layers,
+  ChevronDown,
+  Users,
+  UserPlus,
+  TrendingUp,
+  BadgeCheck,
+  PauseCircle,
+  Phone,
+} from "lucide-react";
 import ZoneStudentAnalytics from "./ZoneStudentAnalytics";
 import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -36,6 +50,7 @@ interface Student {
   zone?: string;
   recordingCount?: number;
   isPlaced?: boolean;
+  isPaused?: boolean;
   purchasedCourses?: unknown[];
   isRealUser?: boolean;
 }
@@ -81,36 +96,9 @@ const shortCourseName = (title?: string) => {
   return words.map((w) => w[0]).join("").toUpperCase().slice(0, 3);
 };
 
-const courseThemes = [
-  {
-    grad: "from-sky-600/25 to-sky-900/20",
-    border: "border-sky-500/40",
-    hover: "hover:border-sky-400",
-    text: "text-sky-300",
-    badge: "bg-sky-500/20 text-sky-200 ring-1 ring-sky-500/30",
-  },
-  {
-    grad: "from-emerald-600/25 to-emerald-900/20",
-    border: "border-emerald-500/40",
-    hover: "hover:border-emerald-400",
-    text: "text-emerald-300",
-    badge: "bg-emerald-500/20 text-emerald-200 ring-1 ring-emerald-500/30",
-  },
-  {
-    grad: "from-violet-600/25 to-violet-900/20",
-    border: "border-violet-500/40",
-    hover: "hover:border-violet-400",
-    text: "text-violet-300",
-    badge: "bg-violet-500/20 text-violet-200 ring-1 ring-violet-500/30",
-  },
-  {
-    grad: "from-orange-600/25 to-orange-900/20",
-    border: "border-orange-500/40",
-    hover: "hover:border-orange-400",
-    text: "text-orange-300",
-    badge: "bg-orange-500/20 text-orange-200 ring-1 ring-orange-500/30",
-  },
-];
+// One hue per course, reused everywhere that course appears (tiles, matrix,
+// chips). Validated for CVD separation + contrast on the dark surface.
+const COURSE_COLORS = ["#199e70", "#d95926", "#d55181", "#e66767"];
 
 
 const zoneOrder = (zone?: string) => {
@@ -142,7 +130,6 @@ const StudentsListPage = () => {
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<string>("");
   const [courseCounts, setCourseCounts] = useState<Record<string, number>>({});
-  const [courseStudents, setCourseStudents] = useState<Student[]>([]);
   const skipNextSuggestionRef = useRef(false);
   const [chartData, setChartData] = useState<
     { month: string; admissions: number }[]
@@ -168,7 +155,8 @@ const StudentsListPage = () => {
   const [suggestionLoading, setSuggestionLoading] = useState(false);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
   const [placementUpdatingId, setPlacementUpdatingId] = useState<string | null>(null);
-  const [placedFilter, setPlacedFilter] = useState<"all" | "placed" | "notplaced">("all");
+  const [pauseUpdatingId, setPauseUpdatingId] = useState<string | null>(null);
+  const [placedFilter, setPlacedFilter] = useState<"all" | "placed" | "notplaced" | "paused">("all");
   const [zoneFilter, setZoneFilter] = useState<string>("all");
   const [courseFilter, setCourseFilter] = useState<string>("all");
   const [placementUnlocked, setPlacementUnlocked] = useState(false);
@@ -177,31 +165,42 @@ const StudentsListPage = () => {
   const isAllView = selectedCourseId === "ALL";
   // Active students view = ALL view filtered to not-placed (entered via "Active Students" card)
   const isActiveView = isAllView && placedFilter === "notplaced";
+  // Pause is a separate feature: its column shows only in the All Enrolled
+  // and Paused views, never in the active/course/placed lists.
+  const showPauseColumn =
+    isAllView && (placedFilter === "all" || placedFilter === "paused");
 
   // ────────────────────────────────────────────
   // Derived counts from the single enrolled fetch
   // ────────────────────────────────────────────
-  const activeStudentsCount = useMemo(
-    () =>
-      allEnrolledStudents.filter(
-        (s) =>
-          s.isRealUser !== true &&
-          s.isPlaced !== true &&
-          Array.isArray(s.purchasedCourses) &&
-          s.purchasedCourses.length > 0
-      ).length,
-    [allEnrolledStudents]
-  );
-
+  // Paused students are excluded here so every "active" surface (cards,
+  // course tiles, drill-downs) shows only truly active students; they get
+  // their own card + drill-down instead.
   const activeStudentsBase = useMemo(
     () =>
       allEnrolledStudents.filter(
         (s) =>
           s.isRealUser !== true &&
           s.isPlaced !== true &&
+          s.isPaused !== true &&
           Array.isArray(s.purchasedCourses) &&
           s.purchasedCourses.length > 0
       ),
+    [allEnrolledStudents]
+  );
+
+  const activeStudentsCount = activeStudentsBase.length;
+
+  const pausedStudentsCount = useMemo(
+    () =>
+      allEnrolledStudents.filter(
+        (s) =>
+          s.isRealUser !== true &&
+          s.isPlaced !== true &&
+          s.isPaused === true &&
+          Array.isArray(s.purchasedCourses) &&
+          s.purchasedCourses.length > 0
+      ).length,
     [allEnrolledStudents]
   );
 
@@ -211,6 +210,44 @@ const StudentsListPage = () => {
         (s) => s.isRealUser !== true && s.isPlaced === true
       ).length,
     [allEnrolledStudents]
+  );
+
+  // Students of the selected course, derived from the same source the course
+  // tiles use so the drill-down always matches the tile count. Derived (not
+  // state) so zone counts are correct on first render after a course click.
+  const courseStudents = useMemo(() => {
+    if (!selectedCourseId || selectedCourseId === "ALL") return [];
+    return activeStudentsBase.filter(
+      (s) =>
+        Array.isArray(s.purchasedCourses) &&
+        s.purchasedCourses.some((p) => String(p) === String(selectedCourseId))
+    );
+  }, [selectedCourseId, activeStudentsBase]);
+
+  const newlyEnrolledCount = useMemo(
+    () =>
+      activeStudentsBase.filter(
+        (s) => (s.zone || "").toLowerCase() === "newly_enrolled"
+      ).length,
+    [activeStudentsBase]
+  );
+
+  const totalEnrolled = activeStudentsCount + placedStudentsCount;
+  const placementRate =
+    totalEnrolled > 0
+      ? `${((placedStudentsCount / totalEnrolled) * 100).toFixed(1)}%`
+      : "—";
+
+  // Only elapsed months for the current year; the current month renders as
+  // month-to-date so a partial number doesn't read as a collapse.
+  const isCurrentChartYear = chartYear === new Date().getFullYear();
+  const visibleChartData = useMemo(() => {
+    if (!isCurrentChartYear) return chartData;
+    return chartData.slice(0, new Date().getMonth() + 1);
+  }, [chartData, isCurrentChartYear]);
+  const chartYearTotal = useMemo(
+    () => visibleChartData.reduce((sum, m) => sum + (m.admissions || 0), 0),
+    [visibleChartData]
   );
 
   // ────────────────────────────────────────────
@@ -228,6 +265,15 @@ const StudentsListPage = () => {
       list = list.filter(
         (s) =>
           s.isPlaced !== true &&
+          s.isPaused !== true &&
+          Array.isArray(s.purchasedCourses) &&
+          s.purchasedCourses.length > 0
+      );
+    } else if (placedFilter === "paused") {
+      list = list.filter(
+        (s) =>
+          s.isPlaced !== true &&
+          s.isPaused === true &&
           Array.isArray(s.purchasedCourses) &&
           s.purchasedCourses.length > 0
       );
@@ -298,12 +344,13 @@ const StudentsListPage = () => {
           }
           return list;
         })();
-    const counts = { blue: 0, yellow: 0, green: 0 };
+    const counts = { blue: 0, yellow: 0, green: 0, newlyEnrolled: 0 };
     source.forEach((s) => {
       const z = (s.zone || "").toLowerCase();
       if (z === "blue") counts.blue += 1;
       else if (z === "yellow") counts.yellow += 1;
       else if (z === "green") counts.green += 1;
+      else if (z === "newly_enrolled") counts.newlyEnrolled += 1;
     });
     return counts;
   }, [isAllView, filteredAllStudents, courseStudents, appliedSearch]);
@@ -329,12 +376,37 @@ const StudentsListPage = () => {
         prev.map((s) => (s._id === studentId ? { ...s, isPlaced: next } : s));
 
       setStudents(updater);
-      setCourseStudents(updater);
       setAllEnrolledStudents(updater);
     } catch (err) {
       console.error("togglePlacement error:", err);
     } finally {
       setPlacementUpdatingId(null);
+    }
+  };
+
+  const togglePause = async (studentId: string, next: boolean) => {
+    try {
+      setPauseUpdatingId(studentId);
+      const res = await fetch(
+        `${API_LMS_URL}/api/users/student-pause-status`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ _id: studentId, isPaused: next }),
+        }
+      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.message || "Update failed");
+
+      const updater = (prev: Student[]) =>
+        prev.map((s) => (s._id === studentId ? { ...s, isPaused: next } : s));
+
+      setStudents(updater);
+      setAllEnrolledStudents(updater);
+    } catch (err) {
+      console.error("togglePause error:", err);
+    } finally {
+      setPauseUpdatingId(null);
     }
   };
 
@@ -357,24 +429,10 @@ const StudentsListPage = () => {
       setLoading(true);
 
       if (selectedCourseId && selectedCourseId !== "ALL") {
-        let list = courseStudents;
-        if (list.length === 0) {
-          // Derive from the same source the course cards use so the
-          // drill-down count always matches the card count.
-          list = activeStudentsBase.filter(
-            (s) =>
-              Array.isArray(s.purchasedCourses) &&
-              s.purchasedCourses.some(
-                (p) => String(p) === String(selectedCourseId)
-              )
-          );
-          setCourseStudents(list);
-        }
-
-        let filtered = list;
+        let filtered = courseStudents;
         if (appliedSearch.trim()) {
           const q = appliedSearch.trim().toLowerCase();
-          filtered = list.filter(
+          filtered = courseStudents.filter(
             (s) =>
               (s.fullName || "").toLowerCase().includes(q) ||
               (s.email || "").toLowerCase().includes(q)
@@ -457,7 +515,10 @@ const StudentsListPage = () => {
               ? j.students
               : [];
             const activeCount = studentsArr.filter(
-              (s) => s.isPlaced !== true && s.isRealUser !== true
+              (s) =>
+                s.isPlaced !== true &&
+                s.isPaused !== true &&
+                s.isRealUser !== true
             ).length;
             return [c._id, activeCount] as const;
           } catch {
@@ -591,7 +652,7 @@ const StudentsListPage = () => {
         const s = JSON.parse(saved);
         if (s && typeof s === "object") {
           if (typeof s.selectedCourseId === "string") setSelectedCourseId(s.selectedCourseId);
-          if (s.placedFilter === "all" || s.placedFilter === "placed" || s.placedFilter === "notplaced") setPlacedFilter(s.placedFilter);
+          if (s.placedFilter === "all" || s.placedFilter === "placed" || s.placedFilter === "notplaced" || s.placedFilter === "paused") setPlacedFilter(s.placedFilter);
           if (typeof s.page === "number") setPage(s.page);
           if (typeof s.limit === "number") setLimit(s.limit);
           if (typeof s.appliedSearch === "string") setAppliedSearch(s.appliedSearch);
@@ -632,10 +693,6 @@ const StudentsListPage = () => {
       }
     })();
   }, [chartYear]);
-
-  useEffect(() => {
-    setCourseStudents([]);
-  }, [selectedCourseId]);
 
   useEffect(() => {
     if (skipNextSuggestionRef.current) {
@@ -755,80 +812,69 @@ const StudentsListPage = () => {
   return (
     <div className="min-h-screen bg-[#09061a] p-6 text-white">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-8 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+        <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <h1 className="text-3xl font-bold text-white">Students Overview</h1>
-            <p className="mt-2 text-[#a8a0d6]">
-              View all students, search them, and open complete details
+            <h1 className="text-2xl font-semibold tracking-tight text-white">
+              Students Overview
+            </h1>
+            <p className="mt-1 text-sm text-[#a8a0d6]">
+              {totalEnrolled > 0
+                ? `${totalEnrolled + pausedStudentsCount} students · ${activeStudentsCount} active · ${pausedStudentsCount} paused · ${placedStudentsCount} placed`
+                : "View all students, search them, and open complete details"}
             </p>
           </div>
 
-          <Link
-            href="/batch-section"
-            className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-[#312a63] bg-[#0f0b24] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#1b1640]"
-          >
-            <Layers className="h-4 w-4" />
-            Batch Section
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/batch-section"
+              className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-[#312a63] bg-[#0f0b24] px-3.5 py-2 text-sm font-medium text-white transition hover:bg-[#1b1640]"
+            >
+              <Layers className="h-4 w-4" />
+              Batch Section
+            </Link>
 
-          <button
-            onClick={() => { router.push('/batch-section/students-zone-update') }}
-            className="shrink-0 rounded-xl border border-[#312a63] bg-[#0f0b24] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#1b1640]"
-          >
-            Update Students Zone
-          </button>
+            <details className="relative shrink-0">
+              <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-lg border border-[#312a63] bg-[#0f0b24] px-3.5 py-2 text-sm font-medium text-white transition hover:bg-[#1b1640] [&::-webkit-details-marker]:hidden">
+                More
+                <ChevronDown className="h-4 w-4" />
+              </summary>
+              <div className="absolute right-0 top-[calc(100%+6px)] z-30 w-72 rounded-xl border border-[#312a63] bg-[#120f2d] p-1.5 shadow-2xl">
+                <button
+                  onClick={() => { router.push('/students-call-reports') }}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-white transition hover:bg-[#1b1640]"
+                >
+                  <Phone className="h-4 w-4 text-[#9a92c9]" />
+                  Call Recording Analysis Dashboard
+                </button>
+                <Link
+                  href="/academic-results"
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-white transition hover:bg-[#1b1640]"
+                >
+                  <GraduationCap className="h-4 w-4 text-[#9a92c9]" />
+                  Academic Results
+                </Link>
+                <Link
+                  href="/communication-analytics"
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-white transition hover:bg-[#1b1640]"
+                >
+                  <BarChart3 className="h-4 w-4 text-[#9a92c9]" />
+                  Communication Analytics
+                </Link>
+              </div>
+            </details>
 
-          <button
-            onClick={() => { router.push('/students-call-reports') }}
-            className="shrink-0 rounded-xl border border-[#312a63] bg-[#0f0b24] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#1b1640]"
-          >
-            Call Recording Annalysiss Dashboard
-          </button>
-
-          <Link
-            href="/academic-results"
-            className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-[#312a63] bg-[#0f0b24] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#1b1640]"
-          >
-            <GraduationCap className="h-4 w-4" />
-            Academic Results
-          </Link>
-
-          <Link
-            href="/communication-analytics"
-            className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-[#312a63] bg-[#0f0b24] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#1b1640]"
-          >
-            <BarChart3 className="h-4 w-4" />
-            Communication Analytics
-          </Link>
+            <button
+              onClick={() => { router.push('/batch-section/students-zone-update') }}
+              className="shrink-0 rounded-lg bg-[#8b5cf6] px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-[#7c3aed]"
+            >
+              Update Students Zone
+            </button>
+          </div>
         </div>
 
-        {/* ── Cards ── */}
+        {/* ── KPI tiles ── */}
         {!selectedCourseId && (
-          <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {/* <button
-              onClick={() => {
-                setSelectedCourseId("ALL");
-                setPlacedFilter("all");
-                setPage(1);
-                setSearchDraft("");
-                setAppliedSearch("");
-              }}
-              className="rounded-2xl border border-[#8b5cf6]/40 bg-gradient-to-br from-[#1c1642] to-[#120f2d] p-6 text-left shadow-[0_10px_30px_rgba(0,0,0,0.25)] transition hover:border-[#8b5cf6] hover:from-[#231b52]"
-            >
-              <p className="text-sm font-medium uppercase tracking-wider text-[#9a92c9]">
-                Total
-              </p>
-              <p className="mt-2 truncate text-xl font-semibold text-white">
-                All Students
-              </p>
-              <p className="mt-4 text-3xl font-bold text-[#8b5cf6]">
-                {totalStudents ?? "…"}
-                <span className="ml-2 text-sm font-medium text-[#a8a0d6]">
-                  students
-                </span>
-              </p>
-            </button> */}
-
+          <div className="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-5">
             <button
               onClick={() => {
                 setSelectedCourseId("ALL");
@@ -837,25 +883,45 @@ const StudentsListPage = () => {
                 setSearchDraft("");
                 setAppliedSearch("");
               }}
-              className="rounded-2xl border border-emerald-500/40 bg-gradient-to-br from-[#0f2a22] to-[#120f2d] p-6 text-left shadow-[0_10px_30px_rgba(0,0,0,0.25)] transition hover:border-emerald-400 hover:from-[#143a2e]"
+              className="rounded-xl border border-[#312a63] bg-[#120f2d] p-4 text-left transition hover:border-[#8b5cf6]/70 hover:bg-[#1b1640]"
             >
-              <p className="text-sm font-medium uppercase tracking-wider text-[#9a92c9]">
-                Active
-              </p>
-              <p className="mt-2 truncate text-xl font-semibold text-white">
-                Active Students
-              </p>
-              <p className="mt-4 text-3xl font-bold text-emerald-400">
-                {activeStudentsCount}
-                <span className="ml-2 text-sm font-medium text-[#a8a0d6]">
-                  not placed · enrolled
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9a92c9]">
+                  Active students
+                </p>
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#8b5cf6]/15 text-[#8b5cf6]">
+                  <Users className="h-4 w-4" />
                 </span>
+              </div>
+              <p className="mt-1 text-3xl font-bold text-white">
+                {activeStudentsCount}
               </p>
+              <p className="mt-1 text-xs text-[#a8a0d6]">not placed · enrolled</p>
             </button>
 
-            <div className="sm:col-span-2 xl:col-span-2">
-              <ZoneStudentAnalytics />
-            </div>
+            <button
+              onClick={() => {
+                setSelectedCourseId("ALL");
+                setPlacedFilter("paused");
+                setPage(1);
+                setSearchDraft("");
+                setAppliedSearch("");
+              }}
+              className="rounded-xl border border-[#312a63] bg-[#120f2d] p-4 text-left transition hover:border-amber-500/60 hover:bg-[#1b1640]"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9a92c9]">
+                  Paused students
+                </p>
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-300">
+                  <PauseCircle className="h-4 w-4" />
+                </span>
+              </div>
+              <p className="mt-1 text-3xl font-bold text-white">
+                {pausedStudentsCount}
+              </p>
+              <p className="mt-1 text-xs text-[#a8a0d6]">on break · not active</p>
+            </button>
 
             <button
               onClick={() => {
@@ -865,23 +931,59 @@ const StudentsListPage = () => {
                 setSearchDraft("");
                 setAppliedSearch("");
               }}
-              className="rounded-2xl border border-amber-500/40 bg-gradient-to-br from-[#2a200f] to-[#120f2d] p-6 text-left shadow-[0_10px_30px_rgba(0,0,0,0.25)] transition hover:border-amber-400 hover:from-[#3a2c14]"
+              className="rounded-xl border border-[#312a63] bg-[#120f2d] p-4 text-left transition hover:border-[#8b5cf6]/70 hover:bg-[#1b1640]"
             >
-              <p className="text-sm font-medium uppercase tracking-wider text-[#9a92c9]">
-                Placed
-              </p>
-              <p className="mt-2 truncate text-xl font-semibold text-white">
-                Placed Students
-              </p>
-              <p className="mt-4 text-3xl font-bold text-amber-400">
-                {placedStudentsCount}
-                <span className="ml-2 text-sm font-medium text-[#a8a0d6]">
-                  placed
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9a92c9]">
+                  Placed students
+                </p>
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#8b5cf6]/15 text-[#8b5cf6]">
+                  <BadgeCheck className="h-4 w-4" />
                 </span>
+              </div>
+              <p className="mt-1 text-3xl font-bold text-white">
+                {placedStudentsCount}
               </p>
+              <p className="mt-1 text-xs text-[#a8a0d6]">all-time placements</p>
             </button>
+
+            <div className="rounded-xl border border-[#312a63] bg-[#120f2d] p-4">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9a92c9]">
+                  Placement rate
+                </p>
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#8b5cf6]/15 text-[#8b5cf6]">
+                  <TrendingUp className="h-4 w-4" />
+                </span>
+              </div>
+              <p className="mt-1 text-3xl font-bold text-white">{placementRate}</p>
+              <p className="mt-1 text-xs text-[#a8a0d6]">
+                {placedStudentsCount} of {totalEnrolled} students
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-[#312a63] bg-[#120f2d] p-4">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9a92c9]">
+                  Newly enrolled
+                </p>
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#8b5cf6]/15 text-[#8b5cf6]">
+                  <UserPlus className="h-4 w-4" />
+                </span>
+              </div>
+              <p className="mt-1 text-3xl font-bold text-white">
+                {newlyEnrolledCount}
+              </p>
+              <p className="mt-1 text-xs text-[#a8a0d6]">awaiting zone assignment</p>
+            </div>
+          </div>
+        )}
+
+        {/* ── Course tiles ── */}
+        {!selectedCourseId && (
+          <div className="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
             {courses.map((c, idx) => {
-              const theme = courseThemes[idx % courseThemes.length];
+              const color = COURSE_COLORS[idx % COURSE_COLORS.length];
               const count = activeStudentsBase.filter(
                 (s) =>
                   Array.isArray(s.purchasedCourses) &&
@@ -889,38 +991,45 @@ const StudentsListPage = () => {
                     (p) => String(p) === String(c._id)
                   )
               ).length;
-              const isSelected = courseFilter === c._id;
+              const share =
+                activeStudentsCount > 0
+                  ? Math.round((count / activeStudentsCount) * 100)
+                  : 0;
               return (
                 <button
                   key={c._id}
                   onClick={() => {
-                    // setCourseFilter(isSelected ? "all" : c._id);
-                    // setPage(1);
                     setSelectedCourseId(c._id);
                     setPlacedFilter("all");
                     setPage(1);
                     setSearchDraft("");
                     setAppliedSearch("");
                   }}
-
-                  className={`rounded-2xl border ${theme.border} ${theme.hover} bg-gradient-to-br ${theme.grad} p-5 text-left shadow-[0_10px_30px_rgba(0,0,0,0.25)] transition ${isSelected ? "ring-2 ring-white/20" : ""
-                    }`}
+                  className="rounded-xl border bg-[#120f2d] p-4 text-left transition hover:bg-[#1b1640]"
+                  style={{ borderColor: `${color}4d` }}
                 >
-                  <div className="flex items-start justify-between">
+                  <div className="flex items-start justify-between gap-2">
                     <span
-                      className={`inline-flex h-8 w-8 items-center justify-center rounded-full ${theme.badge} text-xs font-bold`}
+                      className="rounded-md px-2 py-1 text-[11px] font-bold tracking-wide"
+                      style={{ color, backgroundColor: `${color}24` }}
                     >
                       {shortCourseName(c.title)}
                     </span>
-                    <span className={`text-3xl font-bold ${theme.text}`}>
-                      {count}
-                    </span>
+                    <span className="text-2xl font-bold text-white">{count}</span>
                   </div>
-                  <p className="mt-3 truncate text-lg font-semibold text-white">
+                  <p className="mt-2 truncate text-sm font-medium text-white">
                     {c.title || "Untitled Course"}
                   </p>
-                  <p className="mt-1 text-xs text-[#a8a0d6]">
-                    {isSelected ? "Filter applied · tap to clear" : "Tap to filter"}
+                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
+                    <div
+                      className="h-full rounded-full"
+                      style={{ width: `${share}%`, backgroundColor: color }}
+                    />
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-[#a8a0d6]">
+                    {count === 0
+                      ? "no active students"
+                      : `${share}% of active students`}
                   </p>
                 </button>
               );
@@ -928,52 +1037,91 @@ const StudentsListPage = () => {
           </div>
         )}
 
-        {/* ── Chart ── */}
+        {/* ── Zone matrix + chart ── */}
         {!selectedCourseId && (
-          <div className="mb-6 rounded-2xl border border-[#312a63] bg-[#120f2d] p-5 shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
-            <div className="mb-4 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-              <div>
-                <h2 className="text-lg font-semibold text-white">
-                  Admissions by Month
-                </h2>
-                <p className="text-sm text-[#a8a0d6]">
-                  Total students joined per month
-                </p>
-              </div>
-              <select
-                value={chartYear}
-                onChange={(e) => setChartYear(Number(e.target.value))}
-                className="rounded-lg border border-[#312a63] bg-[#0f0b24] px-3 py-2 text-white outline-none focus:border-[#8b5cf6]"
-              >
-                {availableYears.map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
+          <div className="mb-6 grid grid-cols-1 gap-3 lg:grid-cols-12">
+            <div className="lg:col-span-7">
+              <ZoneStudentAnalytics />
             </div>
-            <div className="h-72 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData}>
-                  <CartesianGrid stroke="#312a63" strokeDasharray="3 3" />
-                  <XAxis dataKey="month" stroke="#a8a0d6" />
-                  <YAxis allowDecimals={false} stroke="#a8a0d6" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#120f2d",
-                      border: "1px solid #312a63",
-                      borderRadius: "8px",
-                      color: "#fff",
-                    }}
-                    cursor={{ fill: "rgba(139,92,246,0.1)" }}
-                  />
-                  <Bar
-                    dataKey="admissions"
-                    fill="#8b5cf6"
-                    radius={[6, 6, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+
+            <div className="flex h-full flex-col rounded-xl border border-[#312a63] bg-[#120f2d] p-5 lg:col-span-5">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-semibold text-white">
+                    Admissions by month
+                  </h2>
+                  <p className="mt-0.5 text-xs text-[#a8a0d6]">
+                    {chartYearTotal} students joined in {chartYear}
+                  </p>
+                </div>
+                <select
+                  value={chartYear}
+                  onChange={(e) => setChartYear(Number(e.target.value))}
+                  className="rounded-lg border border-[#312a63] bg-[#0f0b24] px-2.5 py-1.5 text-sm text-white outline-none focus:border-[#8b5cf6]"
+                >
+                  {availableYears.map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="min-h-56 w-full flex-1">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={visibleChartData} barCategoryGap="28%">
+                    <CartesianGrid
+                      stroke="#312a63"
+                      strokeOpacity={0.6}
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="month"
+                      stroke="#9a92c9"
+                      tickLine={false}
+                      axisLine={{ stroke: "#312a63" }}
+                      fontSize={12}
+                    />
+                    <YAxis
+                      allowDecimals={false}
+                      stroke="#9a92c9"
+                      tickLine={false}
+                      axisLine={false}
+                      fontSize={12}
+                      width={30}
+                    />
+                    <Tooltip
+                      formatter={(value: number) => [`${value} joined`, null]}
+                      contentStyle={{
+                        backgroundColor: "#120f2d",
+                        border: "1px solid #312a63",
+                        borderRadius: "8px",
+                        color: "#fff",
+                        fontSize: "12px",
+                      }}
+                      cursor={{ fill: "rgba(139,92,246,0.08)" }}
+                    />
+                    <Bar dataKey="admissions" radius={[4, 4, 0, 0]} maxBarSize={34}>
+                      {visibleChartData.map((entry, i) => (
+                        <Cell
+                          key={`${entry.month}-${i}`}
+                          fill="#8b5cf6"
+                          fillOpacity={
+                            isCurrentChartYear && i === visibleChartData.length - 1
+                              ? 0.45
+                              : 1
+                          }
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              {isCurrentChartYear && (
+                <p className="mt-2 text-[11px] text-[#9a92c9]">
+                  Current month is month-to-date. Remaining months appear as the
+                  year progresses.
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -1000,7 +1148,9 @@ const StudentsListPage = () => {
                     ? "Placed Students"
                     : placedFilter === "notplaced"
                       ? "Active Students"
-                      : "All Enrolled Students"
+                      : placedFilter === "paused"
+                        ? "Paused Students"
+                        : "All Enrolled Students"
                   : courses.find((c) => c._id === selectedCourseId)?.title ||
                   "Course"}
                 <span className="ml-2 text-sm font-normal text-[#a8a0d6]">
@@ -1014,7 +1164,7 @@ const StudentsListPage = () => {
             </div>
 
             {/* ── Zone counts ── */}
-            <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
               <div className="rounded-2xl border border-blue-500/40 bg-gradient-to-br from-blue-600/20 to-blue-900/10 p-5">
                 <p className="text-sm font-medium uppercase tracking-wider text-[#9a92c9]">Blue Zone</p>
                 <p className="mt-2 text-3xl font-bold text-blue-300">
@@ -1033,6 +1183,13 @@ const StudentsListPage = () => {
                 <p className="text-sm font-medium uppercase tracking-wider text-[#9a92c9]">Green Zone</p>
                 <p className="mt-2 text-3xl font-bold text-emerald-300">
                   {zoneCounts.green}
+                  <span className="ml-2 text-sm font-medium text-[#a8a0d6]">students</span>
+                </p>
+              </div>
+              <div className="rounded-2xl border border-violet-500/40 bg-gradient-to-br from-violet-600/20 to-violet-900/10 p-5">
+                <p className="text-sm font-medium uppercase tracking-wider text-[#9a92c9]">Newly Enrolled</p>
+                <p className="mt-2 text-3xl font-bold text-violet-300">
+                  {zoneCounts.newlyEnrolled}
                   <span className="ml-2 text-sm font-medium text-[#a8a0d6]">students</span>
                 </p>
               </div>
@@ -1172,7 +1329,7 @@ const StudentsListPage = () => {
                       value={placedFilter}
                       onChange={(e) => {
                         setPlacedFilter(
-                          e.target.value as "all" | "placed" | "notplaced"
+                          e.target.value as "all" | "placed" | "paused"
                         );
                         setPage(1);
                       }}
@@ -1180,6 +1337,7 @@ const StudentsListPage = () => {
                     >
                       <option value="all">All Enrolled</option>
                       <option value="placed">Placed</option>
+                      <option value="paused">Paused</option>
                     </select>
                   )}
 
@@ -1206,7 +1364,7 @@ const StudentsListPage = () => {
                       onChange={(e) => setPlacementUnlocked(e.target.checked)}
                       className="h-4 w-4 cursor-pointer accent-[#8b5cf6]"
                     />
-                    Allow placement edit
+                    Allow status edits
                   </label>
 
                   <button
@@ -1270,6 +1428,11 @@ const StudentsListPage = () => {
                         <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[#9a92c9]">
                           Placement
                         </th>
+                        {showPauseColumn && (
+                          <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[#9a92c9]">
+                            Status
+                          </th>
+                        )}
                         <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[#9a92c9]">
                           Actions
                         </th>
@@ -1280,7 +1443,7 @@ const StudentsListPage = () => {
                       {displayStudents.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={7}
+                            colSpan={showPauseColumn ? 7 : 6}
                             className="px-6 py-14 text-center text-[#a8a0d6]"
                           >
                             No students found
@@ -1379,7 +1542,7 @@ const StudentsListPage = () => {
                                     }
                                     title={
                                       !placementUnlocked
-                                        ? "Tick 'Allow placement edit' to enable"
+                                        ? "Tick 'Allow status edits' to enable"
                                         : ""
                                     }
                                     className={`rounded-lg px-3 py-1.5 text-xs font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${student.isPlaced
@@ -1395,6 +1558,48 @@ const StudentsListPage = () => {
                                   </button>
                                 </div>
                               </td>
+
+                              {showPauseColumn && (
+                                <td className="px-6 py-5">
+                                  <div className="flex items-center gap-2">
+                                    <span
+                                      className={`${pill} ${student.isPaused
+                                          ? "bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30"
+                                          : "bg-slate-500/15 text-slate-300 ring-1 ring-slate-500/30"
+                                        }`}
+                                    >
+                                      {student.isPaused ? "Paused" : "Active"}
+                                    </span>
+                                    <button
+                                      onClick={() =>
+                                        togglePause(
+                                          student._id,
+                                          !student.isPaused
+                                        )
+                                      }
+                                      disabled={
+                                        !placementUnlocked ||
+                                        pauseUpdatingId === student._id
+                                      }
+                                      title={
+                                        !placementUnlocked
+                                          ? "Tick 'Allow status edits' to enable"
+                                          : ""
+                                      }
+                                      className={`rounded-lg px-3 py-1.5 text-xs font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${student.isPaused
+                                          ? "bg-sky-600 hover:bg-sky-700"
+                                          : "bg-amber-600 hover:bg-amber-700"
+                                        }`}
+                                    >
+                                      {pauseUpdatingId === student._id
+                                        ? "..."
+                                        : student.isPaused
+                                          ? "Resume"
+                                          : "Pause"}
+                                    </button>
+                                  </div>
+                                </td>
+                              )}
 
                               <td className="px-6 py-5">
                                 <button

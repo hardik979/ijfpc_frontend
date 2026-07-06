@@ -61,6 +61,7 @@ type Student = {
   joinedMonth?: string;
   feePlan?: string;
   isPlaced?: boolean;
+  isPaused?: boolean;
   isRealUser?: boolean;
   purchasedCourses?: string[];
   batchHistory?: { to?: string; from?: string | null; changedAt?: string }[];
@@ -615,6 +616,7 @@ export default function CommunicationAnalytics() {
           (s: Student) =>
             s.isRealUser !== true &&
             s.isPlaced !== true &&
+            s.isPaused !== true &&
             Array.isArray(s.purchasedCourses) &&
             s.purchasedCourses.length > 0
         );
