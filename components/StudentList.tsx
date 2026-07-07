@@ -860,6 +860,14 @@ const StudentsListPage = () => {
                   <BarChart3 className="h-4 w-4 text-[#9a92c9]" />
                   Communication Analytics
                 </Link>
+
+                 <Link
+                  href="/resume-builder"
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-white transition hover:bg-[#1b1640]"
+                >
+                  <GraduationCap className="h-4 w-4 text-[#9a92c9]" />
+                  C.V. Builder
+                </Link>
               </div>
             </details>
 

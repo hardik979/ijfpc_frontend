@@ -1,8 +1,10 @@
-import type {
-  ResumeData,
-  TemplateKey,
-  ResumeTheme,
-  ResumeFontFamily,
+import {
+  normalizeSectionPages,
+  type ResumeData,
+  type SectionKey,
+  type TemplateKey,
+  type ResumeTheme,
+  type ResumeFontFamily,
 } from "@/lib/resume";
 
 /* ───────────────────────── Canonical form shape ─────────────────────────
@@ -66,6 +68,9 @@ export type ResumeFormValues = {
   theme: ResumeTheme;
   fontFamily: ResumeFontFamily;
   fontSize: number;
+
+  // Layout: ordered section keys per page (drag-and-drop)
+  sectionPages: SectionKey[][];
 };
 
 /* ───────────────────────── Option lists + guards ───────────────────────── */
@@ -224,6 +229,7 @@ export function draftToForm(p: Partial<ResumeData> = {}): ResumeFormValues {
     theme: isValidTheme(p.theme) ? p.theme : "blue",
     fontFamily: isValidFontFamily(p.fontFamily) ? p.fontFamily : "Helvetica",
     fontSize: typeof p.fontSize === "number" ? p.fontSize : 12,
+    sectionPages: normalizeSectionPages(p.sectionPages),
   };
 }
 
@@ -271,5 +277,6 @@ export function formToResumeData(v: ResumeFormValues): ResumeData {
     theme: v.theme,
     fontFamily: v.fontFamily,
     fontSize: v.fontSize,
+    sectionPages: normalizeSectionPages(v.sectionPages),
   };
 }

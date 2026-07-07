@@ -54,6 +54,49 @@ export type ExperienceEntry = {
   isCurrent?: boolean;
 };
 
+/* Sections the user can rearrange across pages. The header (name + contact)
+ * is not a section — it is always pinned to the top of page 1. */
+export const SECTION_KEYS = [
+  "summary",
+  "skills",
+  "experience",
+  "projects",
+  "education",
+  "languages",
+] as const;
+
+export type SectionKey = (typeof SECTION_KEYS)[number];
+
+/** Sanitize a saved pages layout: drop unknown/duplicate keys, keep
+ *  user-created empty pages, and append any missing sections to the last
+ *  page so every section always lives somewhere exactly once. */
+export function normalizeSectionPages(input?: unknown): SectionKey[][] {
+  const seen = new Set<SectionKey>();
+  const pages: SectionKey[][] = [];
+
+  if (Array.isArray(input)) {
+    for (const page of input) {
+      if (!Array.isArray(page)) continue;
+      const keys: SectionKey[] = [];
+      for (const key of page) {
+        if (
+          (SECTION_KEYS as readonly string[]).includes(key as string) &&
+          !seen.has(key as SectionKey)
+        ) {
+          seen.add(key as SectionKey);
+          keys.push(key as SectionKey);
+        }
+      }
+      pages.push(keys);
+    }
+  }
+
+  if (!pages.length) pages.push([]);
+  const missing = SECTION_KEYS.filter((key) => !seen.has(key));
+  pages[pages.length - 1] = [...pages[pages.length - 1], ...missing];
+  return pages;
+}
+
 export type ResumeData = {
   fullName?: string;
   role?: string;
@@ -83,4 +126,7 @@ export type ResumeData = {
   theme?: ResumeTheme;
   fontFamily?: ResumeFontFamily;
   fontSize?: number;
+
+  /** Ordered section keys per page (drag-and-drop layout). */
+  sectionPages?: SectionKey[][];
 };

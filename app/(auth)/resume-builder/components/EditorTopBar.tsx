@@ -1,17 +1,56 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useFormContext } from "react-hook-form";
-import { BlobProvider } from "@react-pdf/renderer";
+import { pdf } from "@react-pdf/renderer";
 import { Download, FileText, X, CheckCircle2 } from "lucide-react";
 
 import { ResumeDocumentRouter } from "@/components/resume-builder/ResumePDF";
 import type { ResumeData } from "@/lib/resume";
 import type { ResumeFormValues } from "@/lib/resumeForm";
 import { formToResumeData } from "@/lib/resumeForm";
+import { stripBlankTrailingPagesFromBlob } from "@/lib/pdfPostProcess";
 
 function PdfModal({ data, onClose }: { data: ResumeData; onClose: () => void }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [error, setError] = useState(false);
+  const urlRef = useRef<string | null>(null);
+
+  // Build the final PDF once, strip any empty trailing page, and share the one
+  // blob URL between the inline preview and the Download button.
+  useEffect(() => {
+    let cancelled = false;
+    setError(false);
+    (async () => {
+      try {
+        const rawBlob = await pdf(
+          <ResumeDocumentRouter data={data} />
+        ).toBlob();
+        const blob = await stripBlankTrailingPagesFromBlob(rawBlob);
+        if (cancelled) return;
+        const next = URL.createObjectURL(blob);
+        if (urlRef.current) URL.revokeObjectURL(urlRef.current);
+        urlRef.current = next;
+        setUrl(next);
+      } catch {
+        if (!cancelled) setError(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [data]);
+
+  useEffect(
+    () => () => {
+      if (urlRef.current) URL.revokeObjectURL(urlRef.current);
+    },
+    []
+  );
+
+  const loading = !url && !error;
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
@@ -31,21 +70,17 @@ function PdfModal({ data, onClose }: { data: ResumeData; onClose: () => void }) 
             </h3>
           </div>
           <div className="flex items-center gap-2">
-            <BlobProvider document={<ResumeDocumentRouter data={data} />}>
-              {({ url, loading }) => (
-                <a
-                  href={url ?? "#"}
-                  download="resume.pdf"
-                  className={[
-                    "inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_4px_14px_rgba(124,58,237,0.35)] transition-all hover:-translate-y-0.5",
-                    loading ? "pointer-events-none opacity-60" : "",
-                  ].join(" ")}
-                >
-                  <Download className="h-4 w-4" />
-                  {loading ? "Preparing…" : "Download PDF"}
-                </a>
-              )}
-            </BlobProvider>
+            <a
+              href={url ?? "#"}
+              download="resume.pdf"
+              className={[
+                "inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_4px_14px_rgba(124,58,237,0.35)] transition-all hover:-translate-y-0.5",
+                url ? "" : "pointer-events-none opacity-60",
+              ].join(" ")}
+            >
+              <Download className="h-4 w-4" />
+              {url ? "Download PDF" : "Preparing…"}
+            </a>
             <button
               type="button"
               onClick={onClose}
@@ -58,32 +93,22 @@ function PdfModal({ data, onClose }: { data: ResumeData; onClose: () => void }) 
         </div>
 
         <div className="flex-1 overflow-hidden bg-gray-100 dark:bg-gray-800">
-          <BlobProvider document={<ResumeDocumentRouter data={data} />}>
-            {({ url, loading, error }) => {
-              if (loading) {
-                return (
-                  <div className="flex h-full items-center justify-center gap-3 text-sm text-gray-500 dark:text-gray-400">
-                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-violet-200 dark:border-violet-900 border-t-violet-600 dark:border-t-violet-400" />
-                    Rendering your resume…
-                  </div>
-                );
-              }
-              if (error || !url) {
-                return (
-                  <div className="flex h-full items-center justify-center text-sm text-red-500 dark:text-red-400">
-                    Preview failed — try the download button above.
-                  </div>
-                );
-              }
-              return (
-                <iframe
-                  src={`${url}#toolbar=0&navpanes=0&scrollbar=0&zoom=page-width`}
-                  className="h-full w-full border-0 bg-white"
-                  title="Resume PDF preview"
-                />
-              );
-            }}
-          </BlobProvider>
+          {loading ? (
+            <div className="flex h-full items-center justify-center gap-3 text-sm text-gray-500 dark:text-gray-400">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-violet-200 dark:border-violet-900 border-t-violet-600 dark:border-t-violet-400" />
+              Rendering your resume…
+            </div>
+          ) : error || !url ? (
+            <div className="flex h-full items-center justify-center text-sm text-red-500 dark:text-red-400">
+              Preview failed — try again.
+            </div>
+          ) : (
+            <iframe
+              src={`${url}#toolbar=0&navpanes=0&scrollbar=0&zoom=page-width`}
+              className="h-full w-full border-0 bg-white"
+              title="Resume PDF preview"
+            />
+          )}
         </div>
       </div>
     </div>
