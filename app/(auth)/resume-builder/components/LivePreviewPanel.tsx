@@ -6,8 +6,10 @@ import { pdf } from "@react-pdf/renderer";
 import { ZoomIn, ZoomOut, Pencil, FileText } from "lucide-react";
 
 import EditableResumePreview from "../EditableResumePreview";
+import TemplatePageBar from "./TemplatePageBar";
 import { ResumeDocumentRouter } from "@/components/resume-builder/ResumePDF";
 import { formToResumeData, type ResumeFormValues } from "@/lib/resumeForm";
+import { stripBlankTrailingPagesFromBlob } from "@/lib/pdfPostProcess";
 
 const A4_WIDTH = 794;
 
@@ -43,7 +45,11 @@ function PreviewScale({
  * so it doesn't rebuild on every keystroke — and crucially we keep the LAST good
  * PDF on screen while the next one renders, instead of remounting a spinner each
  * time (which made it flicker "come and go"). */
-function TemplatePdfPreview() {
+function TemplatePdfPreview({
+  onPageCount,
+}: {
+  onPageCount?: (n: number) => void;
+}) {
   const { control } = useFormContext<ResumeFormValues>();
   const values = useWatch({ control }) as ResumeFormValues;
 
@@ -70,14 +76,24 @@ function TemplatePdfPreview() {
     timer.current = setTimeout(async () => {
       const id = ++reqId.current;
       try {
-        const blob = await pdf(
+        const rawBlob = await pdf(
           <ResumeDocumentRouter data={dataRef.current} />
         ).toBlob();
         if (id !== reqId.current) return; // a newer build superseded this one
+        // drop any empty trailing page the layout engine spilled
+        const blob = await stripBlankTrailingPagesFromBlob(rawBlob);
+        if (id !== reqId.current) return;
         const next = URL.createObjectURL(blob);
         if (urlRef.current) URL.revokeObjectURL(urlRef.current);
         urlRef.current = next;
         setUrl(next);
+        try {
+          // real page count of the rendered document ("Page" not "Pages")
+          const text = await blob.text();
+          onPageCount?.((text.match(/\/Type\s*\/Page\b/g) || []).length);
+        } catch {
+          /* count is informational only */
+        }
       } catch {
         /* keep showing the last good preview */
       }
@@ -118,6 +134,7 @@ function TemplatePdfPreview() {
 export default function LivePreviewPanel() {
   const [zoomMul, setZoomMul] = useState(1);
   const [mode, setMode] = useState<"edit" | "template">("edit");
+  const [pdfPageCount, setPdfPageCount] = useState<number | null>(null);
 
   return (
     <div className="flex h-full flex-col">
@@ -179,13 +196,15 @@ export default function LivePreviewPanel() {
         )}
       </div>
 
+      {mode === "template" && <TemplatePageBar pdfPageCount={pdfPageCount} />}
+
       <div className="no-scrollbar flex-1 overflow-auto bg-gradient-to-b from-violet-50/50 to-white dark:from-violet-950/20 dark:to-gray-900 p-4 lg:p-6">
         {mode === "edit" ? (
           <PreviewScale zoomMul={zoomMul}>
             {(scale) => <EditableResumePreview scale={scale} />}
           </PreviewScale>
         ) : (
-          <TemplatePdfPreview />
+          <TemplatePdfPreview onPageCount={setPdfPageCount} />
         )}
       </div>
     </div>

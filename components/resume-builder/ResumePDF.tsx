@@ -12,7 +12,11 @@ import {
   Circle,
 } from "@react-pdf/renderer";
 import type { Style } from "@react-pdf/types";
-import type { ResumeData } from "@/lib/resume";
+import {
+  normalizeSectionPages,
+  type ResumeData,
+  type SectionKey,
+} from "@/lib/resume";
 import {
   getBasePageStyle,
   getThemePalette as resolveThemePalette,
@@ -40,7 +44,11 @@ function safeArray<T>(value: T[] | undefined | null): T[] {
 }
 
 function cleanText(value?: string | null) {
-  return String(value ?? "").trim();
+  // strip zero-width characters too: they survive trim(), render as ghost
+  // empty bullets, and can push an invisible line onto an extra PDF page
+  return String(value ?? "")
+    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, "")
+    .trim();
 }
 
 function hasText(value?: string | null) {
@@ -246,22 +254,47 @@ function hasExtraProfileInfo(data: ResumeData) {
   );
 }
 
+/* -------------------- SECTION ORDER (drag-and-drop layout) -------------------- */
+
+/** Flattened position of each section in the user's page layout, used by the
+ *  two-column templates to order sections within their fixed columns. */
+function sectionRankMap(data: ResumeData) {
+  const rank = new Map<SectionKey, number>();
+  normalizeSectionPages(data.sectionPages)
+    .flat()
+    .forEach((key, i) => rank.set(key, i));
+  return rank;
+}
+
+type RankedSection = { key: SectionKey; node: React.ReactNode };
+
+function orderByRank(items: RankedSection[], rank: Map<SectionKey, number>) {
+  return items
+    .filter((s) => s.node)
+    .sort((a, b) => (rank.get(a.key) ?? 99) - (rank.get(b.key) ?? 99));
+}
+
 /* -------------------- REUSABLE BLOCKS -------------------- */
 
 function Section({
   title,
   children,
   palette,
+  keepTogether,
 }: {
   title: string;
   children: React.ReactNode;
   palette: ThemePalette;
+  /** Short sections pass this to render as one atomic block so the heading is
+   *  never split from its content across a page break (no orphaned heading). */
+  keepTogether?: boolean;
 }) {
   return (
-    <View style={styles.section}>
-      {/* minPresenceAhead: if less than ~40pt of space is left below the heading,
-          push the whole heading to the next page instead of orphaning it */}
-      <View minPresenceAhead={40}>
+    <View style={styles.section} wrap={keepTogether ? false : undefined}>
+      {/* minPresenceAhead: if less than ~64pt of space is left below the heading
+          (room for the heading plus ~2 lines), push the heading to the next
+          page instead of orphaning it at the bottom */}
+      <View minPresenceAhead={64}>
         <View style={{ ...styles.sectionBar, backgroundColor: palette.primary }} />
         <Text style={{ ...styles.heading, color: palette.primary }}>{title}</Text>
       </View>
@@ -561,6 +594,227 @@ function NaukriStyleTemplate({ data }: { data: ResumeData }) {
     cleanText((data as any).relevantExperience) ||
     "";
 
+  const sectionPages = normalizeSectionPages(data.sectionPages);
+
+  const renderSection = (key: SectionKey): React.ReactNode => {
+    switch (key) {
+      case "summary":
+        return hasSummary(data) ? (
+          <Section title="Profile Summary" palette={bluePalette}>
+            <HighlightedSummary data={data} style={{ ...styles.text, color: "#111827" }} />
+          </Section>
+        ) : null;
+
+      case "experience":
+        return experience.length > 0 ? (
+          <Section title="Work Experience" palette={bluePalette}>
+            <View>
+              {experience.map((exp: any, index: number) => {
+                const points = nonEmptyArray(exp?.bullets?.length ? exp.bullets : exp?.points);
+                const start = cleanText(exp.startDate || exp.start);
+                const end = cleanText(exp.endDate || exp.end);
+
+                return (
+                  <View
+                    key={index}
+                    style={{
+                      ...styles.expCard,
+                      borderBottomColor: "#E5E7EB",
+                      paddingBottom: 8,
+                      marginBottom: 8,
+                    }}
+                  >
+                    <View
+                      minPresenceAhead={30}
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                      }}
+                    >
+                      <View style={{ width: "72%" }}>
+                        <Text style={{ fontSize: 10.7, fontWeight: 700, color: "#111827" }}>
+                          {cleanText(exp.jobTitle) || "Role"}
+                        </Text>
+                        {hasText(exp.company) && (
+                          <Text style={{ fontSize: 9.1, color: bluePalette.secondary, marginTop: 2 }}>
+                            {exp.company}
+                          </Text>
+                        )}
+                      </View>
+
+                      {(start || end) && (
+                        <Text style={{ fontSize: 8.4, color: "#6B7280", textAlign: "right" }}>
+                          {start}
+                          {start || end ? " – " : ""}
+                          {end || "Present"}
+                        </Text>
+                      )}
+                    </View>
+
+                    {nonEmptyArray((exp as any).metrics).length > 0 && (
+                      <View style={styles.naukriMetricWrap}>
+                        {nonEmptyArray((exp as any).metrics).map((metric, mi) => (
+                          <Text key={`${metric}-${mi}`} style={styles.naukriMetric}>
+                            {metric}
+                          </Text>
+                        ))}
+                      </View>
+                    )}
+
+                    <View style={{ marginTop: 4 }}>
+                      {points.map((point, i) => (
+                        <BulletItem key={i} text={point} color="#111827" />
+                      ))}
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </Section>
+        ) : null;
+
+      case "skills":
+        return skills.length > 0 ? (
+          <Section title="Technical Skills" palette={bluePalette} keepTogether>
+            <View style={styles.naukriPillWrap}>
+              {skills.map((skill, i) => (
+                <Text
+                  key={`${skill}-${i}`}
+                  style={{
+                    ...styles.naukriPill,
+                    backgroundColor: bluePalette.chipBg,
+                    color: bluePalette.chipText,
+                    borderColor: bluePalette.border,
+                  }}
+                >
+                  {skill}
+                </Text>
+              ))}
+            </View>
+          </Section>
+        ) : null;
+
+      case "education":
+        return education.length > 0 ? (
+          <Section title="Education" palette={bluePalette} keepTogether>
+            <View>
+              {education.map((edu: any, index: number) => (
+                <View key={index} style={{ marginBottom: 8 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                    }}
+                  >
+                    <View style={{ width: "68%" }}>
+                      <Text style={{ fontSize: 10, fontWeight: 700, color: "#111827" }}>
+                        {cleanText(edu.degree) || "Degree"}
+                      </Text>
+                      {hasText(edu.institution) && (
+                        <Text style={{ fontSize: 9, color: bluePalette.secondary, marginTop: 2 }}>
+                          {edu.institution}
+                        </Text>
+                      )}
+                    </View>
+
+                    <View style={{ width: "30%", alignItems: "flex-end" }}>
+                      {(hasText(edu.startYear) || hasText(edu.endYear)) && (
+                        <Text style={{ fontSize: 8.4, color: "#6B7280" }}>
+                          {cleanText(edu.startYear)}
+                          {cleanText(edu.startYear) || cleanText(edu.endYear) ? " – " : ""}
+                          {cleanText(edu.endYear) || (edu.currentlyStudying ? "Present" : "")}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+
+                  <View style={{ marginTop: 3 }}>
+                    {nonEmptyArray(edu.highlights).map((highlight, hi) => (
+                      <BulletItem key={hi} text={highlight} color="#111827" />
+                    ))}
+                  </View>
+                </View>
+              ))}
+            </View>
+          </Section>
+        ) : null;
+
+      case "projects":
+        return projects.length > 0 ? (
+          <Section title="Projects & Open Source" palette={bluePalette}>
+            <ProjectsBlock data={{ ...data, projects } as ResumeData} palette={bluePalette} />
+          </Section>
+        ) : null;
+
+      case "languages":
+        return languages.length > 0 || hasExtraProfileInfo(data) ? (
+          <Section title="Languages" palette={bluePalette} keepTogether>
+            {languages.length > 0 && (
+              <View style={{ marginBottom: 8 }}>
+                <View style={styles.naukriPillWrap}>
+                  {languages.map((lang, i) => (
+                    <Text
+                      key={`${lang}-${i}`}
+                      style={{
+                        ...styles.skillTag,
+                        backgroundColor: "#F3F4F6",
+                        color: "#374151",
+                        marginBottom: 5,
+                      }}
+                    >
+                      {lang}
+                    </Text>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {hasExtraProfileInfo(data) && (
+              <View style={styles.naukriInfoGrid}>
+                {hasText((data as any).currentCtc) && (
+                  <View style={styles.naukriInfoCard}>
+                    <Text style={{ ...styles.smallText, color: "#6B7280" }}>Current CTC</Text>
+                    <Text style={{ fontSize: 9.4, fontWeight: 700, color: "#111827" }}>
+                      {(data as any).currentCtc}
+                    </Text>
+                  </View>
+                )}
+                {hasText((data as any).expectedCtc) && (
+                  <View style={styles.naukriInfoCard}>
+                    <Text style={{ ...styles.smallText, color: "#6B7280" }}>Expected CTC</Text>
+                    <Text style={{ fontSize: 9.4, fontWeight: 700, color: "#111827" }}>
+                      {(data as any).expectedCtc}
+                    </Text>
+                  </View>
+                )}
+                {hasText(totalExperience) && (
+                  <View style={styles.naukriInfoCard}>
+                    <Text style={{ ...styles.smallText, color: "#6B7280" }}>Total Experience</Text>
+                    <Text style={{ fontSize: 9.4, fontWeight: 700, color: "#111827" }}>
+                      {totalExperience}
+                    </Text>
+                  </View>
+                )}
+                {hasText((data as any).relevantExperience) && (
+                  <View style={styles.naukriInfoCard}>
+                    <Text style={{ ...styles.smallText, color: "#6B7280" }}>Relevant Experience</Text>
+                    <Text style={{ fontSize: 9.4, fontWeight: 700, color: "#111827" }}>
+                      {(data as any).relevantExperience}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+          </Section>
+        ) : null;
+
+      default:
+        return null;
+    }
+  };
+
   return (
     <Document>
       <Page
@@ -607,144 +861,18 @@ function NaukriStyleTemplate({ data }: { data: ResumeData }) {
         </View>
 
         <View style={{ paddingHorizontal: 18 }}>
-          {hasSummary(data) && (
-            <Section title="Profile Summary" palette={bluePalette}>
-              <HighlightedSummary data={data} style={{ ...styles.text, color: "#111827" }} />
-            </Section>
-          )}
-
-          {experience.length > 0 && (
-            <Section title="Work Experience" palette={bluePalette}>
-              <View>
-                {experience.map((exp: any, index: number) => {
-                  const points = nonEmptyArray(exp?.bullets?.length ? exp.bullets : exp?.points);
-                  const start = cleanText(exp.startDate || exp.start);
-                  const end = cleanText(exp.endDate || exp.end);
-
-                  return (
-                    <View
-                      key={index}
-                      style={{
-                        ...styles.expCard,
-                        borderBottomColor: "#E5E7EB",
-                        paddingBottom: 8,
-                        marginBottom: 8,
-                      }}
-                    >
-                      <View
-                        minPresenceAhead={30}
-                        style={{
-                          flexDirection: "row",
-                          justifyContent: "space-between",
-                          alignItems: "flex-start",
-                        }}
-                      >
-                        <View style={{ width: "72%" }}>
-                          <Text style={{ fontSize: 10.7, fontWeight: 700, color: "#111827" }}>
-                            {cleanText(exp.jobTitle) || "Role"}
-                          </Text>
-                          {hasText(exp.company) && (
-                            <Text style={{ fontSize: 9.1, color: bluePalette.secondary, marginTop: 2 }}>
-                              {exp.company}
-                            </Text>
-                          )}
-                        </View>
-
-                        {(start || end) && (
-                          <Text style={{ fontSize: 8.4, color: "#6B7280", textAlign: "right" }}>
-                            {start}
-                            {start || end ? " – " : ""}
-                            {end || "Present"}
-                          </Text>
-                        )}
-                      </View>
-
-                      {nonEmptyArray((exp as any).metrics).length > 0 && (
-                        <View style={styles.naukriMetricWrap}>
-                          {nonEmptyArray((exp as any).metrics).map((metric, mi) => (
-                            <Text key={`${metric}-${mi}`} style={styles.naukriMetric}>
-                              {metric}
-                            </Text>
-                          ))}
-                        </View>
-                      )}
-
-                      <View style={{ marginTop: 4 }}>
-                        {points.map((point, i) => (
-                          <BulletItem key={i} text={point} color="#111827" />
-                        ))}
-                      </View>
-                    </View>
-                  );
-                })}
+          {sectionPages.map((keys, pageIndex) => {
+            const rendered = keys
+              .map((sectionKey) => ({ sectionKey, node: renderSection(sectionKey) }))
+              .filter((s) => s.node);
+            // `break` starts each editor page's first section on a fresh PDF
+            // page, so the exported PDF mirrors the drag-and-drop layout.
+            return rendered.map((s, i) => (
+              <View key={s.sectionKey} break={pageIndex > 0 && i === 0}>
+                {s.node}
               </View>
-            </Section>
-          )}
-
-          {skills.length > 0 && (
-            <Section title="Technical Skills" palette={bluePalette}>
-              <View style={styles.naukriPillWrap}>
-                {skills.map((skill, i) => (
-                  <Text
-                    key={`${skill}-${i}`}
-                    style={{
-                      ...styles.naukriPill,
-                      backgroundColor: bluePalette.chipBg,
-                      color: bluePalette.chipText,
-                      borderColor: bluePalette.border,
-                    }}
-                  >
-                    {skill}
-                  </Text>
-                ))}
-              </View>
-            </Section>
-          )}
-
-          {education.length > 0 && (
-            <Section title="Education" palette={bluePalette}>
-              <View>
-                {education.map((edu: any, index: number) => (
-                  <View key={index} style={{ marginBottom: 8 }}>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                        alignItems: "flex-start",
-                      }}
-                    >
-                      <View style={{ width: "68%" }}>
-                        <Text style={{ fontSize: 10, fontWeight: 700, color: "#111827" }}>
-                          {cleanText(edu.degree) || "Degree"}
-                        </Text>
-                        {hasText(edu.institution) && (
-                          <Text style={{ fontSize: 9, color: bluePalette.secondary, marginTop: 2 }}>
-                            {edu.institution}
-                          </Text>
-                        )}
-                      </View>
-
-                      <View style={{ width: "30%", alignItems: "flex-end" }}>
-                        {(hasText(edu.startYear) || hasText(edu.endYear)) && (
-                          <Text style={{ fontSize: 8.4, color: "#6B7280" }}>
-                            {cleanText(edu.startYear)}
-                            {cleanText(edu.startYear) || cleanText(edu.endYear) ? " – " : ""}
-                            {cleanText(edu.endYear) || (edu.currentlyStudying ? "Present" : "")}
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-
-                    <View style={{ marginTop: 3 }}>
-                      {nonEmptyArray(edu.highlights).map((highlight, hi) => (
-                        <BulletItem key={hi} text={highlight} color="#111827" />
-                      ))}
-                    </View>
-                  </View>
-                ))}
-              </View>
-            </Section>
-          )}
+            ));
+          })}
 
           {hasCertifications(data) && certifications.length > 0 && (
             <Section title="Certifications" palette={bluePalette}>
@@ -779,74 +907,6 @@ function NaukriStyleTemplate({ data }: { data: ResumeData }) {
                     ))}
                 </View>
               </View>
-            </Section>
-          )}
-
-          {projects.length > 0 && (
-            <Section title="Projects & Open Source" palette={bluePalette}>
-              <ProjectsBlock data={{ ...data, projects } as ResumeData} palette={bluePalette} />
-            </Section>
-          )}
-
-          {(languages.length > 0 || hasExtraProfileInfo(data)) && (
-            <Section title="Languages" palette={bluePalette}>
-              {languages.length > 0 && (
-                <View style={{ marginBottom: 8 }}>
-                 
-                  <View style={styles.naukriPillWrap}>
-                    {languages.map((lang, i) => (
-                      <Text
-                        key={`${lang}-${i}`}
-                        style={{
-                          ...styles.skillTag,
-                          backgroundColor: "#F3F4F6",
-                          color: "#374151",
-                          marginBottom: 5,
-                        }}
-                      >
-                        {lang}
-                      </Text>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {hasExtraProfileInfo(data) && (
-                <View style={styles.naukriInfoGrid}>
-                  {hasText((data as any).currentCtc) && (
-                    <View style={styles.naukriInfoCard}>
-                      <Text style={{ ...styles.smallText, color: "#6B7280" }}>Current CTC</Text>
-                      <Text style={{ fontSize: 9.4, fontWeight: 700, color: "#111827" }}>
-                        {(data as any).currentCtc}
-                      </Text>
-                    </View>
-                  )}
-                  {hasText((data as any).expectedCtc) && (
-                    <View style={styles.naukriInfoCard}>
-                      <Text style={{ ...styles.smallText, color: "#6B7280" }}>Expected CTC</Text>
-                      <Text style={{ fontSize: 9.4, fontWeight: 700, color: "#111827" }}>
-                        {(data as any).expectedCtc}
-                      </Text>
-                    </View>
-                  )}
-                   {hasText(totalExperience) && (
-                    <View style={styles.naukriInfoCard}>
-                      <Text style={{ ...styles.smallText, color: "#6B7280" }}>Total Experience</Text>
-                      <Text style={{ fontSize: 9.4, fontWeight: 700, color: "#111827" }}>
-                        {totalExperience}
-                      </Text>
-                    </View>
-                  )}
-                  {hasText((data as any).relevantExperience) && (
-                    <View style={styles.naukriInfoCard}>
-                      <Text style={{ ...styles.smallText, color: "#6B7280" }}>Relevant Experience</Text>
-                      <Text style={{ fontSize: 9.4, fontWeight: 700, color: "#111827" }}>
-                        {(data as any).relevantExperience}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              )}
             </Section>
           )}
         </View>
@@ -1062,6 +1122,115 @@ function CorporateSidebarTemplate({ data }: { data: ResumeData }) {
     marginBottom: 6,
   };
 
+  // Column membership is fixed by the template; the drag-and-drop layout
+  // only decides the order of sections inside each column.
+  const rank = sectionRankMap(data);
+
+  const sidebarSections = orderByRank(
+    [
+      {
+        key: "skills",
+        node:
+          skills.length > 0 ? (
+            <View wrap={false} style={{ marginBottom: 16 }}>
+              <Text style={sidebarHeading}>Technical Skills</Text>
+              {skills.map((skill, i) => (
+                <Text
+                  key={i}
+                  style={{ fontSize: 8.7, color: palette.sidebarText, marginBottom: 3 }}
+                >
+                  • {skill}
+                </Text>
+              ))}
+            </View>
+          ) : null,
+      },
+      {
+        key: "education",
+        node:
+          education.length > 0 ? (
+            <View wrap={false} style={{ marginBottom: 16 }}>
+              <Text style={sidebarHeading}>Education</Text>
+              {education.map((edu: any, index: number) => {
+                const range = dateRange(
+                  edu.startYear,
+                  edu.endYear,
+                  edu.currentlyStudying ? "Present" : ""
+                );
+                return (
+                  <View key={index} style={{ marginBottom: 8 }}>
+                    <Text style={{ fontSize: 9, fontWeight: 700, color: palette.sidebarText }}>
+                      {cleanText(edu.degree) || "Degree"}
+                    </Text>
+                    {hasText(edu.institution) && (
+                      <Text style={{ fontSize: 8.2, color: palette.chipBg, marginTop: 1 }}>
+                        {edu.institution}
+                      </Text>
+                    )}
+                    {!!range && (
+                      <Text style={{ fontSize: 8, color: palette.chipBg, marginTop: 1 }}>
+                        {range}
+                      </Text>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          ) : null,
+      },
+      {
+        key: "languages",
+        node:
+          languages.length > 0 ? (
+            <View wrap={false} style={{ marginBottom: 16 }}>
+              <Text style={sidebarHeading}>Languages</Text>
+              {languages.map((lang, i) => (
+                <Text
+                  key={i}
+                  style={{ fontSize: 8.7, color: palette.sidebarText, marginBottom: 3 }}
+                >
+                  • {lang}
+                </Text>
+              ))}
+            </View>
+          ) : null,
+      },
+    ],
+    rank
+  );
+
+  const mainSections = orderByRank(
+    [
+      {
+        key: "summary",
+        node: hasSummary(data) ? (
+          <Section title="Professional Summary" palette={palette}>
+            <HighlightedSummary data={data} style={{ ...styles.text, color: palette.text }} />
+          </Section>
+        ) : null,
+      },
+      {
+        key: "experience",
+        node:
+          experience.length > 0 ? (
+            <Section title="Work Experience" palette={palette}>
+              <ExperienceList items={experience} palette={palette} />
+            </Section>
+          ) : null,
+      },
+      {
+        key: "projects",
+        node:
+          projects.length > 0 ? (
+            <Section title="Projects" palette={palette}>
+              <ProjectsBlock data={{ ...data, projects } as ResumeData} palette={palette} />
+            </Section>
+          ) : null,
+      },
+    ],
+    rank
+  );
+
   return (
     <Document>
       <Page
@@ -1104,49 +1273,9 @@ function CorporateSidebarTemplate({ data }: { data: ResumeData }) {
               <ContactLines data={data} palette={palette} light />
             </View>
 
-            {skills.length > 0 && (
-              <View style={{ marginBottom: 16 }}>
-                <Text style={sidebarHeading}>Technical Skills</Text>
-                {skills.map((skill, i) => (
-                  <Text
-                    key={i}
-                    style={{ fontSize: 8.7, color: palette.sidebarText, marginBottom: 3 }}
-                  >
-                    • {skill}
-                  </Text>
-                ))}
-              </View>
-            )}
-
-            {education.length > 0 && (
-              <View style={{ marginBottom: 16 }}>
-                <Text style={sidebarHeading}>Education</Text>
-                {education.map((edu: any, index: number) => {
-                  const range = dateRange(
-                    edu.startYear,
-                    edu.endYear,
-                    edu.currentlyStudying ? "Present" : ""
-                  );
-                  return (
-                    <View key={index} style={{ marginBottom: 8 }}>
-                      <Text style={{ fontSize: 9, fontWeight: 700, color: palette.sidebarText }}>
-                        {cleanText(edu.degree) || "Degree"}
-                      </Text>
-                      {hasText(edu.institution) && (
-                        <Text style={{ fontSize: 8.2, color: palette.chipBg, marginTop: 1 }}>
-                          {edu.institution}
-                        </Text>
-                      )}
-                      {!!range && (
-                        <Text style={{ fontSize: 8, color: palette.chipBg, marginTop: 1 }}>
-                          {range}
-                        </Text>
-                      )}
-                    </View>
-                  );
-                })}
-              </View>
-            )}
+            {sidebarSections.map((s) => (
+              <React.Fragment key={s.key}>{s.node}</React.Fragment>
+            ))}
 
             {certifications.length > 0 && (
               <View style={{ marginBottom: 16 }}>
@@ -1154,41 +1283,13 @@ function CorporateSidebarTemplate({ data }: { data: ResumeData }) {
                 <CertList items={certifications} palette={palette} light />
               </View>
             )}
-
-            {languages.length > 0 && (
-              <View>
-                <Text style={sidebarHeading}>Languages</Text>
-                {languages.map((lang, i) => (
-                  <Text
-                    key={i}
-                    style={{ fontSize: 8.7, color: palette.sidebarText, marginBottom: 3 }}
-                  >
-                    • {lang}
-                  </Text>
-                ))}
-              </View>
-            )}
           </View>
 
           {/* Main */}
           <View style={{ width: "67%", paddingVertical: 22, paddingHorizontal: 20 }}>
-            {hasSummary(data) && (
-              <Section title="Professional Summary" palette={palette}>
-                <HighlightedSummary data={data} style={{ ...styles.text, color: palette.text }} />
-              </Section>
-            )}
-
-            {experience.length > 0 && (
-              <Section title="Work Experience" palette={palette}>
-                <ExperienceList items={experience} palette={palette} />
-              </Section>
-            )}
-
-            {projects.length > 0 && (
-              <Section title="Projects" palette={palette}>
-                <ProjectsBlock data={{ ...data, projects } as ResumeData} palette={palette} />
-              </Section>
-            )}
+            {mainSections.map((s) => (
+              <React.Fragment key={s.key}>{s.node}</React.Fragment>
+            ))}
           </View>
         </View>
       </Page>
@@ -1201,7 +1302,10 @@ function CorporateSidebarTemplate({ data }: { data: ResumeData }) {
 function AtsSectionTitle({ title, palette }: { title: string; palette: ThemePalette }) {
   return (
     <View
-      minPresenceAhead={40}
+      // reserve enough space that a heading never lands alone at the page
+      // bottom — if there isn't room for the heading plus ~2 lines below it,
+      // react-pdf pushes the heading (and its content) to the next page
+      minPresenceAhead={64}
       style={{
         borderBottomWidth: 1,
         borderBottomStyle: "solid",
@@ -1231,6 +1335,72 @@ function AtsClassicTemplate({ data }: { data: ResumeData }) {
   const { skills, languages, experience, education, projects, certifications } =
     extractSections(data);
 
+  const sectionPages = normalizeSectionPages(data.sectionPages);
+
+  // Short sections render as a single atomic block (wrap={false}) so their
+  // heading and content can never be split across a page break — that split
+  // is what left the "EDUCATION" heading stranded at the bottom of a page.
+  // Long sections (experience/projects) must be allowed to flow across pages,
+  // so they rely on the heading's minPresenceAhead instead.
+  const renderSection = (key: SectionKey): React.ReactNode => {
+    switch (key) {
+      case "summary":
+        return hasSummary(data) ? (
+          <View wrap={false}>
+            <AtsSectionTitle title="Summary" palette={palette} />
+            <HighlightedSummary data={data} style={{ ...styles.text, color: palette.text }} />
+          </View>
+        ) : null;
+
+      case "skills":
+        return skills.length > 0 ? (
+          <View wrap={false}>
+            <AtsSectionTitle title="Technical Skills" palette={palette} />
+            <Text style={{ fontSize: 9.3, color: palette.text, lineHeight: 1.55 }}>
+              {skills.join("  •  ")}
+            </Text>
+          </View>
+        ) : null;
+
+      case "experience":
+        return experience.length > 0 ? (
+          <View>
+            <AtsSectionTitle title="Professional Experience" palette={palette} />
+            <ExperienceList items={experience} palette={palette} />
+          </View>
+        ) : null;
+
+      case "projects":
+        return projects.length > 0 ? (
+          <View>
+            <AtsSectionTitle title="Projects" palette={palette} />
+            <ProjectsBlock data={{ ...data, projects } as ResumeData} palette={palette} />
+          </View>
+        ) : null;
+
+      case "education":
+        return education.length > 0 ? (
+          <View wrap={false}>
+            <AtsSectionTitle title="Education" palette={palette} />
+            <EducationList items={education} palette={palette} />
+          </View>
+        ) : null;
+
+      case "languages":
+        return languages.length > 0 ? (
+          <View wrap={false}>
+            <AtsSectionTitle title="Languages" palette={palette} />
+            <Text style={{ fontSize: 9.3, color: palette.text, lineHeight: 1.55 }}>
+              {languages.join("  •  ")}
+            </Text>
+          </View>
+        ) : null;
+
+      default:
+        return null;
+    }
+  };
+
   return (
     <Document>
       <Page size="A4" style={{ ...getBasePageStyle(data, palette), paddingHorizontal: 38, paddingVertical: 30 }}>
@@ -1252,56 +1422,37 @@ function AtsClassicTemplate({ data }: { data: ResumeData }) {
           </View>
         </View>
 
-        {hasSummary(data) && (
-          <View style={{ marginBottom: 10 }}>
-            <AtsSectionTitle title="Summary" palette={palette} />
-            <HighlightedSummary data={data} style={{ ...styles.text, color: palette.text }} />
-          </View>
-        )}
-
-        {skills.length > 0 && (
-          <View style={{ marginBottom: 10 }}>
-            <AtsSectionTitle title="Technical Skills" palette={palette} />
-            <Text style={{ fontSize: 9.3, color: palette.text, lineHeight: 1.55 }}>
-              {skills.join("  •  ")}
-            </Text>
-          </View>
-        )}
-
-        {experience.length > 0 && (
-          <View style={{ marginBottom: 10 }}>
-            <AtsSectionTitle title="Professional Experience" palette={palette} />
-            <ExperienceList items={experience} palette={palette} />
-          </View>
-        )}
-
-        {projects.length > 0 && (
-          <View style={{ marginBottom: 10 }}>
-            <AtsSectionTitle title="Projects" palette={palette} />
-            <ProjectsBlock data={{ ...data, projects } as ResumeData} palette={palette} />
-          </View>
-        )}
-
-        {education.length > 0 && (
-          <View style={{ marginBottom: 10 }}>
-            <AtsSectionTitle title="Education" palette={palette} />
-            <EducationList items={education} palette={palette} />
-          </View>
-        )}
+        {(() => {
+          // Spacing lives on the TOP of every section except the first, so the
+          // last section never carries a bottom margin that could overflow into
+          // an otherwise-blank extra page.
+          let flat = 0;
+          return sectionPages.map((keys, pageIndex) => {
+            const rendered = keys
+              .map((sectionKey) => ({ sectionKey, node: renderSection(sectionKey) }))
+              .filter((s) => s.node);
+            // `break` starts each editor page's first section on a fresh PDF
+            // page, so the exported PDF mirrors the drag-and-drop layout.
+            return rendered.map((s, i) => {
+              const node = (
+                <View
+                  key={s.sectionKey}
+                  break={pageIndex > 0 && i === 0}
+                  style={{ marginTop: flat === 0 ? 0 : 10 }}
+                >
+                  {s.node}
+                </View>
+              );
+              flat++;
+              return node;
+            });
+          });
+        })()}
 
         {certifications.length > 0 && (
-          <View style={{ marginBottom: 10 }}>
+          <View style={{ marginTop: 10 }}>
             <AtsSectionTitle title="Certifications" palette={palette} />
             <CertList items={certifications} palette={palette} />
-          </View>
-        )}
-
-        {languages.length > 0 && (
-          <View style={{ marginBottom: 10 }}>
-            <AtsSectionTitle title="Languages" palette={palette} />
-            <Text style={{ fontSize: 9.3, color: palette.text, lineHeight: 1.55 }}>
-              {languages.join("  •  ")}
-            </Text>
           </View>
         )}
       </Page>
@@ -1315,6 +1466,97 @@ function ModernBandTemplate({ data }: { data: ResumeData }) {
   const palette = resolveThemePalette((data as any).theme);
   const { skills, languages, experience, education, projects, certifications } =
     extractSections(data);
+
+  // Column membership is fixed by the template; the drag-and-drop layout
+  // only decides the order of sections inside each column.
+  const rank = sectionRankMap(data);
+
+  const leftSections = orderByRank(
+    [
+      {
+        key: "skills",
+        node:
+          skills.length > 0 ? (
+            <Section title="Skills" palette={palette} keepTogether>
+              <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+                {skills.map((skill, i) => (
+                  <Text
+                    key={i}
+                    style={{
+                      fontSize: 8.2,
+                      paddingVertical: 3,
+                      paddingHorizontal: 7,
+                      borderRadius: 4,
+                      marginRight: 4,
+                      marginBottom: 4,
+                      backgroundColor: palette.chipBg,
+                      color: palette.chipText,
+                    }}
+                  >
+                    {skill}
+                  </Text>
+                ))}
+              </View>
+            </Section>
+          ) : null,
+      },
+      {
+        key: "education",
+        node:
+          education.length > 0 ? (
+            <Section title="Education" palette={palette} keepTogether>
+              <EducationList items={education} palette={palette} compact />
+            </Section>
+          ) : null,
+      },
+      {
+        key: "languages",
+        node:
+          languages.length > 0 ? (
+            <Section title="Languages" palette={palette} keepTogether>
+              {languages.map((lang, i) => (
+                <Text key={i} style={{ fontSize: 8.8, color: palette.text, marginBottom: 3 }}>
+                  • {lang}
+                </Text>
+              ))}
+            </Section>
+          ) : null,
+      },
+    ],
+    rank
+  );
+
+  const rightSections = orderByRank(
+    [
+      {
+        key: "summary",
+        node: hasSummary(data) ? (
+          <Section title="Profile" palette={palette}>
+            <HighlightedSummary data={data} style={{ ...styles.text, color: palette.text }} />
+          </Section>
+        ) : null,
+      },
+      {
+        key: "experience",
+        node:
+          experience.length > 0 ? (
+            <Section title="Experience" palette={palette}>
+              <ExperienceList items={experience} palette={palette} />
+            </Section>
+          ) : null,
+      },
+      {
+        key: "projects",
+        node:
+          projects.length > 0 ? (
+            <Section title="Projects" palette={palette}>
+              <ProjectsBlock data={{ ...data, projects } as ResumeData} palette={palette} />
+            </Section>
+          ) : null,
+      },
+    ],
+    rank
+  );
 
   return (
     <Document>
@@ -1362,72 +1604,22 @@ function ModernBandTemplate({ data }: { data: ResumeData }) {
         <View style={{ flexDirection: "row", paddingHorizontal: 24, paddingTop: 20 }}>
           {/* Left narrow column */}
           <View style={{ width: "34%", paddingRight: 16 }}>
-            {skills.length > 0 && (
-              <Section title="Skills" palette={palette}>
-                <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-                  {skills.map((skill, i) => (
-                    <Text
-                      key={i}
-                      style={{
-                        fontSize: 8.2,
-                        paddingVertical: 3,
-                        paddingHorizontal: 7,
-                        borderRadius: 4,
-                        marginRight: 4,
-                        marginBottom: 4,
-                        backgroundColor: palette.chipBg,
-                        color: palette.chipText,
-                      }}
-                    >
-                      {skill}
-                    </Text>
-                  ))}
-                </View>
-              </Section>
-            )}
-
-            {education.length > 0 && (
-              <Section title="Education" palette={palette}>
-                <EducationList items={education} palette={palette} compact />
-              </Section>
-            )}
+            {leftSections.map((s) => (
+              <React.Fragment key={s.key}>{s.node}</React.Fragment>
+            ))}
 
             {certifications.length > 0 && (
               <Section title="Certifications" palette={palette}>
                 <CertList items={certifications} palette={palette} />
               </Section>
             )}
-
-            {languages.length > 0 && (
-              <Section title="Languages" palette={palette}>
-                {languages.map((lang, i) => (
-                  <Text key={i} style={{ fontSize: 8.8, color: palette.text, marginBottom: 3 }}>
-                    • {lang}
-                  </Text>
-                ))}
-              </Section>
-            )}
           </View>
 
           {/* Right main column */}
           <View style={{ width: "66%" }}>
-            {hasSummary(data) && (
-              <Section title="Profile" palette={palette}>
-                <HighlightedSummary data={data} style={{ ...styles.text, color: palette.text }} />
-              </Section>
-            )}
-
-            {experience.length > 0 && (
-              <Section title="Experience" palette={palette}>
-                <ExperienceList items={experience} palette={palette} />
-              </Section>
-            )}
-
-            {projects.length > 0 && (
-              <Section title="Projects" palette={palette}>
-                <ProjectsBlock data={{ ...data, projects } as ResumeData} palette={palette} />
-              </Section>
-            )}
+            {rightSections.map((s) => (
+              <React.Fragment key={s.key}>{s.node}</React.Fragment>
+            ))}
           </View>
         </View>
       </Page>
