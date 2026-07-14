@@ -153,6 +153,9 @@ const PostPlacementDashboard: React.FC = () => {
     PostPlacementOffer[]
   >([]);
   const [searchTerm, setSearchTerm] = useState<string>("");
+  const [feesFilter, setFeesFilter] = useState<"all" | "remaining" | "paid">(
+    "all"
+  );
   const [selectedStudent, setSelectedStudent] =
     useState<PostPlacementOffer | null>(null);
   const [isEditing, setIsEditing] = useState<boolean>(false);
@@ -181,13 +184,21 @@ const PostPlacementDashboard: React.FC = () => {
   };
 
   useEffect(() => {
-    const filtered = students.filter(
-      (student) =>
+    const filtered = students.filter((student) => {
+      const matchesSearch =
         student.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        student.companyName?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+        student.companyName?.toLowerCase().includes(searchTerm.toLowerCase());
+
+      const hasRemainingFee = (student.remainingFee || 0) > 0;
+      const matchesFeesFilter =
+        feesFilter === "all" ||
+        (feesFilter === "remaining" && hasRemainingFee) ||
+        (feesFilter === "paid" && !hasRemainingFee);
+
+      return matchesSearch && matchesFeesFilter;
+    });
     setFilteredStudents(filtered);
-  }, [searchTerm, students]);
+  }, [searchTerm, students, feesFilter]);
 
   const formatCurrency = (amount: number): string => {
     return new Intl.NumberFormat("en-IN", {
@@ -547,9 +558,33 @@ const PostPlacementDashboard: React.FC = () => {
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
+                <div className="mt-3 flex items-center gap-2">
+                  {(
+                    [
+                      { key: "all", label: "All" },
+                      { key: "remaining", label: "Remaining Fees" },
+                      { key: "paid", label: "Fully Paid" },
+                    ] as const
+                  ).map((opt) => (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={() => setFeesFilter(opt.key)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                        feesFilter === opt.key
+                          ? "bg-purple-600 text-white"
+                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
                 <p className="mt-3 text-xs font-medium text-gray-500">
                   {filteredStudents.length}{" "}
                   {filteredStudents.length === 1 ? "student" : "students"}
+                  {feesFilter === "remaining" && " with remaining fees"}
+                  {feesFilter === "paid" && " fully paid"}
                 </p>
               </div>
 
