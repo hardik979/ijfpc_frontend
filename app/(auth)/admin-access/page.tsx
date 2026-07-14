@@ -1,6 +1,7 @@
 "use client"
 // new page
 import { useRouter } from "next/navigation"
+import { useUser } from "@clerk/nextjs"
 import {
   LayoutDashboard,
   BarChart3,
@@ -8,6 +9,7 @@ import {
   ShieldCheck,
   type LucideIcon,
 } from "lucide-react"
+import { ROLES, type Role } from "@/lib/rbac"
 
 interface AdminModule {
   label: string
@@ -16,6 +18,7 @@ interface AdminModule {
   icon: LucideIcon
   accent: string
   tag: string
+  roles?: readonly Role[]
 }
 
 const ADMIN_MODULES: AdminModule[] = [
@@ -46,10 +49,25 @@ const ADMIN_MODULES: AdminModule[] = [
     accent: "from-emerald-500 to-emerald-600",
     tag: "Analytics",
   },
+  {
+    label: "Feedback Management",
+    description: "Review Feedback.",
+    href: "/feedback-dash",
+    icon: BarChart3,
+    accent: "from-emerald-500 to-emerald-600",
+    tag: "Analytics",
+    roles: [ROLES.FOUNDER, ROLES.SUPER_ADMIN],
+  },
 ];
 
 export default function AdminAccessPage() {
   const router = useRouter()
+  const { user } = useUser()
+  const role = (user?.publicMetadata as any)?.role as Role | undefined
+
+  const visibleModules = ADMIN_MODULES.filter(
+    (mod) => !mod.roles || (role && mod.roles.includes(role)),
+  )
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -69,7 +87,7 @@ export default function AdminAccessPage() {
         </header>
 
         <div className="grid gap-5 sm:grid-cols-2">
-          {ADMIN_MODULES.map((mod) => {
+          {visibleModules.map((mod) => {
             const Icon = mod.icon
             return (
               <button

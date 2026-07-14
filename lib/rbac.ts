@@ -34,9 +34,8 @@ export const ACCESS: Record<string, readonly Role[]> = {
   "/resume-builder": [ROLES.SUPER_ADMIN, ROLES.CALLING_STAFF],
   "/studentOverview":[ROLES.STUDENT_MANAGEMENT, ROLES?.ADMIN],
   "/student-full-info":[ROLES.STUDENT_MANAGEMENT, ROLES?.ADMIN],
-  "/academic-results":[ROLES.STUDENT_MANAGEMENT, ROLES.ADMIN, ROLES.SUPER_ADMIN]
-
-
+  "/academic-results":[ROLES.STUDENT_MANAGEMENT, ROLES.ADMIN, ROLES.SUPER_ADMIN],
+  "/feedback-dash" : [ROLES?.FOUNDER, ROLES?.SUPER_ADMIN]
 } as const;
 
 export function isAllowed(pathname: string, role?: string) {
