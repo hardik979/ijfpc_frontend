@@ -851,9 +851,8 @@ export function RealHrCallingTab({
           onMonthChange={onMonthChange}
           onDateSelect={loadDay}
           metrics={[
-            { key: "totalCalls", label: "Calls" },
-            { key: "recordedCount", label: "Recorded", className: "text-emerald-400" },
-            { key: "analyzedCount", label: "Analyzed", className: "text-violet-400" },
+            { key: "uniqueLeadCount", label: "Students" },
+            { key: "totalCalls", label: "Calls", className: "text-emerald-400" },
           ]}
         />
       </div>
