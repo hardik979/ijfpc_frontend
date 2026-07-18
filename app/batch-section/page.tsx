@@ -5,6 +5,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { toast } from "react-toastify";
 import { API_LMS_URL } from "@/lib/api";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   ArrowLeft,
   Plus,
@@ -32,10 +33,10 @@ type StatusFilter = (typeof STATUS_FILTERS)[number];
 const statusStyles = (status?: string) => {
   const s = (status || "").toLowerCase();
   if (s === "active")
-    return { dot: "bg-emerald-400", badge: "bg-emerald-500/15 text-emerald-200 ring-1 ring-emerald-500/30" };
+    return { dot: "bg-emerald-400", badge: "bg-emerald-500/15 text-emerald-700 ring-1 ring-emerald-500/30" };
   if (s === "completed")
-    return { dot: "bg-sky-400", badge: "bg-sky-500/15 text-sky-200 ring-1 ring-sky-500/30" };
-  return { dot: "bg-amber-400", badge: "bg-amber-500/15 text-amber-200 ring-1 ring-amber-500/30" };
+    return { dot: "bg-sky-400", badge: "bg-sky-500/15 text-sky-700 ring-1 ring-sky-500/30" };
+  return { dot: "bg-amber-400", badge: "bg-amber-500/15 text-amber-700 ring-1 ring-amber-500/30" };
 };
 
 const courseTitle = (course: Batch["course"]) => {
@@ -90,7 +91,7 @@ export default function BatchSectionPage() {
   );
 
   return (
-    <div className="relative min-h-screen bg-gradient-to-b from-slate-950 via-slate-950 to-slate-900 text-slate-100">
+    <div className="relative min-h-screen bg-gradient-to-b from-[var(--panel-bg-950)] via-[var(--panel-bg-950)] to-[var(--panel-bg-900)] text-[var(--panel-text-primary)]">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -top-24 -left-24 h-72 w-72 rounded-full bg-cyan-500/10 blur-3xl" />
         <div className="absolute top-20 -right-24 h-72 w-72 rounded-full bg-indigo-500/10 blur-3xl" />
@@ -101,7 +102,7 @@ export default function BatchSectionPage() {
         {/* Back */}
         <Link
           href="/studentOverview"
-          className="group mb-8 inline-flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-slate-300 backdrop-blur-sm transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
+          className="group mb-8 inline-flex items-center gap-2.5 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-4 py-2.5 text-sm font-medium text-[var(--panel-text-secondary)] backdrop-blur-sm transition-all hover:border-[var(--panel-border)] hover:bg-[var(--panel-card)] hover:text-[var(--panel-text-primary)]"
         >
           <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
           <span>Back to Students Overview</span>
@@ -112,13 +113,13 @@ export default function BatchSectionPage() {
           <div className="flex items-start gap-4">
             <div className="relative">
               <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 blur-xl" />
-              <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl border border-white/20 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 backdrop-blur-sm">
+              <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl border border-[var(--panel-border)] bg-gradient-to-br from-cyan-500/10 to-blue-500/10 backdrop-blur-sm">
                 <LayoutGrid className="h-7 w-7 text-cyan-400" />
               </div>
             </div>
             <div>
-              <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">Batches</h1>
-              <p className="mt-1 text-sm text-slate-400">
+              <h1 className="text-3xl font-bold tracking-tight text-[var(--panel-text-primary)] sm:text-4xl">Batches</h1>
+              <p className="mt-1 text-sm text-[var(--panel-text-muted)]">
                 {loading
                   ? "Loading batches…"
                   : `${batches.length} batch${batches.length === 1 ? "" : "es"} · ${totalStudents} student${
@@ -129,10 +130,11 @@ export default function BatchSectionPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <button
               onClick={loadBatches}
               title="Refresh"
-              className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-300 transition hover:bg-white/10 hover:text-white"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] text-[var(--panel-text-secondary)] transition hover:bg-[var(--panel-card)] hover:text-[var(--panel-text-primary)]"
             >
               <RefreshCw className={`h-4.5 w-4.5 ${loading ? "animate-spin" : ""}`} />
             </button>
@@ -149,23 +151,23 @@ export default function BatchSectionPage() {
         {/* Filters */}
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--panel-text-faint)]" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search batches by name or course…"
-              className="w-full rounded-xl border border-white/10 bg-white/[0.03] py-3 pl-10 pr-3 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-cyan-500/50"
+              className="w-full rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] py-3 pl-10 pr-3 text-sm text-[var(--panel-text-primary)] placeholder:text-[var(--panel-text-faint)] outline-none focus:border-cyan-500/50"
             />
           </div>
-          <div className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] p-1">
+          <div className="flex items-center gap-1.5 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] p-1">
             {STATUS_FILTERS.map((s) => (
               <button
                 key={s}
                 onClick={() => setStatus(s)}
                 className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
                   status === s
-                    ? "bg-white/10 text-white"
-                    : "text-slate-400 hover:text-slate-200"
+                    ? "bg-[var(--panel-card)] text-[var(--panel-text-primary)]"
+                    : "text-[var(--panel-text-muted)] hover:text-[var(--panel-text-secondary)]"
                 }`}
               >
                 {s}
@@ -180,7 +182,7 @@ export default function BatchSectionPage() {
             {Array.from({ length: 6 }).map((_, i) => (
               <div
                 key={i}
-                className="h-40 animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]"
+                className="h-40 animate-pulse rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)]"
               />
             ))}
           </div>
@@ -201,15 +203,15 @@ export default function BatchSectionPage() {
                 >
                   <Link
                     href={`/batch-section/${b._id}`}
-                    className="group block h-full overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] transition-all hover:-translate-y-1 hover:border-white/20 hover:bg-white/[0.06] hover:shadow-2xl"
+                    className="group block h-full overflow-hidden rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] transition-all hover:-translate-y-1 hover:border-[var(--panel-border)] hover:bg-[var(--panel-card)] hover:shadow-2xl"
                   >
-                    <div className="flex items-center justify-between border-b border-white/5 px-5 py-4">
+                    <div className="flex items-center justify-between border-b border-[var(--panel-border)] px-5 py-4">
                       <div className="flex items-center gap-2.5">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)]">
                           <Layers className="h-5 w-5 text-cyan-400" />
                         </div>
                         <div className="min-w-0">
-                          <h3 className="truncate text-base font-semibold text-white">
+                          <h3 className="truncate text-base font-semibold text-[var(--panel-text-primary)]">
                             {b.batch || "Untitled batch"}
                           </h3>
                         </div>
@@ -223,15 +225,15 @@ export default function BatchSectionPage() {
                     </div>
 
                     <div className="space-y-3 px-5 py-4">
-                      <div className="flex items-center gap-2 text-sm text-slate-400">
-                        <BookOpen className="h-4 w-4 text-slate-500" />
+                      <div className="flex items-center gap-2 text-sm text-[var(--panel-text-muted)]">
+                        <BookOpen className="h-4 w-4 text-[var(--panel-text-faint)]" />
                         <span className="truncate">{title || "No course linked"}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-sm text-slate-300">
+                        <div className="flex items-center gap-2 text-sm text-[var(--panel-text-secondary)]">
                           <Users className="h-4 w-4 text-indigo-400" />
-                          <span className="font-semibold text-white">{count}</span>
-                          <span className="text-slate-500">
+                          <span className="font-semibold text-[var(--panel-text-primary)]">{count}</span>
+                          <span className="text-[var(--panel-text-faint)]">
                             student{count === 1 ? "" : "s"}
                           </span>
                         </div>
@@ -254,14 +256,14 @@ export default function BatchSectionPage() {
 
 function EmptyState({ hasBatches }: { hasBatches: boolean }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-white/10 bg-white/[0.02] px-6 py-20 text-center">
-      <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
-        <Layers className="h-8 w-8 text-slate-400" />
+    <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-[var(--panel-border)] bg-[var(--panel-card-soft)] px-6 py-20 text-center">
+      <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-card)]">
+        <Layers className="h-8 w-8 text-[var(--panel-text-muted)]" />
       </div>
-      <h3 className="text-lg font-semibold text-white">
+      <h3 className="text-lg font-semibold text-[var(--panel-text-primary)]">
         {hasBatches ? "No batches match your filters" : "No batches yet"}
       </h3>
-      <p className="mt-1.5 max-w-sm text-sm text-slate-400">
+      <p className="mt-1.5 max-w-sm text-sm text-[var(--panel-text-muted)]">
         {hasBatches
           ? "Try clearing the search or switching the status filter."
           : "Create your first batch to start assigning students to it."}

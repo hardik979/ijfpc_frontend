@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import { API_LMS_URL } from "@/lib/api";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   ArrowLeft,
   BookOpen,
@@ -42,17 +43,17 @@ const getBatchInfo = (batchCode: Student["batchCode"]) => {
 
 const zoneBadge = (zone?: string) => {
   const z = (zone || "").toLowerCase();
-  if (z === "blue") return "bg-blue-500/15 text-blue-200 ring-1 ring-blue-500/30";
-  if (z === "yellow") return "bg-yellow-500/15 text-yellow-200 ring-1 ring-yellow-500/30";
-  if (z === "green") return "bg-emerald-500/15 text-emerald-200 ring-1 ring-emerald-500/30";
-  return "bg-slate-500/15 text-slate-200 ring-1 ring-slate-500/30";
+  if (z === "blue") return "bg-blue-500/15 text-blue-700 ring-1 ring-blue-500/30";
+  if (z === "yellow") return "bg-yellow-500/15 text-yellow-700 ring-1 ring-yellow-500/30";
+  if (z === "green") return "bg-emerald-500/15 text-emerald-700 ring-1 ring-emerald-500/30";
+  return "bg-gray-500/15 text-gray-700 ring-1 ring-gray-500/30";
 };
 
 const statusBadge = (status?: string) => {
   const s = (status || "").toLowerCase();
-  if (s === "active") return "bg-emerald-500/15 text-emerald-200 ring-1 ring-emerald-500/30";
-  if (s === "completed") return "bg-blue-500/15 text-blue-200 ring-1 ring-blue-500/30";
-  return "bg-amber-500/15 text-amber-200 ring-1 ring-amber-500/30";
+  if (s === "active") return "bg-emerald-500/15 text-emerald-700 ring-1 ring-emerald-500/30";
+  if (s === "completed") return "bg-blue-500/15 text-blue-700 ring-1 ring-blue-500/30";
+  return "bg-amber-500/15 text-amber-700 ring-1 ring-amber-500/30";
 };
 
 export default function AddStudentsToBatch() {
@@ -213,7 +214,7 @@ export default function AddStudentsToBatch() {
   };
 
   return (
-    <section className="relative min-h-screen w-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100">
+    <section className="relative min-h-screen w-full bg-gradient-to-br from-[var(--panel-bg-950)] via-[var(--panel-bg-900)] to-[var(--panel-bg-950)] text-[var(--panel-text-primary)]">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -top-40 -left-40 h-96 w-96 rounded-full bg-teal-500/10 blur-3xl" />
         <div className="absolute top-20 -right-40 h-96 w-96 rounded-full bg-cyan-500/10 blur-3xl" />
@@ -222,42 +223,45 @@ export default function AddStudentsToBatch() {
 
       <div className="relative z-10 mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
         {/* Back */}
-        <button
-          onClick={() => router.push("/batch-section")}
-          className="group mb-8 flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-slate-300 backdrop-blur-sm transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
-        >
-          <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
-          <span>Back to Batch Section</span>
-        </button>
+        <div className="mb-8 flex items-center justify-between gap-3">
+          <button
+            onClick={() => router.push("/batch-section")}
+            className="group flex items-center gap-2.5 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-4 py-2.5 text-sm font-medium text-[var(--panel-text-secondary)] backdrop-blur-sm transition-all hover:border-[var(--panel-border)] hover:bg-[var(--panel-card)] hover:text-[var(--panel-text-primary)]"
+          >
+            <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+            <span>Back to Batch Section</span>
+          </button>
+          <ThemeToggle />
+        </div>
 
         {/* Header */}
         <div className="mb-8 flex items-start gap-5">
           <div className="relative">
             <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-teal-500/20 to-cyan-500/20 blur-xl" />
-            <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl border border-white/20 bg-gradient-to-br from-teal-500/10 to-cyan-500/10 backdrop-blur-sm">
+            <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl border border-[var(--panel-border)] bg-gradient-to-br from-teal-500/10 to-cyan-500/10 backdrop-blur-sm">
               <UserPlus className="h-8 w-8 text-teal-400" />
             </div>
           </div>
           <div className="flex-1">
-            <h1 className="mb-2 text-3xl font-bold tracking-tight text-white sm:text-4xl">
+            <h1 className="mb-2 text-3xl font-bold tracking-tight text-[var(--panel-text-primary)] sm:text-4xl">
               Add Students to Batch
             </h1>
-            <p className="text-base text-slate-400">
+            <p className="text-base text-[var(--panel-text-muted)]">
               Choose an existing batch, filter students by course, then select who to add.
             </p>
           </div>
         </div>
 
         {/* Card */}
-        <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-2xl backdrop-blur-xl">
+        <div className="relative overflow-hidden rounded-3xl border border-[var(--panel-border)] bg-[var(--panel-card)] shadow-2xl backdrop-blur-xl">
           <div className="relative p-6 sm:p-8 lg:p-10">
-            <div className="mb-8 flex items-center gap-3 border-b border-white/10 pb-6">
+            <div className="mb-8 flex items-center gap-3 border-b border-[var(--panel-border)] pb-6">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-teal-500/30 bg-teal-500/10">
                 <Activity className="h-5 w-5 text-teal-400" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-white">Assign Students</p>
-                <p className="text-xs text-slate-500">Fields marked * are required</p>
+                <p className="text-sm font-semibold text-[var(--panel-text-primary)]">Assign Students</p>
+                <p className="text-xs text-[var(--panel-text-faint)]">Fields marked * are required</p>
               </div>
             </div>
 
@@ -265,22 +269,22 @@ export default function AddStudentsToBatch() {
               {/* Batch + Course */}
               <div className="grid gap-6 sm:grid-cols-2">
                 <div>
-                  <label className="mb-2.5 flex items-center gap-2 text-sm font-semibold text-slate-200">
+                  <label className="mb-2.5 flex items-center gap-2 text-sm font-semibold text-[var(--panel-text-secondary)]">
                     <Layers className="h-4 w-4 text-teal-400" />
-                    Batch <span className="text-red-400">*</span>
+                    Batch <span className="text-red-700">*</span>
                   </label>
-                  <div className="rounded-2xl border-2 border-white/10 bg-white/[0.02] transition-all focus-within:border-teal-500/50 hover:border-white/20">
+                  <div className="rounded-2xl border-2 border-[var(--panel-border)] bg-[var(--panel-card-soft)] transition-all focus-within:border-teal-500/50 hover:border-[var(--panel-border)]">
                     <select
                       value={batchId}
                       onChange={(e) => setBatchId(e.target.value)}
                       disabled={loadingBatches}
-                      className="w-full appearance-none bg-transparent px-4 py-3.5 text-sm text-slate-100 outline-none"
+                      className="w-full appearance-none bg-transparent px-4 py-3.5 text-sm text-[var(--panel-text-primary)] outline-none"
                     >
-                      <option value="" className="bg-slate-900">
+                      <option value="" className="bg-[var(--panel-bg-900)]">
                         {loadingBatches ? "Loading batches..." : "Select a batch"}
                       </option>
                       {batches.map((b) => (
-                        <option key={b._id} value={b._id} className="bg-slate-900">
+                        <option key={b._id} value={b._id} className="bg-[var(--panel-bg-900)]">
                           {b.batch || b._id}
                           {b.status ? ` — ${b.status}` : ""}
                         </option>
@@ -290,22 +294,22 @@ export default function AddStudentsToBatch() {
                 </div>
 
                 <div>
-                  <label className="mb-2.5 flex items-center gap-2 text-sm font-semibold text-slate-200">
+                  <label className="mb-2.5 flex items-center gap-2 text-sm font-semibold text-[var(--panel-text-secondary)]">
                     <BookOpen className="h-4 w-4 text-blue-400" />
-                    Filter students by course <span className="text-red-400">*</span>
+                    Filter students by course <span className="text-red-700">*</span>
                   </label>
-                  <div className="rounded-2xl border-2 border-white/10 bg-white/[0.02] transition-all focus-within:border-blue-500/50 hover:border-white/20">
+                  <div className="rounded-2xl border-2 border-[var(--panel-border)] bg-[var(--panel-card-soft)] transition-all focus-within:border-blue-500/50 hover:border-[var(--panel-border)]">
                     <select
                       value={courseId}
                       onChange={(e) => setCourseId(e.target.value)}
                       disabled={loadingCourses}
-                      className="w-full appearance-none bg-transparent px-4 py-3.5 text-sm text-slate-100 outline-none"
+                      className="w-full appearance-none bg-transparent px-4 py-3.5 text-sm text-[var(--panel-text-primary)] outline-none"
                     >
-                      <option value="" className="bg-slate-900">
+                      <option value="" className="bg-[var(--panel-bg-900)]">
                         {loadingCourses ? "Loading courses..." : "Select a course"}
                       </option>
                       {courses.map((c) => (
-                        <option key={c._id} value={c._id} className="bg-slate-900">
+                        <option key={c._id} value={c._id} className="bg-[var(--panel-bg-900)]">
                           {c.title || "Untitled course"}
                         </option>
                       ))}
@@ -320,9 +324,9 @@ export default function AddStudentsToBatch() {
                   const b = batches.find((x) => x._id === batchId);
                   if (!b) return null;
                   return (
-                    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm">
-                      <span className="text-slate-400">Adding to:</span>
-                      <span className="font-semibold text-white">{b.batch || b._id}</span>
+                    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] px-4 py-3 text-sm">
+                      <span className="text-[var(--panel-text-muted)]">Adding to:</span>
+                      <span className="font-semibold text-[var(--panel-text-primary)]">{b.batch || b._id}</span>
                       {b.status ? (
                         <span
                           className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusBadge(
@@ -339,38 +343,38 @@ export default function AddStudentsToBatch() {
               {/* Students */}
               <div>
                 <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
-                  <label className="flex items-center gap-2 text-sm font-semibold text-slate-200">
+                  <label className="flex items-center gap-2 text-sm font-semibold text-[var(--panel-text-secondary)]">
                     <Users className="h-4 w-4 text-indigo-400" />
-                    Students <span className="text-red-400">*</span>
+                    Students <span className="text-red-700">*</span>
                   </label>
                   {courseId && (
-                    <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-200">
+                    <span className="inline-flex items-center rounded-full border border-[var(--panel-border)] bg-[var(--panel-card)] px-3 py-1 text-xs text-[var(--panel-text-secondary)]">
                       {selected.size} selected
                     </span>
                   )}
                 </div>
 
                 {!courseId ? (
-                  <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-8 text-center text-sm text-slate-500">
+                  <div className="rounded-2xl border border-dashed border-[var(--panel-border)] bg-[var(--panel-card-soft)] px-4 py-8 text-center text-sm text-[var(--panel-text-faint)]">
                     Select a course to list students enrolled in it.
                   </div>
                 ) : (
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.02]">
-                    <div className="flex flex-wrap items-center gap-3 border-b border-white/10 p-3">
+                  <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)]">
+                    <div className="flex flex-wrap items-center gap-3 border-b border-[var(--panel-border)] p-3">
                       <div className="relative flex-1 min-w-[200px]">
-                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--panel-text-faint)]" />
                         <input
                           value={search}
                           onChange={(e) => setSearch(e.target.value)}
                           placeholder="Search by name or email..."
-                          className="w-full rounded-xl border border-white/10 bg-white/[0.03] py-2 pl-9 pr-3 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-indigo-500/50"
+                          className="w-full rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] py-2 pl-9 pr-3 text-sm text-[var(--panel-text-primary)] placeholder:text-[var(--panel-text-faint)] outline-none focus:border-indigo-500/50"
                         />
                       </div>
                       <button
                         type="button"
                         onClick={toggleAllFiltered}
                         disabled={filteredStudents.length === 0}
-                        className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-200 transition hover:bg-white/10 disabled:opacity-40"
+                        className="rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-3 py-2 text-xs font-medium text-[var(--panel-text-secondary)] transition hover:bg-[var(--panel-card)] disabled:opacity-40"
                       >
                         {allFilteredSelected ? "Unselect all" : "Select all"}
                       </button>
@@ -378,16 +382,16 @@ export default function AddStudentsToBatch() {
 
                     <div className="max-h-80 overflow-y-auto">
                       {loadingStudents ? (
-                        <div className="flex items-center justify-center gap-3 px-4 py-10 text-sm text-slate-400">
+                        <div className="flex items-center justify-center gap-3 px-4 py-10 text-sm text-[var(--panel-text-muted)]">
                           <span className="h-5 w-5 animate-spin rounded-full border-b-2 border-indigo-500" />
                           Loading students...
                         </div>
                       ) : filteredStudents.length === 0 ? (
-                        <div className="px-4 py-10 text-center text-sm text-slate-500">
+                        <div className="px-4 py-10 text-center text-sm text-[var(--panel-text-faint)]">
                           No students found for this course.
                         </div>
                       ) : (
-                        <ul className="divide-y divide-white/5">
+                        <ul className="divide-y divide-[var(--panel-border)]">
                           {filteredStudents.map((s) => {
                             const checked = selected.has(s._id);
                             return (
@@ -395,7 +399,7 @@ export default function AddStudentsToBatch() {
                                 key={s._id}
                                 onClick={() => toggle(s._id)}
                                 className={`flex cursor-pointer items-center gap-3 px-4 py-3 transition ${
-                                  checked ? "bg-indigo-500/10" : "hover:bg-white/5"
+                                  checked ? "bg-indigo-500/10" : "hover:bg-[var(--panel-card)]"
                                 }`}
                               >
                                 <input
@@ -403,16 +407,16 @@ export default function AddStudentsToBatch() {
                                   checked={checked}
                                   onChange={() => toggle(s._id)}
                                   onClick={(e) => e.stopPropagation()}
-                                  className="h-4 w-4 cursor-pointer rounded border-white/20 bg-white/10 accent-indigo-500"
+                                  className="h-4 w-4 cursor-pointer rounded border-[var(--panel-border)] bg-[var(--panel-card)] accent-indigo-500"
                                 />
                                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-sm font-semibold text-white">
                                   {(s.fullName || "S").slice(0, 1).toUpperCase()}
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                  <div className="truncate text-sm font-semibold text-white">
+                                  <div className="truncate text-sm font-semibold text-[var(--panel-text-primary)]">
                                     {s.fullName || "Unnamed student"}
                                   </div>
-                                  <div className="truncate text-xs text-slate-400">
+                                  <div className="truncate text-xs text-[var(--panel-text-muted)]">
                                     {s.email || "—"}
                                   </div>
                                 </div>
@@ -420,7 +424,7 @@ export default function AddStudentsToBatch() {
                                   const { id, name } = getBatchInfo(s.batchCode);
                                   if (!id) return null;
                                   return (
-                                    <span className="shrink-0 rounded-full bg-amber-500/15 px-2 py-1 text-[10px] font-semibold text-amber-200 ring-1 ring-amber-500/30">
+                                    <span className="shrink-0 rounded-full bg-amber-500/15 px-2 py-1 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-500/30">
                                       {name ? `In batch: ${name}` : "Already in a batch"}
                                     </span>
                                   );
@@ -468,7 +472,7 @@ export default function AddStudentsToBatch() {
                     )}
                   </div>
                 </button>
-                <p className="mt-3 flex items-center justify-center gap-2 text-xs text-slate-500">
+                <p className="mt-3 flex items-center justify-center gap-2 text-xs text-[var(--panel-text-faint)]">
                   <AlertCircle className="h-3.5 w-3.5" />
                   Students already in the batch are skipped automatically.
                 </p>

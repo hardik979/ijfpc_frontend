@@ -53,11 +53,11 @@ export function CourseFilter({
 
   return (
     <div className="relative">
-      <BookOpen className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+      <BookOpen className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--panel-text-muted)]" />
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-md border border-slate-700 bg-slate-900 py-1.5 pl-8 pr-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="rounded-md border border-[var(--panel-border-strong)] bg-[var(--panel-card)] py-1.5 pl-8 pr-3 text-sm text-[var(--panel-text-primary)] focus:outline-none focus:ring-2 focus:ring-blue-500"
       >
         <option value="">All courses</option>
         {courses.map((c) => (
@@ -86,7 +86,7 @@ export function TabBar({
   onChange: (t: TabKey) => void;
 }) {
   return (
-    <div className="inline-flex flex-wrap gap-1 rounded-xl border border-slate-700 bg-slate-900 p-1">
+    <div className="inline-flex flex-wrap gap-1 rounded-xl border border-[var(--panel-border-strong)] bg-[var(--panel-card)] p-1">
       {TABS.map((t) => (
         <button
           key={t.key}
@@ -94,7 +94,7 @@ export function TabBar({
           className={`inline-flex items-center gap-2 rounded-lg px-4 py-1.5 text-sm font-medium transition ${
             active === t.key
               ? "bg-blue-600 text-white shadow"
-              : "text-slate-300 hover:bg-slate-800"
+              : "text-[var(--panel-text-secondary)] hover:text-[var(--panel-text-primary)]"
           }`}
         >
           {t.icon}
@@ -153,13 +153,13 @@ export function StatCards({
 function StatCard({ label, value, accent }: StatItem) {
   const a = ACCENTS[accent];
   return (
-    <div className="relative overflow-hidden rounded-xl border border-slate-800 bg-slate-900/60 p-4 shadow-sm">
+    <div className="relative overflow-hidden rounded-xl border border-[var(--panel-border-strong)] bg-[var(--panel-card)] p-4 shadow-sm">
       <div className={`absolute inset-x-0 top-0 h-0.5 ${a.bar}`} />
       <div
         className={`pointer-events-none absolute -top-10 -right-10 h-32 w-32 rounded-full bg-gradient-to-br ${a.ring} blur-2xl`}
       />
       <div className="relative">
-        <div className="text-[11px] uppercase tracking-wider text-slate-400">
+        <div className="text-[11px] uppercase tracking-wider text-[var(--panel-text-muted)]">
           {label}
         </div>
         <div className={`mt-1 text-3xl font-semibold ${a.value}`}>{value}</div>
@@ -208,12 +208,12 @@ export function MonthlyChart({
   }, [data, month, series]);
 
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+    <div className="rounded-2xl border border-[var(--panel-border-strong)] bg-[var(--panel-card)] p-4">
       {title && (
-        <h3 className="mb-3 text-sm font-medium text-slate-300">{title}</h3>
+        <h3 className="mb-3 text-sm font-medium text-[var(--panel-text-secondary)]">{title}</h3>
       )}
       {chartData.length === 0 ? (
-        <div className="flex h-[300px] items-center justify-center text-sm text-slate-500">
+        <div className="flex h-[300px] items-center justify-center text-sm text-[var(--panel-text-faint)]">
           No data for this month
         </div>
       ) : (
@@ -222,15 +222,15 @@ export function MonthlyChart({
             data={chartData}
             margin={{ top: 6, right: 8, left: yLabel ? 12 : -18, bottom: 0 }}
           >
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--panel-border-strong)" vertical={false} />
               <XAxis
                 dataKey="day"
-                tick={{ fill: "#94a3b8", fontSize: 11 }}
+                tick={{ fill: "var(--panel-text-muted)", fontSize: 11 }}
                 tickLine={false}
-                axisLine={{ stroke: "#334155" }}
+                axisLine={{ stroke: "var(--panel-border-strong)" }}
               />
               <YAxis
-                tick={{ fill: "#94a3b8", fontSize: 11 }}
+                tick={{ fill: "var(--panel-text-muted)", fontSize: 11 }}
                 tickLine={false}
                 axisLine={false}
                 allowDecimals={false}
@@ -240,7 +240,7 @@ export function MonthlyChart({
                         value: yLabel,
                         angle: -90,
                         position: "insideLeft",
-                        fill: "#94a3b8",
+                        fill: "var(--panel-text-muted)",
                         fontSize: 11,
                         style: { textAnchor: "middle" },
                       }
@@ -249,16 +249,16 @@ export function MonthlyChart({
               />
               <Tooltip
                 contentStyle={{
-                  background: "#0f172a",
-                  border: "1px solid #334155",
+                  background: "var(--panel-bg-900)",
+                  border: "1px solid var(--panel-border-strong)",
                   borderRadius: 8,
-                  color: "#e2e8f0",
+                  color: "var(--panel-text-secondary)",
                 }}
-                labelStyle={{ color: "#e2e8f0" }}
+                labelStyle={{ color: "var(--panel-text-secondary)" }}
                 labelFormatter={(label) => `Day ${label}`}
                 cursor={{ fill: "rgba(148,163,184,0.08)" }}
               />
-              <Legend wrapperStyle={{ fontSize: 12, color: "#94a3b8" }} />
+              <Legend wrapperStyle={{ fontSize: 12, color: "var(--panel-text-muted)" }} />
               {series.map((s) => (
                 <Bar
                   key={s.key}
@@ -272,7 +272,7 @@ export function MonthlyChart({
                     dataKey={s.key}
                     position="top"
                     fontSize={10}
-                    fill="#e2e8f0"
+                    fill="var(--panel-text-secondary)"
                     formatter={(v) => (v ? `${v}` : "")}
                   />
                 </Bar>
@@ -330,9 +330,9 @@ export function ResultsCalendar({
         const numColor = !inMonth
           ? "text-gray-400"
           : dow === 0
-          ? "text-red-400"
+          ? "text-red-800"
           : dow >= 1 && dow <= 5
-          ? "text-emerald-400"
+          ? "text-emerald-800"
           : "text-gray-700";
         return (
           <div
@@ -344,7 +344,7 @@ export function ResultsCalendar({
                 ? "border-blue-400/40 bg-blue-500/10"
                 : d
                 ? "border-emerald-500/20 bg-emerald-500/[0.07] hover:bg-emerald-500/15"
-                : "border-transparent hover:bg-white/5",
+                : "border-transparent hover:bg-[var(--panel-card)]",
             ].join(" ")}
           >
             <div className={`text-sm font-semibold leading-none ${numColor}`}>
@@ -355,12 +355,12 @@ export function ResultsCalendar({
                 {metrics.map((m) => (
                   <div
                     key={m.key}
-                    className={`flex justify-between ${
-                      m.className ?? "text-gray-500"
+                    className={`flex justify-between font-semibold ${
+                      m.className ?? "text-gray-600"
                     }`}
                   >
                     <span>{m.label}</span>
-                    <span className="font-semibold">
+                    <span className="font-bold">
                       {String(d[m.key] ?? 0)}
                     </span>
                   </div>

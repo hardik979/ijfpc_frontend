@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import { API_LMS_URL } from "@/lib/api";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   ArrowLeft,
   Users,
@@ -41,19 +42,19 @@ const ALLOWED_STATUS = ["Upcoming", "Active", "Completed"] as const;
 
 const zoneBadge = (zone?: string) => {
   const z = (zone || "").toLowerCase();
-  if (z === "blue") return "bg-blue-500/15 text-blue-200 ring-1 ring-blue-500/30";
-  if (z === "yellow") return "bg-yellow-500/15 text-yellow-200 ring-1 ring-yellow-500/30";
-  if (z === "green") return "bg-emerald-500/15 text-emerald-200 ring-1 ring-emerald-500/30";
-  return "bg-slate-500/15 text-slate-200 ring-1 ring-slate-500/30";
+  if (z === "blue") return "bg-blue-500/15 text-blue-700 ring-1 ring-blue-500/30";
+  if (z === "yellow") return "bg-yellow-500/15 text-yellow-700 ring-1 ring-yellow-500/30";
+  if (z === "green") return "bg-emerald-500/15 text-emerald-700 ring-1 ring-emerald-500/30";
+  return "bg-slate-500/15 text-slate-700 ring-1 ring-slate-500/30";
 };
 
 const statusStyles = (status?: string) => {
   const s = (status || "").toLowerCase();
   if (s === "active")
-    return { dot: "bg-emerald-400", badge: "bg-emerald-500/15 text-emerald-200 ring-1 ring-emerald-500/30" };
+    return { dot: "bg-emerald-400", badge: "bg-emerald-500/15 text-emerald-700 ring-1 ring-emerald-500/30" };
   if (s === "completed")
-    return { dot: "bg-sky-400", badge: "bg-sky-500/15 text-sky-200 ring-1 ring-sky-500/30" };
-  return { dot: "bg-amber-400", badge: "bg-amber-500/15 text-amber-200 ring-1 ring-amber-500/30" };
+    return { dot: "bg-sky-400", badge: "bg-sky-500/15 text-sky-700 ring-1 ring-sky-500/30" };
+  return { dot: "bg-amber-400", badge: "bg-amber-500/15 text-amber-700 ring-1 ring-amber-500/30" };
 };
 
 const getCourse = (course: Batch["course"]): Course | null => {
@@ -179,7 +180,7 @@ export default function BatchDetail({ batchId }: { batchId: string }) {
   const st = statusStyles(batch?.status);
 
   return (
-    <section className="relative min-h-screen w-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100">
+    <section className="relative min-h-screen w-full bg-gradient-to-br from-[var(--panel-bg-950)] via-[var(--panel-bg-900)] to-[var(--panel-bg-950)] text-[var(--panel-text-primary)]">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -top-40 -left-40 h-96 w-96 rounded-full bg-cyan-500/10 blur-3xl" />
         <div className="absolute top-20 -right-40 h-96 w-96 rounded-full bg-indigo-500/10 blur-3xl" />
@@ -187,32 +188,35 @@ export default function BatchDetail({ batchId }: { batchId: string }) {
 
       <div className="relative z-10 mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
         {/* Back */}
-        <button
-          onClick={() => router.push("/batch-section")}
-          className="group mb-6 flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-slate-300 backdrop-blur-sm transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
-        >
-          <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
-          <span>All Batches</span>
-        </button>
+        <div className="mb-6 flex items-center justify-between gap-3">
+          <button
+            onClick={() => router.push("/batch-section")}
+            className="group flex items-center gap-2.5 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-4 py-2.5 text-sm font-medium text-[var(--panel-text-secondary)] backdrop-blur-sm transition-all hover:border-[var(--panel-border)] hover:bg-[var(--panel-border)] hover:text-[var(--panel-text-primary)]"
+          >
+            <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+            <span>All Batches</span>
+          </button>
+          <ThemeToggle />
+        </div>
 
         {loading ? (
           <div className="space-y-4">
-            <div className="h-28 animate-pulse rounded-3xl border border-white/10 bg-white/[0.03]" />
-            <div className="h-96 animate-pulse rounded-3xl border border-white/10 bg-white/[0.03]" />
+            <div className="h-28 animate-pulse rounded-3xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)]" />
+            <div className="h-96 animate-pulse rounded-3xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)]" />
           </div>
         ) : !batch ? (
-          <div className="rounded-3xl border border-white/10 bg-white/[0.03] px-6 py-20 text-center">
-            <p className="text-sm text-slate-400">This batch could not be found.</p>
+          <div className="rounded-3xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] px-6 py-20 text-center">
+            <p className="text-sm text-[var(--panel-text-muted)]">This batch could not be found.</p>
           </div>
         ) : (
           <>
             {/* Batch header */}
-            <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-2xl backdrop-blur-xl">
+            <div className="relative overflow-hidden rounded-3xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] shadow-2xl backdrop-blur-xl">
               <div className="flex flex-col gap-5 p-6 sm:p-8">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <div className="mb-2 flex items-center gap-3">
-                      <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
+                      <h1 className="text-2xl font-bold tracking-tight text-[var(--panel-text-primary)] sm:text-3xl">
                         {batch.batch || "Untitled batch"}
                       </h1>
                       <span
@@ -222,14 +226,14 @@ export default function BatchDetail({ batchId }: { batchId: string }) {
                         {batch.status || "—"}
                       </span>
                     </div>
-                    <div className="flex flex-wrap items-center gap-4 text-sm text-slate-400">
+                    <div className="flex flex-wrap items-center gap-4 text-sm text-[var(--panel-text-muted)]">
                       <span className="flex items-center gap-1.5">
-                        <BookOpen className="h-4 w-4 text-slate-500" />
+                        <BookOpen className="h-4 w-4 text-[var(--panel-text-faint)]" />
                         {course?.title || "No course linked"}
                       </span>
                       <span className="flex items-center gap-1.5">
                         <Users className="h-4 w-4 text-indigo-400" />
-                        <span className="font-semibold text-white">{students.length}</span>
+                        <span className="font-semibold text-[var(--panel-text-primary)]">{students.length}</span>
                         student{students.length === 1 ? "" : "s"}
                       </span>
                     </div>
@@ -237,14 +241,14 @@ export default function BatchDetail({ batchId }: { batchId: string }) {
                   <button
                     onClick={loadBatch}
                     title="Refresh"
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-300 transition hover:bg-white/10 hover:text-white"
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] text-[var(--panel-text-secondary)] transition hover:bg-[var(--panel-border)] hover:text-[var(--panel-text-primary)]"
                   >
                     <RefreshCw className="h-4 w-4" />
                   </button>
                 </div>
 
                 {/* Action toolbar */}
-                <div className="flex flex-wrap gap-2 border-t border-white/10 pt-5">
+                <div className="flex flex-wrap gap-2 border-t border-[var(--panel-border)] pt-5">
                   <ToolbarButton
                     onClick={() => setModal("add")}
                     icon={<UserPlus className="h-4 w-4" />}
@@ -272,22 +276,22 @@ export default function BatchDetail({ batchId }: { batchId: string }) {
             </div>
 
             {/* Roster */}
-            <div className="mt-6 rounded-3xl border border-white/10 bg-white/[0.03] shadow-2xl backdrop-blur-xl">
-              <div className="flex flex-wrap items-center gap-3 border-b border-white/10 p-4">
+            <div className="mt-6 rounded-3xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] shadow-2xl backdrop-blur-xl">
+              <div className="flex flex-wrap items-center gap-3 border-b border-[var(--panel-border)] p-4">
                 <div className="relative flex-1 min-w-[200px]">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--panel-text-faint)]" />
                   <input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Search students in this batch…"
-                    className="w-full rounded-xl border border-white/10 bg-white/[0.03] py-2.5 pl-9 pr-3 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-cyan-500/50"
+                    className="w-full rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] py-2.5 pl-9 pr-3 text-sm text-[var(--panel-text-primary)] placeholder:text-[var(--panel-text-faint)] outline-none focus:border-cyan-500/50"
                   />
                 </div>
                 {students.length > 0 && (
                   <button
                     onClick={toggleAll}
                     disabled={filtered.length === 0}
-                    className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-xs font-medium text-slate-200 transition hover:bg-white/10 disabled:opacity-40"
+                    className="rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-3 py-2.5 text-xs font-medium text-[var(--panel-text-secondary)] transition hover:bg-[var(--panel-border)] disabled:opacity-40"
                   >
                     {allFilteredSelected ? "Unselect all" : "Select all"}
                   </button>
@@ -296,7 +300,7 @@ export default function BatchDetail({ batchId }: { batchId: string }) {
                   <button
                     onClick={handleRemoveSelected}
                     disabled={removingBulk}
-                    className="inline-flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2.5 text-xs font-semibold text-rose-200 transition hover:bg-rose-500/20 disabled:opacity-50"
+                    className="inline-flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-500/20 disabled:opacity-50"
                   >
                     {removingBulk ? (
                       <span className="h-3.5 w-3.5 animate-spin rounded-full border-b-2 border-rose-300" />
@@ -311,11 +315,11 @@ export default function BatchDetail({ batchId }: { batchId: string }) {
               <div className="max-h-[28rem] overflow-y-auto">
                 {students.length === 0 ? (
                   <div className="flex flex-col items-center px-4 py-16 text-center">
-                    <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
-                      <Users className="h-7 w-7 text-slate-400" />
+                    <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-card)]">
+                      <Users className="h-7 w-7 text-[var(--panel-text-muted)]" />
                     </div>
-                    <p className="text-sm font-medium text-white">No students in this batch yet</p>
-                    <p className="mt-1 text-xs text-slate-400">
+                    <p className="text-sm font-medium text-[var(--panel-text-primary)]">No students in this batch yet</p>
+                    <p className="mt-1 text-xs text-[var(--panel-text-muted)]">
                       Use “Add Students” above to assign students enrolled in this course.
                     </p>
                     <button
@@ -327,11 +331,11 @@ export default function BatchDetail({ batchId }: { batchId: string }) {
                     </button>
                   </div>
                 ) : filtered.length === 0 ? (
-                  <div className="px-4 py-14 text-center text-sm text-slate-500">
+                  <div className="px-4 py-14 text-center text-sm text-[var(--panel-text-faint)]">
                     No students match your search.
                   </div>
                 ) : (
-                  <ul className="divide-y divide-white/5">
+                  <ul className="divide-y divide-[var(--panel-border)]">
                     {filtered.map((s) => {
                       const checked = selected.has(s._id);
                       const busy = removingId === s._id;
@@ -339,26 +343,26 @@ export default function BatchDetail({ batchId }: { batchId: string }) {
                         <li
                           key={s._id}
                           className={`flex items-center gap-3 px-4 py-3 transition ${
-                            checked ? "bg-rose-500/10" : "hover:bg-white/5"
+                            checked ? "bg-rose-500/10" : "hover:bg-[var(--panel-card)]"
                           }`}
                         >
                           <input
                             type="checkbox"
                             checked={checked}
                             onChange={() => toggle(s._id)}
-                            className="h-4 w-4 cursor-pointer rounded border-white/20 bg-white/10 accent-rose-500"
+                            className="h-4 w-4 cursor-pointer rounded border-[var(--panel-border)] bg-[var(--panel-border)] accent-rose-500"
                           />
                           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-sm font-semibold text-white">
                             {(s.fullName || "S").slice(0, 1).toUpperCase()}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <div className="truncate text-sm font-semibold text-white">
+                            <div className="truncate text-sm font-semibold text-[var(--panel-text-primary)]">
                               {s.fullName || "Unnamed student"}
                             </div>
-                            <div className="truncate text-xs text-slate-400">{s.email || "—"}</div>
+                            <div className="truncate text-xs text-[var(--panel-text-muted)]">{s.email || "—"}</div>
                           </div>
                           {s.isPlaced && (
-                            <span className="hidden shrink-0 rounded-full bg-emerald-500/15 px-2 py-1 text-[10px] font-semibold text-emerald-200 ring-1 ring-emerald-500/30 sm:inline">
+                            <span className="hidden shrink-0 rounded-full bg-emerald-500/15 px-2 py-1 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-500/30 sm:inline">
                               Placed
                             </span>
                           )}
@@ -373,7 +377,7 @@ export default function BatchDetail({ batchId }: { batchId: string }) {
                             onClick={() => handleRemoveOne(s._id, s.fullName)}
                             disabled={busy}
                             title="Remove from batch"
-                            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1.5 text-xs font-semibold text-rose-200 transition hover:bg-rose-500/20 disabled:opacity-50"
+                            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-500/20 disabled:opacity-50"
                           >
                             {busy ? (
                               <span className="h-3.5 w-3.5 animate-spin rounded-full border-b-2 border-rose-300" />
@@ -456,10 +460,10 @@ function ToolbarButton({
 }) {
   const cls =
     tone === "primary"
-      ? "border-teal-500/40 bg-teal-500/15 text-teal-100 hover:bg-teal-500/25"
+      ? "border-teal-500/40 bg-teal-500/15 text-teal-700 hover:bg-teal-500/25"
       : tone === "danger"
-      ? "border-rose-500/30 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20"
-      : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10";
+      ? "border-rose-500/30 bg-rose-500/10 text-rose-700 hover:bg-rose-500/20"
+      : "border-[var(--panel-border)] bg-[var(--panel-card)] text-[var(--panel-text-secondary)] hover:bg-[var(--panel-border)]";
   return (
     <button
       onClick={onClick}
@@ -488,18 +492,18 @@ function ModalShell({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-[var(--panel-bg-950)]/70 backdrop-blur-sm" onClick={onClose} />
       <div
-        className={`relative w-full ${maxW} overflow-hidden rounded-3xl border border-white/10 bg-slate-900 shadow-2xl`}
+        className={`relative w-full ${maxW} overflow-hidden rounded-3xl border border-[var(--panel-border)] bg-[var(--panel-bg-900)] shadow-2xl`}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-white/10 p-5">
+        <div className="flex items-start justify-between gap-4 border-b border-[var(--panel-border)] p-5">
           <div>
-            <h3 className="text-lg font-semibold text-white">{title}</h3>
-            {subtitle && <p className="mt-0.5 text-sm text-slate-400">{subtitle}</p>}
+            <h3 className="text-lg font-semibold text-[var(--panel-text-primary)]">{title}</h3>
+            {subtitle && <p className="mt-0.5 text-sm text-[var(--panel-text-muted)]">{subtitle}</p>}
           </div>
           <button
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-white/10 hover:text-white"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--panel-text-muted)] transition hover:bg-[var(--panel-border)] hover:text-[var(--panel-text-primary)]"
           >
             <X className="h-4 w-4" />
           </button>
@@ -613,34 +617,34 @@ function AddStudentsModal({
       maxW="max-w-lg"
     >
       {!course?._id ? (
-        <div className="p-6 text-center text-sm text-slate-400">
+        <div className="p-6 text-center text-sm text-[var(--panel-text-muted)]">
           This batch has no linked course, so students can’t be listed automatically.
         </div>
       ) : (
         <>
-          <div className="border-b border-white/10 p-4">
+          <div className="border-b border-[var(--panel-border)] p-4">
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--panel-text-faint)]" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search by name or email…"
-                className="w-full rounded-xl border border-white/10 bg-white/[0.03] py-2.5 pl-9 pr-3 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-teal-500/50"
+                className="w-full rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] py-2.5 pl-9 pr-3 text-sm text-[var(--panel-text-primary)] placeholder:text-[var(--panel-text-faint)] outline-none focus:border-teal-500/50"
               />
             </div>
           </div>
           <div className="max-h-72 overflow-y-auto">
             {loading ? (
-              <div className="flex items-center justify-center gap-3 px-4 py-12 text-sm text-slate-400">
+              <div className="flex items-center justify-center gap-3 px-4 py-12 text-sm text-[var(--panel-text-muted)]">
                 <span className="h-5 w-5 animate-spin rounded-full border-b-2 border-teal-500" />
                 Loading students…
               </div>
             ) : available.length === 0 ? (
-              <div className="px-4 py-12 text-center text-sm text-slate-500">
+              <div className="px-4 py-12 text-center text-sm text-[var(--panel-text-faint)]">
                 No more students available to add from this course.
               </div>
             ) : (
-              <ul className="divide-y divide-white/5">
+              <ul className="divide-y divide-[var(--panel-border)]">
                 {available.map((s) => {
                   const checked = selected.has(s._id);
                   return (
@@ -648,7 +652,7 @@ function AddStudentsModal({
                       key={s._id}
                       onClick={() => toggle(s._id)}
                       className={`flex cursor-pointer items-center gap-3 px-4 py-3 transition ${
-                        checked ? "bg-teal-500/10" : "hover:bg-white/5"
+                        checked ? "bg-teal-500/10" : "hover:bg-[var(--panel-card)]"
                       }`}
                     >
                       <input
@@ -656,16 +660,16 @@ function AddStudentsModal({
                         checked={checked}
                         onChange={() => toggle(s._id)}
                         onClick={(e) => e.stopPropagation()}
-                        className="h-4 w-4 cursor-pointer rounded border-white/20 bg-white/10 accent-teal-500"
+                        className="h-4 w-4 cursor-pointer rounded border-[var(--panel-border)] bg-[var(--panel-border)] accent-teal-500"
                       />
                       <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-cyan-600 text-sm font-semibold text-white">
                         {(s.fullName || "S").slice(0, 1).toUpperCase()}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-semibold text-white">
+                        <div className="truncate text-sm font-semibold text-[var(--panel-text-primary)]">
                           {s.fullName || "Unnamed student"}
                         </div>
-                        <div className="truncate text-xs text-slate-400">{s.email || "—"}</div>
+                        <div className="truncate text-xs text-[var(--panel-text-muted)]">{s.email || "—"}</div>
                       </div>
                       <span
                         className={`hidden shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold sm:inline ${zoneBadge(
@@ -680,12 +684,12 @@ function AddStudentsModal({
               </ul>
             )}
           </div>
-          <div className="flex items-center justify-between gap-3 border-t border-white/10 p-4">
-            <span className="text-xs text-slate-400">{selected.size} selected</span>
+          <div className="flex items-center justify-between gap-3 border-t border-[var(--panel-border)] p-4">
+            <span className="text-xs text-[var(--panel-text-muted)]">{selected.size} selected</span>
             <div className="flex gap-2">
               <button
                 onClick={onClose}
-                className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-slate-200 transition hover:bg-white/10"
+                className="rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-4 py-2.5 text-sm font-medium text-[var(--panel-text-secondary)] transition hover:bg-[var(--panel-border)]"
               >
                 Cancel
               </button>
@@ -756,19 +760,19 @@ function RenameModal({
     <ModalShell title="Rename batch" onClose={onClose}>
       <div className="space-y-4 p-5">
         <div>
-          <label className="mb-2 block text-sm font-medium text-slate-300">Batch name</label>
+          <label className="mb-2 block text-sm font-medium text-[var(--panel-text-secondary)]">Batch name</label>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoFocus
             onKeyDown={(e) => e.key === "Enter" && save()}
-            className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-100 outline-none focus:border-amber-500/50"
+            className="w-full rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] px-4 py-3 text-sm text-[var(--panel-text-primary)] outline-none focus:border-amber-500/50"
           />
         </div>
         <div className="flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-slate-200 transition hover:bg-white/10"
+            className="rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-4 py-2.5 text-sm font-medium text-[var(--panel-text-secondary)] transition hover:bg-[var(--panel-border)]"
           >
             Cancel
           </button>
@@ -841,8 +845,8 @@ function StatusModal({
                 onClick={() => setStatus(s)}
                 className={`flex flex-col items-center gap-2 rounded-xl border px-3 py-4 text-sm font-semibold transition ${
                   active
-                    ? "border-white/30 bg-white/10 text-white"
-                    : "border-white/10 bg-white/[0.02] text-slate-300 hover:bg-white/5"
+                    ? "border-[var(--panel-border)] bg-[var(--panel-border)] text-[var(--panel-text-primary)]"
+                    : "border-[var(--panel-border)] bg-[var(--panel-card-soft)] text-[var(--panel-text-secondary)] hover:bg-[var(--panel-card)]"
                 }`}
               >
                 <span className={`h-2.5 w-2.5 rounded-full ${style.dot}`} />
@@ -854,7 +858,7 @@ function StatusModal({
         <div className="flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-slate-200 transition hover:bg-white/10"
+            className="rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-4 py-2.5 text-sm font-medium text-[var(--panel-text-secondary)] transition hover:bg-[var(--panel-border)]"
           >
             Cancel
           </button>
@@ -915,12 +919,12 @@ function DeleteModal({
     <ModalShell title="Delete batch" onClose={onClose}>
       <div className="space-y-5 p-5">
         <div className="flex items-start gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4">
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-rose-300" />
-          <div className="text-sm text-rose-100">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-rose-700" />
+          <div className="text-sm text-rose-700">
             <p className="font-semibold">
               Delete “{name || "this batch"}” permanently?
             </p>
-            <p className="mt-1 text-rose-200/80">
+            <p className="mt-1 text-rose-700/80">
               This removes the batch itself. {count > 0
                 ? `Its ${count} student${count === 1 ? "" : "s"} keep their accounts but are no longer grouped here.`
                 : "It has no students."}{" "}
@@ -931,14 +935,14 @@ function DeleteModal({
         <div className="flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-slate-200 transition hover:bg-white/10"
+            className="rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-4 py-2.5 text-sm font-medium text-[var(--panel-text-secondary)] transition hover:bg-[var(--panel-border)]"
           >
             Cancel
           </button>
           <button
             onClick={remove}
             disabled={deleting}
-            className="inline-flex items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-500/20 px-4 py-2.5 text-sm font-semibold text-rose-100 transition hover:bg-rose-500/30 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-500/20 px-4 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-500/30 disabled:opacity-50"
           >
             {deleting ? (
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-rose-200/40 border-t-rose-200" />

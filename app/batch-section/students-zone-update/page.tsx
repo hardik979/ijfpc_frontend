@@ -5,6 +5,7 @@ import { CheckCircle2, X, Users, ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Pagination from "@/components/shared/Pagination";
 import { API_LMS_URL } from "@/lib/api";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface BatchHistoryItem {
   _id: string;
@@ -36,14 +37,14 @@ const pill = "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-sem
 const zoneBadge = (zone?: string) => {
   const z = (zone || "").toLowerCase();
   if (z === "blue")
-    return "bg-blue-500/15 text-blue-200 ring-1 ring-blue-500/30";
+    return "bg-blue-500/15 text-blue-700 ring-1 ring-blue-500/30";
   if (z === "yellow")
-    return "bg-yellow-500/15 text-yellow-200 ring-1 ring-yellow-500/30";
+    return "bg-yellow-500/15 text-yellow-700 ring-1 ring-yellow-500/30";
   if (z === "green")
-    return "bg-emerald-500/15 text-emerald-200 ring-1 ring-emerald-500/30";
+    return "bg-emerald-500/15 text-emerald-700 ring-1 ring-emerald-500/30";
   if (z === "newly_enrolled")
-    return "bg-violet-500/15 text-violet-200 ring-1 ring-violet-500/30";
-  return "bg-slate-500/15 text-slate-200 ring-1 ring-slate-500/30";
+    return "bg-violet-500/15 text-violet-700 ring-1 ring-violet-500/30";
+  return "bg-slate-500/15 text-slate-700 ring-1 ring-slate-500/30";
 };
 
 const ZONE_META: Record<
@@ -55,28 +56,28 @@ const ZONE_META: Record<
     dot: "bg-blue-500",
     ring: "ring-blue-400",
     bg: "bg-blue-500/10 hover:bg-blue-500/20",
-    text: "text-blue-200",
+    text: "text-blue-700",
   },
   green: {
     label: "Green",
     dot: "bg-emerald-500",
     ring: "ring-emerald-400",
     bg: "bg-emerald-500/10 hover:bg-emerald-500/20",
-    text: "text-emerald-200",
+    text: "text-emerald-700",
   },
   yellow: {
     label: "Yellow",
     dot: "bg-yellow-400",
     ring: "ring-yellow-300",
     bg: "bg-yellow-500/10 hover:bg-yellow-500/20",
-    text: "text-yellow-200",
+    text: "text-yellow-700",
   },
   newly_enrolled: {
     label: "Newly Enrolled",
     dot: "bg-violet-500",
     ring: "ring-violet-400",
     bg: "bg-violet-500/10 hover:bg-violet-500/20",
-    text: "text-violet-200",
+    text: "text-violet-700",
   },
 };
 
@@ -257,29 +258,30 @@ const StudentsZoneUpdatePage: React.FC = () => {
 
   return (
     <>
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
+      <div className="min-h-screen bg-gradient-to-br from-[var(--panel-bg-950)] via-[var(--panel-bg-900)] to-[var(--panel-bg-950)] p-6">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
           <div className="mb-8 flex items-start justify-between gap-4 flex-wrap">
             <div>
               <button
                 onClick={() => router.back()}
-                className="mb-3 inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-slate-200 transition hover:bg-white/10"
+                className="mb-3 inline-flex items-center gap-2 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-4 py-2 text-sm font-medium text-[var(--panel-text-secondary)] transition hover:bg-[var(--panel-border)]"
               >
                 <ArrowLeft className="h-4 w-4" />
                 Back
               </button>
-              <h1 className="text-3xl font-bold text-white">
+              <h1 className="text-3xl font-bold text-[var(--panel-text-primary)]">
                 Students Zone Update
               </h1>
-              <p className="text-slate-300 mt-2">
+              <p className="text-[var(--panel-text-secondary)] mt-2">
                 Select students and update their zone in bulk
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <div className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-200 text-sm flex items-center gap-2">
+              <ThemeToggle />
+              <div className="px-4 py-2 rounded-xl bg-[var(--panel-card)] border border-[var(--panel-border)] text-[var(--panel-text-secondary)] text-sm flex items-center gap-2">
                 <Users className="w-4 h-4 text-indigo-300" />
-                <span className="font-semibold text-white">
+                <span className="font-semibold text-[var(--panel-text-primary)]">
                   {selected.size}
                 </span>
                 selected
@@ -295,7 +297,7 @@ const StudentsZoneUpdatePage: React.FC = () => {
           </div>
 
           {/* Filter */}
-          <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-2xl p-6 mb-6">
+          <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-card)] backdrop-blur-xl shadow-2xl p-6 mb-6">
             <div className="flex flex-col md:flex-row gap-4">
               <div className="flex-1">
                 <input
@@ -311,7 +313,7 @@ const StudentsZoneUpdatePage: React.FC = () => {
                       setPage(1);
                     }
                   }}
-                  className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-slate-100 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-transparent"
+                  className="w-full px-4 py-3 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] text-[var(--panel-text-primary)] placeholder:text-[var(--panel-text-muted)] outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-transparent"
                 />
               </div>
 
@@ -320,21 +322,21 @@ const StudentsZoneUpdatePage: React.FC = () => {
                 onChange={(e) =>
                   setZoneDraft(e.target.value as "" | ZoneOption)
                 }
-                className="px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-transparent min-w-[160px]"
+                className="px-4 py-3 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] text-[var(--panel-text-primary)] outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-transparent min-w-[160px]"
               >
-                <option value="" className="bg-slate-900">
+                <option value="" className="bg-[var(--panel-bg-900)]">
                   All Zones
                 </option>
-                <option value="blue" className="bg-slate-900">
+                <option value="blue" className="bg-[var(--panel-bg-900)]">
                   Blue
                 </option>
-                <option value="green" className="bg-slate-900">
+                <option value="green" className="bg-[var(--panel-bg-900)]">
                   Green
                 </option>
-                <option value="yellow" className="bg-slate-900">
+                <option value="yellow" className="bg-[var(--panel-bg-900)]">
                   Yellow
                 </option>
-                <option value="newly_enrolled" className="bg-slate-900">
+                <option value="newly_enrolled" className="bg-[var(--panel-bg-900)]">
                   Newly Enrolled
                 </option>
               </select>
@@ -358,7 +360,7 @@ const StudentsZoneUpdatePage: React.FC = () => {
                   setAppliedZone("");
                   setPage(1);
                 }}
-                className="px-6 py-3 rounded-xl border border-white/15 bg-white/5 text-slate-200 hover:bg-white/10 transition font-semibold whitespace-nowrap"
+                className="px-6 py-3 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] text-[var(--panel-text-secondary)] hover:bg-[var(--panel-border)] transition font-semibold whitespace-nowrap"
               >
                 Reset
               </button>
@@ -382,10 +384,10 @@ const StudentsZoneUpdatePage: React.FC = () => {
           )}
 
           {/* Table */}
-          <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-2xl overflow-hidden">
+          <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-card)] backdrop-blur-xl shadow-2xl overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-white/5 border-b border-white/10">
+                <thead className="bg-[var(--panel-card-soft)] border-b border-[var(--panel-border)]">
                   <tr>
                     <th className="px-6 py-3 text-left">
                       <input
@@ -393,25 +395,25 @@ const StudentsZoneUpdatePage: React.FC = () => {
                         checked={allOnPageSelected}
                         onChange={togglePage}
                         aria-label="Select all on page"
-                        className="h-4 w-4 rounded border-white/20 bg-white/10 text-indigo-500 focus:ring-indigo-400 cursor-pointer accent-indigo-500"
+                        className="h-4 w-4 rounded border-[var(--panel-border)] bg-[var(--panel-card)] text-indigo-500 focus:ring-indigo-400 cursor-pointer accent-indigo-500"
                       />
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-[var(--panel-text-secondary)] uppercase tracking-wider">
                       Student
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-[var(--panel-text-secondary)] uppercase tracking-wider">
                       Batch
-                    </th>                   
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-[var(--panel-text-secondary)] uppercase tracking-wider">
                       Current Zone
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/10">
+                <tbody className="divide-y divide-[var(--panel-border)]">
                   {loading ? (
                     <tr>
                       <td colSpan={5} className="px-6 py-14 text-center">
-                        <div className="inline-flex items-center gap-3 text-slate-300">
+                        <div className="inline-flex items-center gap-3 text-[var(--panel-text-secondary)]">
                           <span className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-500" />
                           Loading students...
                         </div>
@@ -421,7 +423,7 @@ const StudentsZoneUpdatePage: React.FC = () => {
                     <tr>
                       <td
                         colSpan={5}
-                        className="px-6 py-14 text-center text-slate-300"
+                        className="px-6 py-14 text-center text-[var(--panel-text-secondary)]"
                       >
                         No students found
                       </td>
@@ -441,7 +443,7 @@ const StudentsZoneUpdatePage: React.FC = () => {
                           className={`cursor-pointer transition ${
                             checked
                               ? "bg-indigo-500/10 hover:bg-indigo-500/15"
-                              : "hover:bg-white/5"
+                              : "hover:bg-[var(--panel-card)]"
                           }`}
                         >
                           <td className="px-6 py-4">
@@ -451,7 +453,7 @@ const StudentsZoneUpdatePage: React.FC = () => {
                               onChange={() => toggleOne(student.clerkId)}
                               onClick={(e) => e.stopPropagation()}
                               aria-label={`Select ${student.fullName}`}
-                              className="h-4 w-4 rounded border-white/20 bg-white/10 text-indigo-500 focus:ring-indigo-400 cursor-pointer accent-indigo-500"
+                              className="h-4 w-4 rounded border-[var(--panel-border)] bg-[var(--panel-card)] text-indigo-500 focus:ring-indigo-400 cursor-pointer accent-indigo-500"
                             />
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -462,10 +464,10 @@ const StudentsZoneUpdatePage: React.FC = () => {
                                   .toUpperCase()}
                               </div>
                               <div className="ml-4">
-                                <div className="text-sm font-semibold text-white">
+                                <div className="text-sm font-semibold text-[var(--panel-text-primary)]">
                                   {student.fullName}
                                 </div>
-                                <div className="text-sm text-slate-300">
+                                <div className="text-sm text-[var(--panel-text-secondary)]">
                                   {student.email}
                                 </div>
                               </div>
@@ -473,11 +475,11 @@ const StudentsZoneUpdatePage: React.FC = () => {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span
-                              className={`${pill} bg-slate-500/15 text-slate-200 ring-1 ring-slate-500/30`}
+                              className={`${pill} bg-slate-500/15 text-slate-700 ring-1 ring-slate-500/30`}
                             >
                               {batchCode}
                             </span>
-                          </td>                         
+                          </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span
                               className={`${pill} ${zoneBadge(student.zone)}`}
@@ -513,21 +515,21 @@ const StudentsZoneUpdatePage: React.FC = () => {
       {/* Zone Picker Modal */}
       {modalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--panel-bg-950)]/70 backdrop-blur-sm"
           onClick={() => !submitting && setModalOpen(false)}
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 to-slate-950 p-6 shadow-2xl"
+            className="w-full max-w-md rounded-2xl border border-[var(--panel-border)] bg-gradient-to-br from-[var(--panel-bg-900)] to-[var(--panel-bg-950)] p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between mb-1">
               <div>
-                <h2 className="text-xl font-bold text-white">
+                <h2 className="text-xl font-bold text-[var(--panel-text-primary)]">
                   Update Zone
                 </h2>
-                <p className="text-sm text-slate-400 mt-1">
+                <p className="text-sm text-[var(--panel-text-muted)] mt-1">
                   Choose a zone for{" "}
-                  <span className="text-white font-semibold">
+                  <span className="text-[var(--panel-text-primary)] font-semibold">
                     {selected.size}
                   </span>{" "}
                   student{selected.size > 1 ? "s" : ""}
@@ -535,7 +537,7 @@ const StudentsZoneUpdatePage: React.FC = () => {
               </div>
               <button
                 onClick={() => !submitting && setModalOpen(false)}
-                className="text-slate-400 hover:text-white transition"
+                className="text-[var(--panel-text-muted)] hover:text-[var(--panel-text-primary)] transition"
                 aria-label="Close"
               >
                 <X className="w-5 h-5" />
@@ -555,7 +557,7 @@ const StudentsZoneUpdatePage: React.FC = () => {
                     } ${
                       active
                         ? `border-transparent ring-2 ${meta.ring}`
-                        : "border-white/10"
+                        : "border-[var(--panel-border)]"
                     }`}
                   >
                     <div className="flex items-center gap-3">
@@ -578,7 +580,7 @@ const StudentsZoneUpdatePage: React.FC = () => {
               <button
                 onClick={() => setModalOpen(false)}
                 disabled={submitting}
-                className="px-4 py-2 rounded-xl text-slate-200 hover:bg-white/5 transition disabled:opacity-40"
+                className="px-4 py-2 rounded-xl text-[var(--panel-text-secondary)] hover:bg-[var(--panel-card)] transition disabled:opacity-40"
               >
                 Cancel
               </button>
@@ -602,8 +604,8 @@ const StudentsZoneUpdatePage: React.FC = () => {
         <div
           className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl shadow-2xl border backdrop-blur-xl ${
             toast.type === "success"
-              ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-100"
-              : "bg-rose-500/15 border-rose-500/30 text-rose-100"
+              ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-700"
+              : "bg-rose-500/15 border-rose-500/30 text-rose-700"
           }`}
         >
           {toast.message}

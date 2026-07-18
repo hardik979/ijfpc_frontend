@@ -5,6 +5,7 @@ import Pagination from "@/components/shared/Pagination";
 import FilterBar from "@/components/shared/FilterBar";
 import { toast } from "react-toastify";
 import { API_LMS_URL } from '@/lib/api'
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 
 // -------------------- Types --------------------
@@ -45,19 +46,19 @@ const pill = "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-sem
 
 const zoneBadge = (zone?: string) => {
     const z = (zone || "").toLowerCase();
-    if (z === "blue") return "bg-blue-500/15 text-blue-200 ring-1 ring-blue-500/30";
-    if (z === "yellow") return "bg-yellow-500/15 text-yellow-200 ring-1 ring-yellow-500/30";
-    if (z === "green") return "bg-emerald-500/15 text-emerald-200 ring-1 ring-emerald-500/30";
-    return "bg-slate-500/15 text-slate-200 ring-1 ring-slate-500/30";
+    if (z === "blue") return "bg-blue-500/15 text-blue-700 ring-1 ring-blue-500/30";
+    if (z === "yellow") return "bg-yellow-500/15 text-yellow-700 ring-1 ring-yellow-500/30";
+    if (z === "green") return "bg-emerald-500/15 text-emerald-700 ring-1 ring-emerald-500/30";
+    return "bg-slate-500/15 text-slate-700 ring-1 ring-slate-500/30";
 };
 
 const feeBadge = (feePlan?: string) => {
     const fp = (feePlan || "").toLowerCase();
-    if (!fp || fp === "-" || fp === "none") return "bg-slate-500/15 text-slate-200 ring-1 ring-slate-500/30";
-    if (fp.includes("emi")) return "bg-violet-500/15 text-violet-200 ring-1 ring-violet-500/30";
-    if (fp.includes("one") || fp.includes("full")) return "bg-emerald-500/15 text-emerald-200 ring-1 ring-emerald-500/30";
-    if (fp.includes("admission") || fp.includes("advance")) return "bg-amber-500/15 text-amber-200 ring-1 ring-amber-500/30";
-    return "bg-cyan-500/15 text-cyan-200 ring-1 ring-cyan-500/30";
+    if (!fp || fp === "-" || fp === "none") return "bg-slate-500/15 text-slate-700 ring-1 ring-slate-500/30";
+    if (fp.includes("emi")) return "bg-violet-500/15 text-violet-700 ring-1 ring-violet-500/30";
+    if (fp.includes("one") || fp.includes("full")) return "bg-emerald-500/15 text-emerald-700 ring-1 ring-emerald-500/30";
+    if (fp.includes("admission") || fp.includes("advance")) return "bg-amber-500/15 text-amber-700 ring-1 ring-amber-500/30";
+    return "bg-cyan-500/15 text-cyan-700 ring-1 ring-cyan-500/30";
 };
 
 const safeDate = (val?: string) => {
@@ -218,10 +219,10 @@ const StudentZoneUpdate: React.FC = () => {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
+            <div className="min-h-screen bg-gradient-to-br from-[var(--panel-bg-950)] via-[var(--panel-bg-900)] to-[var(--panel-bg-950)] flex items-center justify-center">
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500 mx-auto" />
-                    <p className="mt-4 text-slate-300">Loading students...</p>
+                    <p className="mt-4 text-[var(--panel-text-secondary)]">Loading students...</p>
                 </div>
             </div>
         );
@@ -229,16 +230,19 @@ const StudentZoneUpdate: React.FC = () => {
 
     return (
         <>
-            <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
+            <div className="min-h-screen bg-gradient-to-br from-[var(--panel-bg-950)] via-[var(--panel-bg-900)] to-[var(--panel-bg-950)] p-6">
                 <div className="max-w-7xl mx-auto">
                     {/* Header */}
-                    <div className="mb-8">
-                        <h1 className="text-3xl font-bold text-white">Students Zone Management</h1>
-                        <p className="text-slate-300 mt-2">View and manage all enrolled students</p>
+                    <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+                        <div>
+                            <h1 className="text-3xl font-bold text-[var(--panel-text-primary)]">Students Zone Management</h1>
+                            <p className="text-[var(--panel-text-secondary)] mt-2">View and manage all enrolled students</p>
+                        </div>
+                        <ThemeToggle />
                     </div>
 
                     {/* Filters and Search */}
-                    <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-2xl p-6 mb-6">
+                    <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-card)] backdrop-blur-xl shadow-2xl p-6 mb-6">
                         <FilterBar
                             value={searchDraft}
                             onChange={setSearchDraft}
@@ -256,11 +260,11 @@ const StudentZoneUpdate: React.FC = () => {
                     </div>
 
                     {/* Students Table */}
-                    <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-2xl overflow-hidden">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-6 py-4 border-b border-white/10 bg-white/5">
+                    <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-card)] backdrop-blur-xl shadow-2xl overflow-hidden">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-6 py-4 border-b border-[var(--panel-border)] bg-[var(--panel-card-soft)]">
                             <div>
-                                <h3 className="text-sm font-semibold text-white">Eligibility Controls</h3>
-                                <p className="text-xs text-slate-300">
+                                <h3 className="text-sm font-semibold text-[var(--panel-text-primary)]">Eligibility Controls</h3>
+                                <p className="text-xs text-[var(--panel-text-secondary)]">
                                     Apply today eligibility to all students in this list.
                                 </p>
                             </div>
@@ -270,7 +274,7 @@ const StudentZoneUpdate: React.FC = () => {
                                     type="button"
                                     onClick={handleSetStudent}
                                     className="inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold
-                 bg-emerald-500/15 text-emerald-200 ring-1 ring-emerald-500/30
+                 bg-emerald-500/15 text-emerald-700 ring-1 ring-emerald-500/30
                  hover:bg-emerald-500/25 hover:ring-emerald-500/40
                  active:scale-[0.99] transition"
                                 >
@@ -281,7 +285,7 @@ const StudentZoneUpdate: React.FC = () => {
                                     type="button"
                                     onClick={handleResetStudent}
                                     className="inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold
-                 bg-rose-500/15 text-rose-200 ring-1 ring-rose-500/30
+                 bg-rose-500/15 text-rose-700 ring-1 ring-rose-500/30
                  hover:bg-rose-500/25 hover:ring-rose-500/40
                  active:scale-[0.99] transition"
                                 >
@@ -292,33 +296,33 @@ const StudentZoneUpdate: React.FC = () => {
 
                         <div className="overflow-x-auto">
                             <table className="w-full">
-                                <thead className="bg-white/5 border-b border-white/10">
+                                <thead className="bg-[var(--panel-card-soft)] border-b border-[var(--panel-border)]">
                                     <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                                        <th className="px-6 py-3 text-left text-xs font-semibold text-[var(--panel-text-secondary)] uppercase tracking-wider">
                                             Student
                                         </th>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                                        <th className="px-6 py-3 text-left text-xs font-semibold text-[var(--panel-text-secondary)] uppercase tracking-wider">
                                             Batch Code
                                         </th>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                                        <th className="px-6 py-3 text-left text-xs font-semibold text-[var(--panel-text-secondary)] uppercase tracking-wider">
                                             FeePlan
                                         </th>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                                        <th className="px-6 py-3 text-left text-xs font-semibold text-[var(--panel-text-secondary)] uppercase tracking-wider">
                                             Zone
                                         </th>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                                        <th className="px-6 py-3 text-left text-xs font-semibold text-[var(--panel-text-secondary)] uppercase tracking-wider">
                                             Enrollment Date
                                         </th>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                                        <th className="px-6 py-3 text-left text-xs font-semibold text-[var(--panel-text-secondary)] uppercase tracking-wider">
                                             Actions
                                         </th>
                                     </tr>
                                 </thead>
 
-                                <tbody className="divide-y divide-white/10">
+                                <tbody className="divide-y divide-[var(--panel-border)]">
                                     {students.length === 0 ? (
                                         <tr>
-                                            <td colSpan={6} className="px-6 py-14 text-center text-slate-300">
+                                            <td colSpan={6} className="px-6 py-14 text-center text-[var(--panel-text-secondary)]">
                                                 No students found
                                             </td>
                                         </tr>
@@ -330,7 +334,7 @@ const StudentZoneUpdate: React.FC = () => {
                                                     : "—";
 
                                             return (
-                                                <tr key={student._id} className="hover:bg-white/5 transition">
+                                                <tr key={student._id} className="hover:bg-[var(--panel-card)] transition">
                                                     <td className="px-6 py-4 whitespace-nowrap">
                                                         <div className="flex items-center">
                                                             <div className="h-10 w-10 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white font-semibold">
@@ -338,14 +342,14 @@ const StudentZoneUpdate: React.FC = () => {
                                                             </div>
 
                                                             <div className="ml-4">
-                                                                <div className="text-sm font-semibold text-white">{student.fullName}</div>
-                                                                <div className="text-sm text-slate-300">{student.email}</div>
+                                                                <div className="text-sm font-semibold text-[var(--panel-text-primary)]">{student.fullName}</div>
+                                                                <div className="text-sm text-[var(--panel-text-secondary)]">{student.email}</div>
                                                             </div>
                                                         </div>
                                                     </td>
 
                                                     <td className="px-6 py-4 whitespace-nowrap">
-                                                        <span className={`${pill} bg-slate-500/15 text-slate-200 ring-1 ring-slate-500/30`}>
+                                                        <span className={`${pill} bg-slate-500/15 text-slate-700 ring-1 ring-slate-500/30`}>
                                                             {batchCode}
                                                         </span>
                                                     </td>
@@ -363,7 +367,7 @@ const StudentZoneUpdate: React.FC = () => {
                                                     </td>
 
                                                     <td className="px-6 py-4 whitespace-nowrap">
-                                                        <div className="text-sm text-slate-200">{safeDate(student.joinedMonth)}</div>
+                                                        <div className="text-sm text-[var(--panel-text-secondary)]">{safeDate(student.joinedMonth)}</div>
                                                     </td>
 
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">

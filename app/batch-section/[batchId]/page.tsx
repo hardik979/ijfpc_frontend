@@ -11,7 +11,7 @@ export default function BatchDetailPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
+        <div className="min-h-screen bg-[var(--panel-bg-950)] text-[var(--panel-text-primary)] flex items-center justify-center">
           Loading...
         </div>
       }

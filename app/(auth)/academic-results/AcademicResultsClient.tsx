@@ -3,6 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, CalendarDays, GraduationCap, RefreshCw } from "lucide-react";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { useTheme } from "@/context/ThemeContext";
 import { currentMonth, type TabKey } from "./data";
 import { TabBar, CourseFilter } from "./ui";
 import {
@@ -24,16 +26,17 @@ export default function AcademicResultsClient() {
   const [month, setMonth] = useState<string>(currentMonth());
   const [courseId, setCourseId] = useState<string>("");
   const [refreshKey, setRefreshKey] = useState(0);
+  const { theme } = useTheme();
 
   return (
-    <div className="min-h-screen bg-slate-950 p-4 text-slate-100 sm:p-6">
+    <div className="min-h-screen bg-[var(--panel-bg-950)] p-4 text-[var(--panel-text-primary)] sm:p-6">
       <div className="mx-auto max-w-7xl space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
             <Link
               href="/studentOverview"
-              className="grid h-9 w-9 place-items-center rounded-lg border border-slate-700 bg-slate-900 text-slate-300 transition hover:bg-slate-800"
+              className="grid h-9 w-9 place-items-center rounded-lg border border-[var(--panel-border-strong)] bg-[var(--panel-card)] text-[var(--panel-text-secondary)] transition hover:bg-[var(--panel-card)] hover:text-[var(--panel-text-primary)]"
               aria-label="Back to students"
             >
               <ArrowLeft className="h-4 w-4" />
@@ -42,27 +45,29 @@ export default function AcademicResultsClient() {
               <GraduationCap className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-semibold text-white">Academic Results</h1>
-              <p className="text-sm text-slate-400">{DESCRIPTIONS[tab]}</p>
+              <h1 className="text-2xl font-semibold text-[var(--panel-text-primary)]">Academic Results</h1>
+              <p className="text-sm text-[var(--panel-text-muted)]">{DESCRIPTIONS[tab]}</p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <ThemeToggle />
             {(tab === "quiz" || tab === "mock" || tab === "ai") && (
               <CourseFilter value={courseId} onChange={setCourseId} />
             )}
             <div className="relative">
-              <CalendarDays className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <CalendarDays className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--panel-text-muted)]" />
               <input
                 type="month"
                 value={month}
                 onChange={(e) => setMonth(e.target.value)}
-                className="rounded-md border border-slate-700 bg-slate-900 py-1.5 pl-8 pr-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 [color-scheme:dark]"
+                style={{ colorScheme: theme }}
+                className="rounded-md border border-[var(--panel-border-strong)] bg-[var(--panel-card)] py-1.5 pl-8 pr-3 text-sm text-[var(--panel-text-primary)] focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <button
               onClick={() => setRefreshKey((k) => k + 1)}
-              className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 hover:bg-slate-800"
+              className="inline-flex items-center gap-1.5 rounded-md border border-[var(--panel-border-strong)] bg-[var(--panel-card)] px-3 py-1.5 text-sm text-[var(--panel-text-primary)] hover:bg-[var(--panel-card)]"
             >
               <RefreshCw className="h-4 w-4" />
               Refresh

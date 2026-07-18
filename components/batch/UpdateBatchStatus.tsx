@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import { API_LMS_URL } from "@/lib/api";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   ArrowLeft,
   Layers,
@@ -25,9 +26,9 @@ type Status = (typeof STATUS_OPTIONS)[number];
 
 const statusBadge = (status?: string) => {
   const s = (status || "").toLowerCase();
-  if (s === "active") return "bg-emerald-500/15 text-emerald-200 ring-1 ring-emerald-500/30";
-  if (s === "completed") return "bg-blue-500/15 text-blue-200 ring-1 ring-blue-500/30";
-  return "bg-amber-500/15 text-amber-200 ring-1 ring-amber-500/30";
+  if (s === "active") return "bg-emerald-500/15 text-emerald-700 ring-1 ring-emerald-500/30";
+  if (s === "completed") return "bg-blue-500/15 text-blue-700 ring-1 ring-blue-500/30";
+  return "bg-amber-500/15 text-amber-700 ring-1 ring-amber-500/30";
 };
 
 export default function UpdateBatchStatus() {
@@ -122,7 +123,7 @@ export default function UpdateBatchStatus() {
   };
 
   return (
-    <section className="relative min-h-screen w-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100">
+    <section className="relative min-h-screen w-full bg-gradient-to-br from-[var(--panel-bg-950)] via-[var(--panel-bg-900)] to-[var(--panel-bg-950)] text-[var(--panel-text-primary)]">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -top-40 -left-40 h-96 w-96 rounded-full bg-violet-500/10 blur-3xl" />
         <div className="absolute top-20 -right-40 h-96 w-96 rounded-full bg-fuchsia-500/10 blur-3xl" />
@@ -130,60 +131,63 @@ export default function UpdateBatchStatus() {
       </div>
 
       <div className="relative z-10 mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
-        {/* Back */}
-        <button
-          onClick={() => router.push("/batch-section")}
-          className="group mb-8 flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-slate-300 backdrop-blur-sm transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
-        >
-          <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
-          <span>Back to Batch Section</span>
-        </button>
+        {/* Back + Theme toggle */}
+        <div className="mb-8 flex items-center justify-between gap-3">
+          <button
+            onClick={() => router.push("/batch-section")}
+            className="group flex items-center gap-2.5 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-4 py-2.5 text-sm font-medium text-[var(--panel-text-secondary)] backdrop-blur-sm transition-all hover:border-[var(--panel-border)] hover:bg-[var(--panel-border)] hover:text-[var(--panel-text-primary)]"
+          >
+            <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+            <span>Back to Batch Section</span>
+          </button>
+          <ThemeToggle />
+        </div>
 
         {/* Header */}
         <div className="mb-8 flex items-start gap-5">
           <div className="relative">
             <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 blur-xl" />
-            <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl border border-white/20 bg-gradient-to-br from-violet-500/10 to-fuchsia-500/10 backdrop-blur-sm">
+            <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl border border-[var(--panel-border)] bg-gradient-to-br from-violet-500/10 to-fuchsia-500/10 backdrop-blur-sm">
               <RefreshCw className="h-8 w-8 text-violet-400" />
             </div>
           </div>
           <div className="flex-1">
-            <h1 className="mb-2 text-3xl font-bold tracking-tight text-white sm:text-4xl">
+            <h1 className="mb-2 text-3xl font-bold tracking-tight text-[var(--panel-text-primary)] sm:text-4xl">
               Update Batch Status
             </h1>
-            <p className="text-base text-slate-400">
+            <p className="text-base text-[var(--panel-text-muted)]">
               Select an existing batch and move it to a new status.
             </p>
           </div>
         </div>
 
         {/* Card */}
-        <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-2xl backdrop-blur-xl">
+        <div className="relative overflow-hidden rounded-3xl border border-[var(--panel-border)] bg-[var(--panel-card)] shadow-2xl backdrop-blur-xl">
           <div className="relative p-6 sm:p-8 lg:p-10">
-            <div className="mb-8 flex items-center gap-3 border-b border-white/10 pb-6">
+            <div className="mb-8 flex items-center gap-3 border-b border-[var(--panel-border)] pb-6">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-violet-500/30 bg-violet-500/10">
                 <Activity className="h-5 w-5 text-violet-400" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-white">Status Update Form</p>
-                <p className="text-xs text-slate-500">Fields marked * are required</p>
+                <p className="text-sm font-semibold text-[var(--panel-text-primary)]">Status Update Form</p>
+                <p className="text-xs text-[var(--panel-text-faint)]">Fields marked * are required</p>
               </div>
             </div>
 
             <div className="space-y-6">
               {/* Search */}
               <div>
-                <label className="mb-2.5 flex items-center gap-2 text-sm font-semibold text-slate-200">
+                <label className="mb-2.5 flex items-center gap-2 text-sm font-semibold text-[var(--panel-text-secondary)]">
                   <Search className="h-4 w-4 text-fuchsia-400" />
                   Find a batch
                 </label>
                 <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--panel-text-faint)]" />
                   <input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Search by name or status..."
-                    className="w-full rounded-2xl border-2 border-white/10 bg-white/[0.02] py-3.5 pl-10 pr-3 text-sm text-slate-100 placeholder:text-slate-500 outline-none transition-all focus:border-fuchsia-500/50 hover:border-white/20"
+                    className="w-full rounded-2xl border-2 border-[var(--panel-border)] bg-[var(--panel-card-soft)] py-3.5 pl-10 pr-3 text-sm text-[var(--panel-text-primary)] placeholder:text-[var(--panel-text-faint)] outline-none transition-all focus:border-fuchsia-500/50 hover:border-[var(--panel-border)]"
                   />
                 </div>
               </div>
@@ -191,22 +195,22 @@ export default function UpdateBatchStatus() {
               {/* Batch + New status */}
               <div className="grid gap-6 sm:grid-cols-2">
                 <div>
-                  <label className="mb-2.5 flex items-center gap-2 text-sm font-semibold text-slate-200">
+                  <label className="mb-2.5 flex items-center gap-2 text-sm font-semibold text-[var(--panel-text-secondary)]">
                     <Layers className="h-4 w-4 text-violet-400" />
-                    Batch <span className="text-red-400">*</span>
+                    Batch <span className="text-red-700">*</span>
                   </label>
-                  <div className="rounded-2xl border-2 border-white/10 bg-white/[0.02] transition-all focus-within:border-violet-500/50 hover:border-white/20">
+                  <div className="rounded-2xl border-2 border-[var(--panel-border)] bg-[var(--panel-card-soft)] transition-all focus-within:border-violet-500/50 hover:border-[var(--panel-border)]">
                     <select
                       value={batchId}
                       onChange={(e) => setBatchId(e.target.value)}
                       disabled={loadingBatches}
-                      className="w-full appearance-none bg-transparent px-4 py-3.5 text-sm text-slate-100 outline-none"
+                      className="w-full appearance-none bg-transparent px-4 py-3.5 text-sm text-[var(--panel-text-primary)] outline-none"
                     >
-                      <option value="" className="bg-slate-900">
+                      <option value="" className="bg-[var(--panel-bg-900)]">
                         {loadingBatches ? "Loading batches..." : "Select a batch"}
                       </option>
                       {filteredBatches.map((b) => (
-                        <option key={b._id} value={b._id} className="bg-slate-900">
+                        <option key={b._id} value={b._id} className="bg-[var(--panel-bg-900)]">
                           {b.batch || b._id}
                           {b.status ? ` — ${b.status}` : ""}
                         </option>
@@ -216,19 +220,19 @@ export default function UpdateBatchStatus() {
                 </div>
 
                 <div>
-                  <label className="mb-2.5 flex items-center gap-2 text-sm font-semibold text-slate-200">
+                  <label className="mb-2.5 flex items-center gap-2 text-sm font-semibold text-[var(--panel-text-secondary)]">
                     <CheckCircle className="h-4 w-4 text-emerald-400" />
-                    New status <span className="text-red-400">*</span>
+                    New status <span className="text-red-700">*</span>
                   </label>
-                  <div className="rounded-2xl border-2 border-white/10 bg-white/[0.02] transition-all focus-within:border-emerald-500/50 hover:border-white/20">
+                  <div className="rounded-2xl border-2 border-[var(--panel-border)] bg-[var(--panel-card-soft)] transition-all focus-within:border-emerald-500/50 hover:border-[var(--panel-border)]">
                     <select
                       value={status}
                       onChange={(e) => setStatus(e.target.value as Status)}
                       disabled={!batchId}
-                      className="w-full appearance-none bg-transparent px-4 py-3.5 text-sm text-slate-100 outline-none disabled:opacity-50"
+                      className="w-full appearance-none bg-transparent px-4 py-3.5 text-sm text-[var(--panel-text-primary)] outline-none disabled:opacity-50"
                     >
                       {STATUS_OPTIONS.map((s) => (
-                        <option key={s} value={s} className="bg-slate-900">
+                        <option key={s} value={s} className="bg-[var(--panel-bg-900)]">
                           {s}
                         </option>
                       ))}
@@ -239,13 +243,13 @@ export default function UpdateBatchStatus() {
 
               {/* Selected batch summary */}
               {selectedBatch && (
-                <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm">
-                  <span className="text-slate-400">Updating:</span>
-                  <span className="font-semibold text-white">
+                <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] px-4 py-3 text-sm">
+                  <span className="text-[var(--panel-text-muted)]">Updating:</span>
+                  <span className="font-semibold text-[var(--panel-text-primary)]">
                     {selectedBatch.batch || selectedBatch._id}
                   </span>
-                  <span className="text-slate-500">·</span>
-                  <span className="text-slate-400">Current:</span>
+                  <span className="text-[var(--panel-text-faint)]">·</span>
+                  <span className="text-[var(--panel-text-muted)]">Current:</span>
                   <span
                     className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusBadge(
                       selectedBatch.status
@@ -253,8 +257,8 @@ export default function UpdateBatchStatus() {
                   >
                     {selectedBatch.status || "—"}
                   </span>
-                  <span className="text-slate-500">→</span>
-                  <span className="text-slate-400">New:</span>
+                  <span className="text-[var(--panel-text-faint)]">→</span>
+                  <span className="text-[var(--panel-text-muted)]">New:</span>
                   <span
                     className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusBadge(
                       status
@@ -291,7 +295,7 @@ export default function UpdateBatchStatus() {
                     )}
                   </div>
                 </button>
-                <p className="mt-3 flex items-center justify-center gap-2 text-xs text-slate-500">
+                <p className="mt-3 flex items-center justify-center gap-2 text-xs text-[var(--panel-text-faint)]">
                   <AlertCircle className="h-3.5 w-3.5" />
                   Status must be one of: {STATUS_OPTIONS.join(", ")}.
                 </p>

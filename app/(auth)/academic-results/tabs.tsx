@@ -230,8 +230,8 @@ export function DailyQuizTab({
           onDateSelect={loadDay}
           metrics={[
             { key: "totalAttempts", label: "Attempts" },
-            { key: "evaluatedCount", label: "Evaluated", className: "text-emerald-400" },
-            { key: "pendingCount", label: "Pending", className: "text-amber-400" },
+            { key: "evaluatedCount", label: "Evaluated", className: "text-emerald-800" },
+            { key: "pendingCount", label: "Pending", className: "text-amber-700" },
           ]}
         />
       </div>
@@ -432,7 +432,7 @@ export function MockInterviewTab({
           onDateSelect={loadDay}
           metrics={[
             { key: "totalAttempts", label: "Interviews" },
-            { key: "uniqueUserCount", label: "Students", className: "text-emerald-400" },
+            { key: "uniqueUserCount", label: "Students", className: "text-emerald-800" },
           ]}
         />
       </div>
@@ -641,8 +641,8 @@ export function AiHrCallingTab({
           onDateSelect={loadDay}
           metrics={[
             { key: "totalCalls", label: "Calls" },
-            { key: "uniqueCandidateCount", label: "Candidates", className: "text-emerald-400" },
-            { key: "analyzedCount", label: "Analyzed", className: "text-violet-400" },
+            { key: "uniqueCandidateCount", label: "Candidates", className: "text-emerald-800" },
+            { key: "analyzedCount", label: "Analyzed", className: "text-violet-700" },
           ]}
         />
       </div>
@@ -852,7 +852,7 @@ export function RealHrCallingTab({
           onDateSelect={loadDay}
           metrics={[
             { key: "uniqueLeadCount", label: "Students" },
-            { key: "totalCalls", label: "Calls", className: "text-emerald-400" },
+            { key: "totalCalls", label: "Calls", className: "text-emerald-800" },
           ]}
         />
       </div>
