@@ -11,6 +11,7 @@ import type { ResumeData } from "@/lib/resume";
 import type { ResumeFormValues } from "@/lib/resumeForm";
 import { formToResumeData } from "@/lib/resumeForm";
 import { stripBlankTrailingPagesFromBlob } from "@/lib/pdfPostProcess";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 function PdfModal({ data, onClose }: { data: ResumeData; onClose: () => void }) {
   const [url, setUrl] = useState<string | null>(null);
@@ -145,15 +146,19 @@ export default function EditorTopBar({ savedLabel }: { savedLabel: string }) {
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setDocData(formToResumeData(getValues()))}
-          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_4px_14px_rgba(124,58,237,0.35)] transition-all hover:-translate-y-0.5 hover:shadow-[0_6px_20px_rgba(124,58,237,0.45)]"
-        >
-          <Download className="h-4 w-4" />
-          <span className="hidden sm:inline">Preview &amp; Download</span>
-          <span className="sm:hidden">PDF</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+
+          <button
+            type="button"
+            onClick={() => setDocData(formToResumeData(getValues()))}
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_4px_14px_rgba(124,58,237,0.35)] transition-all hover:-translate-y-0.5 hover:shadow-[0_6px_20px_rgba(124,58,237,0.45)]"
+          >
+            <Download className="h-4 w-4" />
+            <span className="hidden sm:inline">Preview &amp; Download</span>
+            <span className="sm:hidden">PDF</span>
+          </button>
+        </div>
       </div>
 
       {mounted &&

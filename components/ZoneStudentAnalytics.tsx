@@ -239,20 +239,20 @@ export default function ZoneStudentAnalytics() {
 
   return (
     <>
-      <div className="flex h-full flex-col rounded-xl border border-[#312a63] bg-[#120f2d] p-5">
+      <div className="flex h-full flex-col rounded-xl border border-[var(--so-border)] bg-[var(--so-bg-card)] p-5">
         <div className="mb-3">
-          <h2 className="text-sm font-semibold text-white">
+          <h2 className="text-sm font-semibold text-[var(--so-text-primary)]">
             Active students by zone and course
           </h2>
-          <p className="mt-0.5 text-xs text-[#a8a0d6]">
+          <p className="mt-0.5 text-xs text-[var(--so-text-secondary)]">
             Click any count to see those students
           </p>
         </div>
 
         {countsError ? (
-          <div className="text-sm text-red-400">{countsError}</div>
+          <div className="text-sm text-red-700">{countsError}</div>
         ) : loadingCounts ? (
-          <div className="flex flex-1 items-center justify-center py-10 text-[#a8a0d6]">
+          <div className="flex flex-1 items-center justify-center py-10 text-[var(--so-text-secondary)]">
             <Loader2 className="mr-2 h-5 w-5 animate-spin" />
             Loading zones...
           </div>
@@ -260,7 +260,7 @@ export default function ZoneStudentAnalytics() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[520px] text-sm tabular-nums">
               <thead>
-                <tr className="border-b border-[#312a63] text-[11px] font-semibold uppercase tracking-wider text-[#9a92c9]">
+                <tr className="border-b border-[var(--so-border)] text-[11px] font-semibold uppercase tracking-wider text-[var(--so-text-muted)]">
                   <th className="pb-2 pr-2 text-left font-semibold">Zone</th>
                   {SUBS.map((sub) => (
                     <th key={sub.key} className="pb-2 text-right font-semibold">
@@ -289,9 +289,9 @@ export default function ZoneStudentAnalytics() {
                   return (
                     <tr
                       key={zone.key}
-                      className="border-b border-[#312a63]/50 transition hover:bg-[#1b1640]/60"
+                      className="border-b border-[var(--so-border)]/50 transition hover:bg-[var(--so-bg-hover)]/60"
                     >
-                      <td className="whitespace-nowrap py-2.5 pr-2 font-medium text-white">
+                      <td className="whitespace-nowrap py-2.5 pr-2 font-medium text-[var(--so-text-primary)]">
                         <span
                           className="mr-2 inline-block h-2 w-2 rounded-full align-[1px]"
                           style={{ backgroundColor: zone.dot }}
@@ -307,8 +307,8 @@ export default function ZoneStudentAnalytics() {
                               onClick={() => openZone(zone.key, sub.key)}
                               className={`${cellButton} ${
                                 value === 0
-                                  ? "text-[#9a92c9]"
-                                  : "text-white"
+                                  ? "text-[var(--so-text-muted)]"
+                                  : "text-[var(--so-text-primary)]"
                               }`}
                             >
                               {value}
@@ -320,14 +320,14 @@ export default function ZoneStudentAnalytics() {
                         <button
                           type="button"
                           onClick={() => openZone(zone.key)}
-                          className={`${cellButton} font-bold text-white`}
+                          className={`${cellButton} font-bold text-[var(--so-text-primary)]`}
                         >
                           {breakdown.total}
                         </button>
                       </td>
                       <td className="py-2.5 pl-4">
                         <span className="flex items-center justify-end gap-2">
-                          <span className="h-1.5 w-16 overflow-hidden rounded-full bg-white/10">
+                          <span className="h-1.5 w-16 overflow-hidden rounded-full bg-[var(--so-border)]">
                             <span
                               className="block h-full rounded-full"
                               style={{
@@ -336,7 +336,7 @@ export default function ZoneStudentAnalytics() {
                               }}
                             />
                           </span>
-                          <span className="w-8 text-right text-xs text-[#a8a0d6]">
+                          <span className="w-8 text-right text-xs text-[var(--so-text-secondary)]">
                             {share}%
                           </span>
                         </span>
@@ -346,14 +346,14 @@ export default function ZoneStudentAnalytics() {
                 })}
               </tbody>
               <tfoot>
-                <tr className="text-sm font-semibold text-[#a8a0d6]">
+                <tr className="text-sm font-semibold text-[var(--so-text-secondary)]">
                   <td className="pt-2.5 pr-2">All active</td>
                   {subTotals.map((value, i) => (
                     <td key={SUBS[i].key} className="pt-2.5 pr-2 text-right">
                       {value}
                     </td>
                   ))}
-                  <td className="pt-2.5 pr-2 text-right font-bold text-white">
+                  <td className="pt-2.5 pr-2 text-right font-bold text-[var(--so-text-primary)]">
                     {total}
                   </td>
                   <td />
@@ -363,7 +363,7 @@ export default function ZoneStudentAnalytics() {
           </div>
         )}
 
-        <p className="mt-auto pt-3 text-[11px] text-[#9a92c9]">
+        <p className="mt-auto pt-3 text-[11px] text-[var(--so-text-muted)]">
           PS = Job-Assistance · DE = Data Engineering · DS = Data Science · DA =
           Data Analyst
         </p>
@@ -376,23 +376,23 @@ export default function ZoneStudentAnalytics() {
           role="presentation"
         >
           <div
-            className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-[#120f2d] shadow-xl ring-1 ring-[#312a63]"
+            className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-[var(--so-bg-card)] shadow-xl ring-1 ring-[var(--so-border)]"
             onClick={(event) => event.stopPropagation()}
             role="dialog"
             aria-modal="true"
             aria-label={`${activeMeta?.label ?? "Zone"} students`}
           >
-            <div className="flex items-center justify-between border-b border-[#312a63] px-5 py-4">
+            <div className="flex items-center justify-between border-b border-[var(--so-border)] px-5 py-4">
               <div className="flex items-center gap-2">
                 <span
                   className="h-2.5 w-2.5 rounded-full"
-                  style={{ backgroundColor: activeMeta?.dot ?? "#9a92c9" }}
+                  style={{ backgroundColor: activeMeta?.dot ?? "var(--so-text-muted)" }}
                 />
-                <h4 className="text-sm font-semibold text-white">
+                <h4 className="text-sm font-semibold text-[var(--so-text-primary)]">
                   {activeMeta?.label ?? "Zone"} zone students
                   {activeSub ? ` — ${activeSub}` : ""}
                 </h4>
-                <span className="ml-2 text-xs text-[#a8a0d6]">
+                <span className="ml-2 text-xs text-[var(--so-text-secondary)]">
                   ({students.length})
                 </span>
               </div>
@@ -400,7 +400,7 @@ export default function ZoneStudentAnalytics() {
               <button
                 type="button"
                 onClick={closeModal}
-                className="rounded-md p-1 text-[#a8a0d6] hover:bg-[#1b1640] hover:text-white"
+                className="rounded-md p-1 text-[var(--so-text-secondary)] hover:bg-[var(--so-bg-hover)] hover:text-[var(--so-text-primary)]"
                 aria-label="Close student list"
               >
                 <X className="h-4 w-4" />
@@ -409,21 +409,21 @@ export default function ZoneStudentAnalytics() {
 
             <div className="flex-1 overflow-y-auto">
               {loadingStudents ? (
-                <div className="flex items-center justify-center py-12 text-[#a8a0d6]">
+                <div className="flex items-center justify-center py-12 text-[var(--so-text-secondary)]">
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                   Loading students...
                 </div>
               ) : studentsError ? (
-                <div className="p-6 text-sm text-red-400">
+                <div className="p-6 text-sm text-red-700">
                   {studentsError}
                 </div>
               ) : students.length === 0 ? (
-                <div className="p-6 text-center text-sm text-[#a8a0d6]">
+                <div className="p-6 text-center text-sm text-[var(--so-text-secondary)]">
                   No students found in this zone.
                 </div>
               ) : (
                 <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-[#120f2d]/95 text-xs uppercase text-[#9a92c9] backdrop-blur">
+                  <thead className="sticky top-0 bg-[var(--so-bg-card)]/95 text-xs uppercase text-[var(--so-text-muted)] backdrop-blur">
                     <tr>
                       <th className="px-5 py-2 text-left font-medium">#</th>
                       <th className="px-5 py-2 text-left font-medium">Name</th>
@@ -445,20 +445,20 @@ export default function ZoneStudentAnalytics() {
                           student.clerkId ??
                           `${student.email}-${index}`
                         }
-                        className="border-t border-[#312a63]/60 hover:bg-[#1b1640]/60"
+                        className="border-t border-[var(--so-border)]/60 hover:bg-[var(--so-bg-hover)]/60"
                       >
-                        <td className="px-5 py-2 text-[#9a92c9]">
+                        <td className="px-5 py-2 text-[var(--so-text-muted)]">
                           {index + 1}
                         </td>
-                        <td className="px-5 py-2 text-white">
+                        <td className="px-5 py-2 text-[var(--so-text-primary)]">
                           {student.fullName || "—"}
                           {student.isPaused ? (
-                            <span className="ml-2 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-300 ring-1 ring-amber-500/30">
+                            <span className="ml-2 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-700 ring-1 ring-amber-500/30">
                               Paused
                             </span>
                           ) : null}
                         </td>
-                        <td className="px-5 py-2 text-[#a8a0d6]">
+                        <td className="px-5 py-2 text-[var(--so-text-secondary)]">
                           {student.email || "—"}
                         </td>
                         <td className="px-5 py-2">
@@ -467,17 +467,17 @@ export default function ZoneStudentAnalytics() {
                               {student.courses.map((course) => (
                                 <span
                                   key={course}
-                                  className="rounded-full bg-white/[0.06] px-2 py-0.5 text-xs font-medium text-[#a8a0d6] ring-1 ring-[#312a63]"
+                                  className="rounded-full bg-[var(--so-bg-hover)] px-2 py-0.5 text-xs font-medium text-[var(--so-text-secondary)] ring-1 ring-[var(--so-border)]"
                                 >
                                   {course}
                                 </span>
                               ))}
                             </div>
                           ) : (
-                            <span className="text-[#9a92c9]">—</span>
+                            <span className="text-[var(--so-text-muted)]">—</span>
                           )}
                         </td>
-                        <td className="px-5 py-2 text-[#9a92c9]">
+                        <td className="px-5 py-2 text-[var(--so-text-muted)]">
                           {student.joinedMonth || "—"}
                         </td>
                       </tr>

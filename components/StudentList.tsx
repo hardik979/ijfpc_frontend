@@ -28,6 +28,8 @@ import {
   YAxis,
 } from "recharts";
 import Link from "next/link";
+import { useTheme } from "@/context/ThemeContext";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface BatchHistoryItem {
   _id: string;
@@ -81,12 +83,12 @@ const pill = "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-sem
 const zoneBadge = (zone?: string) => {
   const z = (zone || "").toLowerCase();
   if (z === "blue")
-    return "bg-blue-500/15 text-blue-300 ring-1 ring-blue-500/30";
+    return "bg-blue-500/15 text-blue-700 ring-1 ring-blue-500/30";
   if (z === "yellow")
-    return "bg-yellow-500/15 text-yellow-300 ring-1 ring-yellow-500/30";
+    return "bg-yellow-500/15 text-yellow-700 ring-1 ring-yellow-500/30";
   if (z === "green")
-    return "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30";
-  return "bg-slate-500/15 text-slate-300 ring-1 ring-slate-500/30";
+    return "bg-emerald-500/15 text-emerald-700 ring-1 ring-emerald-500/30";
+  return "bg-gray-500/15 text-gray-700 ring-1 ring-gray-500/30";
 };
 
 const shortCourseName = (title?: string) => {
@@ -98,7 +100,10 @@ const shortCourseName = (title?: string) => {
 
 // One hue per course, reused everywhere that course appears (tiles, matrix,
 // chips). Validated for CVD separation + contrast on the dark surface.
-const COURSE_COLORS = ["#199e70", "#d95926", "#d55181", "#e66767"];
+// Light-mode variants are darkened for AA text contrast on a white card —
+// used for the exact same badges, just legible against the opposite surface.
+const COURSE_COLORS_DARK = ["#199e70", "#d95926", "#d55181", "#e66767"];
+const COURSE_COLORS_LIGHT = ["#0b6b4c", "#a8460f", "#a63368", "#b23a3a"];
 
 
 const zoneOrder = (zone?: string) => {
@@ -124,6 +129,8 @@ const safeDate = (val?: string) => {
 
 const StudentsListPage = () => {
   const router = useRouter();
+  const { theme } = useTheme();
+  const COURSE_COLORS = theme === "dark" ? COURSE_COLORS_DARK : COURSE_COLORS_LIGHT;
   const searchBoxRef = useRef<HTMLDivElement | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
@@ -800,24 +807,24 @@ const StudentsListPage = () => {
 
   if (loading && !isAllView) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#09061a]">
+      <div className="flex min-h-screen items-center justify-center bg-[var(--so-bg-page)]">
         <div className="text-center">
           <div className="mx-auto h-12 w-12 animate-spin rounded-full border-b-2 border-[#8b5cf6]" />
-          <p className="mt-4 text-[#a8a0d6]">Loading students...</p>
+          <p className="mt-4 text-[var(--so-text-secondary)]">Loading students...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#09061a] p-6 text-white">
+    <div className="min-h-screen bg-[var(--so-bg-page)] p-6 text-[var(--so-text-primary)]">
       <div className="mx-auto max-w-7xl">
         <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-white">
+            <h1 className="text-2xl font-semibold tracking-tight text-[var(--so-text-primary)]">
               Students Overview
             </h1>
-            <p className="mt-1 text-sm text-[#a8a0d6]">
+            <p className="mt-1 text-sm text-[var(--so-text-secondary)]">
               {totalEnrolled > 0
                 ? `${totalEnrolled + pausedStudentsCount} students · ${activeStudentsCount} active · ${pausedStudentsCount} paused · ${placedStudentsCount} placed`
                 : "View all students, search them, and open complete details"}
@@ -825,47 +832,49 @@ const StudentsListPage = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <ThemeToggle />
+
             <Link
               href="/batch-section"
-              className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-[#312a63] bg-[#0f0b24] px-3.5 py-2 text-sm font-medium text-white transition hover:bg-[#1b1640]"
+              className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-[var(--so-border)] bg-[var(--so-bg-input)] px-3.5 py-2 text-sm font-medium text-[var(--so-text-primary)] transition hover:bg-[var(--so-bg-hover)]"
             >
               <Layers className="h-4 w-4" />
               Batch Section
             </Link>
 
             <details className="relative shrink-0">
-              <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-lg border border-[#312a63] bg-[#0f0b24] px-3.5 py-2 text-sm font-medium text-white transition hover:bg-[#1b1640] [&::-webkit-details-marker]:hidden">
+              <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-lg border border-[var(--so-border)] bg-[var(--so-bg-input)] px-3.5 py-2 text-sm font-medium text-[var(--so-text-primary)] transition hover:bg-[var(--so-bg-hover)] [&::-webkit-details-marker]:hidden">
                 More
                 <ChevronDown className="h-4 w-4" />
               </summary>
-              <div className="absolute right-0 top-[calc(100%+6px)] z-30 w-72 rounded-xl border border-[#312a63] bg-[#120f2d] p-1.5 shadow-2xl">
+              <div className="absolute right-0 top-[calc(100%+6px)] z-30 w-72 rounded-xl border border-[var(--so-border)] bg-[var(--so-bg-card)] p-1.5 shadow-2xl">
                 <button
                   onClick={() => { router.push('/students-call-reports') }}
-                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-white transition hover:bg-[#1b1640]"
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-[var(--so-text-primary)] transition hover:bg-[var(--so-bg-hover)]"
                 >
-                  <Phone className="h-4 w-4 text-[#9a92c9]" />
+                  <Phone className="h-4 w-4 text-[var(--so-text-muted)]" />
                   Call Recording Analysis Dashboard
                 </button>
                 <Link
                   href="/academic-results"
-                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-white transition hover:bg-[#1b1640]"
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-[var(--so-text-primary)] transition hover:bg-[var(--so-bg-hover)]"
                 >
-                  <GraduationCap className="h-4 w-4 text-[#9a92c9]" />
+                  <GraduationCap className="h-4 w-4 text-[var(--so-text-muted)]" />
                   Academic Results
                 </Link>
                 <Link
                   href="/communication-analytics"
-                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-white transition hover:bg-[#1b1640]"
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-[var(--so-text-primary)] transition hover:bg-[var(--so-bg-hover)]"
                 >
-                  <BarChart3 className="h-4 w-4 text-[#9a92c9]" />
+                  <BarChart3 className="h-4 w-4 text-[var(--so-text-muted)]" />
                   Communication Analytics
                 </Link>
 
                  <Link
                   href="/resume-builder"
-                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-white transition hover:bg-[#1b1640]"
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-[var(--so-text-primary)] transition hover:bg-[var(--so-bg-hover)]"
                 >
-                  <GraduationCap className="h-4 w-4 text-[#9a92c9]" />
+                  <GraduationCap className="h-4 w-4 text-[var(--so-text-muted)]" />
                   C.V. Builder
                 </Link>
               </div>
@@ -891,20 +900,20 @@ const StudentsListPage = () => {
                 setSearchDraft("");
                 setAppliedSearch("");
               }}
-              className="rounded-xl border border-[#312a63] bg-[#120f2d] p-4 text-left transition hover:border-[#8b5cf6]/70 hover:bg-[#1b1640]"
+              className="rounded-xl border border-[var(--so-border)] bg-[var(--so-bg-card)] p-4 text-left transition hover:border-[#8b5cf6]/70 hover:bg-[var(--so-bg-hover)]"
             >
               <div className="flex items-center justify-between gap-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9a92c9]">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--so-text-muted)]">
                   Active students
                 </p>
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#8b5cf6]/15 text-[#8b5cf6]">
                   <Users className="h-4 w-4" />
                 </span>
               </div>
-              <p className="mt-1 text-3xl font-bold text-white">
+              <p className="mt-1 text-3xl font-bold text-[var(--so-text-primary)]">
                 {activeStudentsCount}
               </p>
-              <p className="mt-1 text-xs text-[#a8a0d6]">not placed · enrolled</p>
+              <p className="mt-1 text-xs text-[var(--so-text-secondary)]">not placed · enrolled</p>
             </button>
 
             <button
@@ -915,20 +924,20 @@ const StudentsListPage = () => {
                 setSearchDraft("");
                 setAppliedSearch("");
               }}
-              className="rounded-xl border border-[#312a63] bg-[#120f2d] p-4 text-left transition hover:border-amber-500/60 hover:bg-[#1b1640]"
+              className="rounded-xl border border-[var(--so-border)] bg-[var(--so-bg-card)] p-4 text-left transition hover:border-amber-500/60 hover:bg-[var(--so-bg-hover)]"
             >
               <div className="flex items-center justify-between gap-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9a92c9]">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--so-text-muted)]">
                   Paused students
                 </p>
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-300">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-700">
                   <PauseCircle className="h-4 w-4" />
                 </span>
               </div>
-              <p className="mt-1 text-3xl font-bold text-white">
+              <p className="mt-1 text-3xl font-bold text-[var(--so-text-primary)]">
                 {pausedStudentsCount}
               </p>
-              <p className="mt-1 text-xs text-[#a8a0d6]">on break · not active</p>
+              <p className="mt-1 text-xs text-[var(--so-text-secondary)]">on break · not active</p>
             </button>
 
             <button
@@ -939,50 +948,50 @@ const StudentsListPage = () => {
                 setSearchDraft("");
                 setAppliedSearch("");
               }}
-              className="rounded-xl border border-[#312a63] bg-[#120f2d] p-4 text-left transition hover:border-[#8b5cf6]/70 hover:bg-[#1b1640]"
+              className="rounded-xl border border-[var(--so-border)] bg-[var(--so-bg-card)] p-4 text-left transition hover:border-[#8b5cf6]/70 hover:bg-[var(--so-bg-hover)]"
             >
               <div className="flex items-center justify-between gap-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9a92c9]">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--so-text-muted)]">
                   Placed students
                 </p>
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#8b5cf6]/15 text-[#8b5cf6]">
                   <BadgeCheck className="h-4 w-4" />
                 </span>
               </div>
-              <p className="mt-1 text-3xl font-bold text-white">
+              <p className="mt-1 text-3xl font-bold text-[var(--so-text-primary)]">
                 {placedStudentsCount}
               </p>
-              <p className="mt-1 text-xs text-[#a8a0d6]">all-time placements</p>
+              <p className="mt-1 text-xs text-[var(--so-text-secondary)]">all-time placements</p>
             </button>
 
-            <div className="rounded-xl border border-[#312a63] bg-[#120f2d] p-4">
+            <div className="rounded-xl border border-[var(--so-border)] bg-[var(--so-bg-card)] p-4">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9a92c9]">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--so-text-muted)]">
                   Placement rate
                 </p>
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#8b5cf6]/15 text-[#8b5cf6]">
                   <TrendingUp className="h-4 w-4" />
                 </span>
               </div>
-              <p className="mt-1 text-3xl font-bold text-white">{placementRate}</p>
-              <p className="mt-1 text-xs text-[#a8a0d6]">
+              <p className="mt-1 text-3xl font-bold text-[var(--so-text-primary)]">{placementRate}</p>
+              <p className="mt-1 text-xs text-[var(--so-text-secondary)]">
                 {placedStudentsCount} of {totalEnrolled} students
               </p>
             </div>
 
-            <div className="rounded-xl border border-[#312a63] bg-[#120f2d] p-4">
+            <div className="rounded-xl border border-[var(--so-border)] bg-[var(--so-bg-card)] p-4">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9a92c9]">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--so-text-muted)]">
                   Newly enrolled
                 </p>
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#8b5cf6]/15 text-[#8b5cf6]">
                   <UserPlus className="h-4 w-4" />
                 </span>
               </div>
-              <p className="mt-1 text-3xl font-bold text-white">
+              <p className="mt-1 text-3xl font-bold text-[var(--so-text-primary)]">
                 {newlyEnrolledCount}
               </p>
-              <p className="mt-1 text-xs text-[#a8a0d6]">awaiting zone assignment</p>
+              <p className="mt-1 text-xs text-[var(--so-text-secondary)]">awaiting zone assignment</p>
             </div>
           </div>
         )}
@@ -1013,7 +1022,7 @@ const StudentsListPage = () => {
                     setSearchDraft("");
                     setAppliedSearch("");
                   }}
-                  className="rounded-xl border bg-[#120f2d] p-4 text-left transition hover:bg-[#1b1640]"
+                  className="rounded-xl border bg-[var(--so-bg-card)] p-4 text-left transition hover:bg-[var(--so-bg-hover)]"
                   style={{ borderColor: `${color}4d` }}
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -1023,18 +1032,18 @@ const StudentsListPage = () => {
                     >
                       {shortCourseName(c.title)}
                     </span>
-                    <span className="text-2xl font-bold text-white">{count}</span>
+                    <span className="text-2xl font-bold text-[var(--so-text-primary)]">{count}</span>
                   </div>
-                  <p className="mt-2 truncate text-sm font-medium text-white">
+                  <p className="mt-2 truncate text-sm font-medium text-[var(--so-text-primary)]">
                     {c.title || "Untitled Course"}
                   </p>
-                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
+                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--so-border)]">
                     <div
                       className="h-full rounded-full"
                       style={{ width: `${share}%`, backgroundColor: color }}
                     />
                   </div>
-                  <p className="mt-1.5 text-[11px] text-[#a8a0d6]">
+                  <p className="mt-1.5 text-[11px] text-[var(--so-text-secondary)]">
                     {count === 0
                       ? "no active students"
                       : `${share}% of active students`}
@@ -1052,20 +1061,20 @@ const StudentsListPage = () => {
               <ZoneStudentAnalytics />
             </div>
 
-            <div className="flex h-full flex-col rounded-xl border border-[#312a63] bg-[#120f2d] p-5 lg:col-span-5">
+            <div className="flex h-full flex-col rounded-xl border border-[var(--so-border)] bg-[var(--so-bg-card)] p-5 lg:col-span-5">
               <div className="mb-3 flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-sm font-semibold text-white">
+                  <h2 className="text-sm font-semibold text-[var(--so-text-primary)]">
                     Admissions by month
                   </h2>
-                  <p className="mt-0.5 text-xs text-[#a8a0d6]">
+                  <p className="mt-0.5 text-xs text-[var(--so-text-secondary)]">
                     {chartYearTotal} students joined in {chartYear}
                   </p>
                 </div>
                 <select
                   value={chartYear}
                   onChange={(e) => setChartYear(Number(e.target.value))}
-                  className="rounded-lg border border-[#312a63] bg-[#0f0b24] px-2.5 py-1.5 text-sm text-white outline-none focus:border-[#8b5cf6]"
+                  className="rounded-lg border border-[var(--so-border)] bg-[var(--so-bg-input)] px-2.5 py-1.5 text-sm text-[var(--so-text-primary)] outline-none focus:border-[#8b5cf6]"
                 >
                   {availableYears.map((y) => (
                     <option key={y} value={y}>
@@ -1078,20 +1087,20 @@ const StudentsListPage = () => {
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={visibleChartData} barCategoryGap="28%">
                     <CartesianGrid
-                      stroke="#312a63"
+                      stroke="var(--so-border)"
                       strokeOpacity={0.6}
                       vertical={false}
                     />
                     <XAxis
                       dataKey="month"
-                      stroke="#9a92c9"
+                      stroke="var(--so-text-muted)"
                       tickLine={false}
-                      axisLine={{ stroke: "#312a63" }}
+                      axisLine={{ stroke: "var(--so-border)" }}
                       fontSize={12}
                     />
                     <YAxis
                       allowDecimals={false}
-                      stroke="#9a92c9"
+                      stroke="var(--so-text-muted)"
                       tickLine={false}
                       axisLine={false}
                       fontSize={12}
@@ -1100,10 +1109,10 @@ const StudentsListPage = () => {
                     <Tooltip
                       formatter={(value: number) => [`${value} joined`, null]}
                       contentStyle={{
-                        backgroundColor: "#120f2d",
-                        border: "1px solid #312a63",
+                        backgroundColor: "var(--so-bg-card)",
+                        border: "1px solid var(--so-border)",
                         borderRadius: "8px",
-                        color: "#fff",
+                        color: "var(--so-text-primary)",
                         fontSize: "12px",
                       }}
                       cursor={{ fill: "rgba(139,92,246,0.08)" }}
@@ -1125,7 +1134,7 @@ const StudentsListPage = () => {
                 </ResponsiveContainer>
               </div>
               {isCurrentChartYear && (
-                <p className="mt-2 text-[11px] text-[#9a92c9]">
+                <p className="mt-2 text-[11px] text-[var(--so-text-muted)]">
                   Current month is month-to-date. Remaining months appear as the
                   year progresses.
                 </p>
@@ -1146,11 +1155,11 @@ const StudentsListPage = () => {
                   setPage(1);
                   setPlacedFilter("all");
                 }}
-                className="rounded-xl border border-[#312a63] bg-[#0f0b24] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#1b1640]"
+                className="rounded-xl border border-[var(--so-border)] bg-[var(--so-bg-input)] px-4 py-2 text-sm font-medium text-[var(--so-text-primary)] transition hover:bg-[var(--so-bg-hover)]"
               >
                 ← Back to Courses
               </button>
-              <p className="text-lg font-semibold text-white">
+              <p className="text-lg font-semibold text-[var(--so-text-primary)]">
                 {isAllView
                   ? placedFilter === "placed"
                     ? "Placed Students"
@@ -1161,7 +1170,7 @@ const StudentsListPage = () => {
                         : "All Enrolled Students"
                   : courses.find((c) => c._id === selectedCourseId)?.title ||
                   "Course"}
-                <span className="ml-2 text-sm font-normal text-[#a8a0d6]">
+                <span className="ml-2 text-sm font-normal text-[var(--so-text-secondary)]">
                   (
                   {isAllView
                     ? `${allViewTotal} students`
@@ -1174,40 +1183,40 @@ const StudentsListPage = () => {
             {/* ── Zone counts ── */}
             <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
               <div className="rounded-2xl border border-blue-500/40 bg-gradient-to-br from-blue-600/20 to-blue-900/10 p-5">
-                <p className="text-sm font-medium uppercase tracking-wider text-[#9a92c9]">Blue Zone</p>
-                <p className="mt-2 text-3xl font-bold text-blue-300">
+                <p className="text-sm font-medium uppercase tracking-wider text-[var(--so-text-muted)]">Blue Zone</p>
+                <p className="mt-2 text-3xl font-bold text-blue-700">
                   {zoneCounts.blue}
-                  <span className="ml-2 text-sm font-medium text-[#a8a0d6]">students</span>
+                  <span className="ml-2 text-sm font-medium text-[var(--so-text-secondary)]">students</span>
                 </p>
               </div>
               <div className="rounded-2xl border border-yellow-500/40 bg-gradient-to-br from-yellow-600/20 to-yellow-900/10 p-5">
-                <p className="text-sm font-medium uppercase tracking-wider text-[#9a92c9]">Yellow Zone</p>
-                <p className="mt-2 text-3xl font-bold text-yellow-300">
+                <p className="text-sm font-medium uppercase tracking-wider text-[var(--so-text-muted)]">Yellow Zone</p>
+                <p className="mt-2 text-3xl font-bold text-yellow-700">
                   {zoneCounts.yellow}
-                  <span className="ml-2 text-sm font-medium text-[#a8a0d6]">students</span>
+                  <span className="ml-2 text-sm font-medium text-[var(--so-text-secondary)]">students</span>
                 </p>
               </div>
               <div className="rounded-2xl border border-emerald-500/40 bg-gradient-to-br from-emerald-600/20 to-emerald-900/10 p-5">
-                <p className="text-sm font-medium uppercase tracking-wider text-[#9a92c9]">Green Zone</p>
-                <p className="mt-2 text-3xl font-bold text-emerald-300">
+                <p className="text-sm font-medium uppercase tracking-wider text-[var(--so-text-muted)]">Green Zone</p>
+                <p className="mt-2 text-3xl font-bold text-emerald-700">
                   {zoneCounts.green}
-                  <span className="ml-2 text-sm font-medium text-[#a8a0d6]">students</span>
+                  <span className="ml-2 text-sm font-medium text-[var(--so-text-secondary)]">students</span>
                 </p>
               </div>
               <div className="rounded-2xl border border-violet-500/40 bg-gradient-to-br from-violet-600/20 to-violet-900/10 p-5">
-                <p className="text-sm font-medium uppercase tracking-wider text-[#9a92c9]">Newly Enrolled</p>
-                <p className="mt-2 text-3xl font-bold text-violet-300">
+                <p className="text-sm font-medium uppercase tracking-wider text-[var(--so-text-muted)]">Newly Enrolled</p>
+                <p className="mt-2 text-3xl font-bold text-violet-700">
                   {zoneCounts.newlyEnrolled}
-                  <span className="ml-2 text-sm font-medium text-[#a8a0d6]">students</span>
+                  <span className="ml-2 text-sm font-medium text-[var(--so-text-secondary)]">students</span>
                 </p>
               </div>
             </div>
 
             {/* ── Search / Filter bar ── */}
-            <div className="mb-6 rounded-2xl border border-[#312a63] bg-[#120f2d] p-5 shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
+            <div className="mb-6 rounded-2xl border border-[var(--so-border)] bg-[var(--so-bg-card)] p-5 shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
               <div className="flex flex-col items-stretch gap-4 md:flex-row md:items-center">
                 <div ref={searchBoxRef} className="relative flex-1">
-                  <Search className="absolute left-4 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-[#9a92c9]" />
+                  <Search className="absolute left-4 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-[var(--so-text-muted)]" />
                   <input
                     type="text"
                     value={searchDraft}
@@ -1220,7 +1229,7 @@ const StudentsListPage = () => {
                         setShowSuggestions(true);
                     }}
                     placeholder="Search by student name or email..."
-                    className="w-full rounded-xl border border-[#312a63] bg-[#0f0b24] py-3 pl-11 pr-4 text-white outline-none transition placeholder:text-[#8f87bf] focus:border-[#8b5cf6]"
+                    className="w-full rounded-xl border border-[var(--so-border)] bg-[var(--so-bg-input)] py-3 pl-11 pr-4 text-[var(--so-text-primary)] outline-none transition placeholder:text-[var(--so-text-placeholder)] focus:border-[#8b5cf6]"
                     onKeyDown={(e) => {
                       if (e.key === "ArrowDown") {
                         e.preventDefault();
@@ -1255,9 +1264,9 @@ const StudentsListPage = () => {
 
                   {showSuggestions &&
                     (searchDraft.trim() || suggestionLoading) && (
-                      <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 overflow-hidden rounded-xl border border-[#312a63] bg-[#120f2d] shadow-2xl">
+                      <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 overflow-hidden rounded-xl border border-[var(--so-border)] bg-[var(--so-bg-card)] shadow-2xl">
                         {suggestionLoading ? (
-                          <div className="px-4 py-3 text-sm text-[#a8a0d6]">
+                          <div className="px-4 py-3 text-sm text-[var(--so-text-secondary)]">
                             Searching...
                           </div>
                         ) : searchSuggestions.length > 0 ? (
@@ -1270,19 +1279,19 @@ const StudentsListPage = () => {
                                     handleSuggestionClick(student)
                                   }
                                   className={`flex w-full items-center justify-between px-4 py-3 text-left transition ${activeSuggestionIndex === index
-                                      ? "bg-[#1c1642] text-white"
-                                      : "hover:bg-[#1c1642] hover:text-white"
+                                      ? "bg-[var(--so-bg-suggestion-hover)] text-[var(--so-text-primary)]"
+                                      : "hover:bg-[var(--so-bg-suggestion-hover)] hover:text-[var(--so-text-primary)]"
                                     }`}
                                 >
                                   <div className="min-w-0">
-                                    <p className="truncate font-medium text-white">
+                                    <p className="truncate font-medium text-[var(--so-text-primary)]">
                                       {student.fullName || "Unnamed Student"}
                                     </p>
-                                    <p className="truncate text-sm text-[#a8a0d6]">
+                                    <p className="truncate text-sm text-[var(--so-text-secondary)]">
                                       {student.email || "No email"}
                                     </p>
                                   </div>
-                                  <span className="ml-3 shrink-0 text-xs text-[#9a92c9]">
+                                  <span className="ml-3 shrink-0 text-xs text-[var(--so-text-muted)]">
                                     Select
                                   </span>
                                 </button>
@@ -1290,7 +1299,7 @@ const StudentsListPage = () => {
                             ))}
                           </ul>
                         ) : (
-                          <div className="px-4 py-3 text-sm text-[#a8a0d6]">
+                          <div className="px-4 py-3 text-sm text-[var(--so-text-secondary)]">
                             No suggestions found
                           </div>
                         )}
@@ -1307,7 +1316,7 @@ const StudentsListPage = () => {
                           setZoneFilter(e.target.value);
                           setPage(1);
                         }}
-                        className="rounded-xl border border-[#312a63] bg-[#0f0b24] px-4 py-3 text-white outline-none focus:border-[#8b5cf6]"
+                        className="rounded-xl border border-[var(--so-border)] bg-[var(--so-bg-input)] px-4 py-3 text-[var(--so-text-primary)] outline-none focus:border-[#8b5cf6]"
                       >
                         <option value="all">All Zones</option>
                         <option value="blue">Blue</option>
@@ -1320,7 +1329,7 @@ const StudentsListPage = () => {
                           setCourseFilter(e.target.value);
                           setPage(1);
                         }}
-                        className="rounded-xl border border-[#312a63] bg-[#0f0b24] px-4 py-3 text-white outline-none focus:border-[#8b5cf6]"
+                        className="rounded-xl border border-[var(--so-border)] bg-[var(--so-bg-input)] px-4 py-3 text-[var(--so-text-primary)] outline-none focus:border-[#8b5cf6]"
                       >
                         <option value="all">All Courses</option>
                         {courses.map((c) => (
@@ -1341,7 +1350,7 @@ const StudentsListPage = () => {
                         );
                         setPage(1);
                       }}
-                      className="rounded-xl border border-[#312a63] bg-[#0f0b24] px-4 py-3 text-white outline-none focus:border-[#8b5cf6]"
+                      className="rounded-xl border border-[var(--so-border)] bg-[var(--so-bg-input)] px-4 py-3 text-[var(--so-text-primary)] outline-none focus:border-[#8b5cf6]"
                     >
                       <option value="all">All Enrolled</option>
                       <option value="placed">Placed</option>
@@ -1357,7 +1366,7 @@ const StudentsListPage = () => {
                           e.target.value as "all" | "placed" | "notplaced"
                         )
                       }
-                      className="rounded-xl border border-[#312a63] bg-[#0f0b24] px-4 py-3 text-white outline-none focus:border-[#8b5cf6]"
+                      className="rounded-xl border border-[var(--so-border)] bg-[var(--so-bg-input)] px-4 py-3 text-[var(--so-text-primary)] outline-none focus:border-[#8b5cf6]"
                     >
                       <option value="all">All Placement</option>
                       <option value="placed">Placed</option>
@@ -1365,7 +1374,7 @@ const StudentsListPage = () => {
                     </select>
                   )}
 
-                  <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-[#312a63] bg-[#0f0b24] px-4 py-3 text-sm text-white">
+                  <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-[var(--so-border)] bg-[var(--so-bg-input)] px-4 py-3 text-sm text-[var(--so-text-primary)]">
                     <input
                       type="checkbox"
                       checked={placementUnlocked}
@@ -1393,7 +1402,7 @@ const StudentsListPage = () => {
                       setCourseFilter("all");
                       setPage(1);
                     }}
-                    className="rounded-xl border border-[#312a63] bg-[#0f0b24] px-5 py-3 font-medium text-white transition hover:bg-[#1b1640]"
+                    className="rounded-xl border border-[var(--so-border)] bg-[var(--so-bg-input)] px-5 py-3 font-medium text-[var(--so-text-primary)] transition hover:bg-[var(--so-bg-hover)]"
                   >
                     Reset
                   </button>
@@ -1406,53 +1415,53 @@ const StudentsListPage = () => {
               <div className="flex items-center justify-center py-20">
                 <div className="text-center">
                   <div className="mx-auto h-12 w-12 animate-spin rounded-full border-b-2 border-[#8b5cf6]" />
-                  <p className="mt-4 text-[#a8a0d6]">Loading students...</p>
+                  <p className="mt-4 text-[var(--so-text-secondary)]">Loading students...</p>
                 </div>
               </div>
             )}
 
             {/* ── Table ── */}
             {!(isAllView && allEnrolledLoading) && (
-              <div className="overflow-hidden rounded-2xl border border-[#312a63] bg-[#120f2d] shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
+              <div className="overflow-hidden rounded-2xl border border-[var(--so-border)] bg-[var(--so-bg-card)] shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[1000px]">
-                    <thead className="border-b border-[#312a63] bg-[#151033]">
+                    <thead className="border-b border-[var(--so-border)] bg-[var(--so-bg-header)]">
                       <tr>
-                        <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[#9a92c9]">
+                        <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[var(--so-text-muted)]">
                           Student
                         </th>
-                        {/* <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[#9a92c9]">
+                        {/* <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[var(--so-text-muted)]">
                           Batch
                         </th> */}
-                        {/* <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[#9a92c9]">
+                        {/* <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[var(--so-text-muted)]">
                           Fee Plan
                         </th> */}
-                        <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[#9a92c9]">
+                        <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[var(--so-text-muted)]">
                           Zone
                         </th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[#9a92c9]">
+                        <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[var(--so-text-muted)]">
                           Joined
                         </th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[#9a92c9]">
+                        <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[var(--so-text-muted)]">
                           Placement
                         </th>
                         {showPauseColumn && (
-                          <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[#9a92c9]">
+                          <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[var(--so-text-muted)]">
                             Status
                           </th>
                         )}
-                        <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[#9a92c9]">
+                        <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[var(--so-text-muted)]">
                           Actions
                         </th>
                       </tr>
                     </thead>
 
-                    <tbody className="divide-y divide-[#312a63]">
+                    <tbody className="divide-y divide-[var(--so-border)]">
                       {displayStudents.length === 0 ? (
                         <tr>
                           <td
                             colSpan={showPauseColumn ? 7 : 6}
-                            className="px-6 py-14 text-center text-[#a8a0d6]"
+                            className="px-6 py-14 text-center text-[var(--so-text-secondary)]"
                           >
                             No students found
                           </td>
@@ -1467,7 +1476,7 @@ const StudentsListPage = () => {
                           return (
                             <tr
                               key={student._id}
-                              className="transition-colors hover:bg-[#1a1538]"
+                              className="transition-colors hover:bg-[var(--so-bg-row-hover)]"
                             >
                               <td className="px-6 py-5">
                                 <div className="flex items-center gap-4">
@@ -1479,7 +1488,7 @@ const StudentsListPage = () => {
                                         className="h-full w-full object-cover"
                                       />
                                     ) : (
-                                      <span className="font-semibold text-white">
+                                      <span className="font-semibold text-[#8b5cf6]">
                                         {student.fullName
                                           ?.charAt(0)
                                           ?.toUpperCase() || "S"}
@@ -1487,10 +1496,10 @@ const StudentsListPage = () => {
                                     )}
                                   </div>
                                   <div>
-                                    <p className="font-semibold text-white">
+                                    <p className="font-semibold text-[var(--so-text-primary)]">
                                       {student.fullName || "Unnamed Student"}
                                     </p>
-                                    <p className="text-sm text-[#a8a0d6]">
+                                    <p className="text-sm text-[var(--so-text-secondary)]">
                                       {student.email || "No email"}
                                     </p>
                                   </div>
@@ -1521,7 +1530,7 @@ const StudentsListPage = () => {
                                 </span>
                               </td>
 
-                              <td className="px-6 py-5 text-[#a8a0d6]">
+                              <td className="px-6 py-5 text-[var(--so-text-secondary)]">
                                 {safeDate(student.joinedMonth)}
                               </td>
 
@@ -1529,8 +1538,8 @@ const StudentsListPage = () => {
                                 <div className="flex items-center gap-2">
                                   <span
                                     className={`${pill} ${student.isPlaced
-                                        ? "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30"
-                                        : "bg-slate-500/15 text-slate-300 ring-1 ring-slate-500/30"
+                                        ? "bg-emerald-500/15 text-emerald-700 ring-1 ring-emerald-500/30"
+                                        : "bg-gray-500/15 text-gray-700 ring-1 ring-gray-500/30"
                                       }`}
                                   >
                                     {student.isPlaced
@@ -1572,8 +1581,8 @@ const StudentsListPage = () => {
                                   <div className="flex items-center gap-2">
                                     <span
                                       className={`${pill} ${student.isPaused
-                                          ? "bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30"
-                                          : "bg-slate-500/15 text-slate-300 ring-1 ring-slate-500/30"
+                                          ? "bg-amber-500/15 text-amber-700 ring-1 ring-amber-500/30"
+                                          : "bg-gray-500/15 text-gray-700 ring-1 ring-gray-500/30"
                                         }`}
                                     >
                                       {student.isPaused ? "Paused" : "Active"}
@@ -1629,18 +1638,18 @@ const StudentsListPage = () => {
                 </div>
 
                 {/* ── Pagination ── */}
-                <div className="flex flex-col gap-4 border-t border-[#312a63] px-6 py-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="text-sm text-[#a8a0d6]">
+                <div className="flex flex-col gap-4 border-t border-[var(--so-border)] px-6 py-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="text-sm text-[var(--so-text-secondary)]">
                     Showing{" "}
-                    <span className="font-semibold text-white">
+                    <span className="font-semibold text-[var(--so-text-primary)]">
                       {displayTotal === 0 ? 0 : (page - 1) * limit + 1}
                     </span>{" "}
                     to{" "}
-                    <span className="font-semibold text-white">
+                    <span className="font-semibold text-[var(--so-text-primary)]">
                       {Math.min(page * limit, displayTotal)}
                     </span>{" "}
                     of{" "}
-                    <span className="font-semibold text-white">
+                    <span className="font-semibold text-[var(--so-text-primary)]">
                       {displayTotal}
                     </span>{" "}
                     students
@@ -1653,7 +1662,7 @@ const StudentsListPage = () => {
                         setLimit(Number(e.target.value));
                         setPage(1);
                       }}
-                      className="rounded-lg border border-[#312a63] bg-[#0f0b24] px-3 py-2 text-white outline-none focus:border-[#8b5cf6]"
+                      className="rounded-lg border border-[var(--so-border)] bg-[var(--so-bg-input)] px-3 py-2 text-[var(--so-text-primary)] outline-none focus:border-[#8b5cf6]"
                     >
                       <option value={5}>5 / page</option>
                       <option value={10}>10 / page</option>
@@ -1665,7 +1674,7 @@ const StudentsListPage = () => {
                       <button
                         onClick={() => handlePageChange(page - 1)}
                         disabled={page === 1}
-                        className="rounded-lg border border-[#312a63] bg-[#0f0b24] px-4 py-2 text-white transition hover:bg-[#1b1640] disabled:cursor-not-allowed disabled:opacity-50"
+                        className="rounded-lg border border-[var(--so-border)] bg-[var(--so-bg-input)] px-4 py-2 text-[var(--so-text-primary)] transition hover:bg-[var(--so-bg-hover)] disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         Previous
                       </button>
@@ -1676,7 +1685,7 @@ const StudentsListPage = () => {
                           onClick={() => handlePageChange(pageNumber)}
                           className={`h-10 min-w-10 rounded-lg px-3 text-sm font-medium transition ${page === pageNumber
                               ? "bg-[#8b5cf6] text-white"
-                              : "border border-[#312a63] bg-[#0f0b24] text-white hover:bg-[#1b1640]"
+                              : "border border-[var(--so-border)] bg-[var(--so-bg-input)] text-[var(--so-text-primary)] hover:bg-[var(--so-bg-hover)]"
                             }`}
                         >
                           {pageNumber}
@@ -1686,7 +1695,7 @@ const StudentsListPage = () => {
                       <button
                         onClick={() => handlePageChange(page + 1)}
                         disabled={page === displayTotalPages}
-                        className="rounded-lg border border-[#312a63] bg-[#0f0b24] px-4 py-2 text-white transition hover:bg-[#1b1640] disabled:cursor-not-allowed disabled:opacity-50"
+                        className="rounded-lg border border-[var(--so-border)] bg-[var(--so-bg-input)] px-4 py-2 text-[var(--so-text-primary)] transition hover:bg-[var(--so-bg-hover)] disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         Next
                       </button>

@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* Resume builder (and any future component) styled with Tailwind's `dark:`
+   variant should follow the in-app theme toggle, not the OS colour scheme.
+   Tailwind v4 has no config file to set `darkMode: 'selector'`, so it's
+   remapped here instead — `dark:` now activates on [data-theme="dark"]. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 @layer utilities {
   .glass { @apply bg-white/5 backdrop-blur-xl border border-white/10 shadow-xl; }
   .glass-card { @apply bg-slate-900/40 backdrop-blur-md border border-white/5 rounded-xl shadow-lg hover:border-white/10 transition-all duration-300; }
@@ -575,3 +581,97 @@ body {
 /* Payment-status accent colours (remaining fee paid / due) */
 [data-theme="dark"] .text-emerald-600 { color: #34d399 !important; }
 [data-theme="dark"] .text-amber-600   { color: #fbbf24 !important; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   STUDENT OVERVIEW — dedicated palette
+   Scoped to StudentList.tsx / ZoneStudentAnalytics.tsx. Brand purple
+   (#8b5cf6 / #7c3aed) is intentionally hardcoded and constant across
+   both themes — it's the page's accent identity, not a surface color.
+   Light values are a new corporate-light palette; dark values reproduce
+   the page's original always-dark design pixel-for-pixel.
+   ═══════════════════════════════════════════════════════════════════ */
+:root {
+  --so-bg-page:             #F8F7FC;
+  --so-bg-card:             #FFFFFF;
+  --so-bg-input:            #FFFFFF;
+  --so-bg-header:           #F3F0FB;
+  --so-bg-hover:            #F1ECFA;
+  --so-bg-row-hover:        #F5F1FC;
+  --so-bg-suggestion-hover: #EDE6FA;
+  --so-border:              #E3DDF4;
+  --so-text-primary:        #1E1B33;
+  --so-text-secondary:      #57517A;
+  --so-text-muted:          #7A7398;
+  --so-text-placeholder:    #9992B8;
+  --so-overlay:             rgba(30, 27, 51, 0.45);
+}
+
+[data-theme="dark"] {
+  --so-bg-page:             #09061a;
+  --so-bg-card:             #120f2d;
+  --so-bg-input:            #0f0b24;
+  --so-bg-header:           #151033;
+  --so-bg-hover:            #1b1640;
+  --so-bg-row-hover:        #1a1538;
+  --so-bg-suggestion-hover: #1c1642;
+  --so-border:              #312a63;
+  --so-text-primary:        #ffffff;
+  --so-text-secondary:      #a8a0d6;
+  --so-text-muted:          #9a92c9;
+  --so-text-placeholder:    #8f87bf;
+  --so-overlay:             rgba(0, 0, 0, 0.6);
+}
+
+/* Status-badge text: base classes below are light-safe (700-weight)
+   Tailwind shades; restored to the original dark-mode tints here.
+   blue-700/amber-700/red-700/violet-700/gray-700 dark tints already
+   exist above — only yellow/emerald need adding. */
+[data-theme="dark"] .text-yellow-700  { color: #fde047 !important; }
+[data-theme="dark"] .text-emerald-700 { color: #6ee7b7 !important; }
+[data-theme="dark"] .text-emerald-800 { color: #6ee7b7 !important; }
+[data-theme="dark"] .text-teal-700    { color: #5eead4 !important; }
+[data-theme="dark"] .text-cyan-700    { color: #67e8f9 !important; }
+[data-theme="dark"] .text-sky-700     { color: #bae6fd !important; }
+/* Added for the glass-panel batch pages (zone-badge fallback + remove-student chip). */
+[data-theme="dark"] .text-slate-700   { color: #e2e8f0 !important; }
+[data-theme="dark"] .text-rose-700    { color: #fecdd3 !important; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   "GLASS PANEL" pages — dedicated palette
+   Scoped to batch-section (+ components/batch/*) and academic-results.
+   These pages use a glassmorphism dark design (translucent white cards
+   + backdrop-blur over a slate gradient) with no theme wiring at all —
+   they were always dark. Indigo/violet/blue accent colors are left as
+   literal Tailwind classes (constant brand identity across themes, same
+   call as the purple brand in the student-overview palette above).
+   Dark values reproduce the current design pixel-for-pixel; light
+   values are a new corporate-light palette. The glass/blur treatment
+   is intentionally dropped in light mode (translucent white-on-white
+   card fills are read as solid white with a soft border/shadow instead
+   — frosted glass over a near-white page is rarely legible).
+   ═══════════════════════════════════════════════════════════════════ */
+:root {
+  --panel-bg-950:        #F7F8FC;
+  --panel-bg-900:        #EFF1F8;
+  --panel-card:          #FFFFFF;
+  --panel-card-soft:     #FAFBFE;
+  --panel-border:        #E2E5F0;
+  --panel-border-strong: #D3D8E8;
+  --panel-text-primary:   #171A2B;
+  --panel-text-secondary: #4B5170;
+  --panel-text-muted:     #767C99;
+  --panel-text-faint:     #9BA0BE;
+}
+
+[data-theme="dark"] {
+  --panel-bg-950:        #020617;
+  --panel-bg-900:        #0f172a;
+  --panel-card:          rgba(255, 255, 255, 0.05);
+  --panel-card-soft:     rgba(255, 255, 255, 0.03);
+  --panel-border:        rgba(255, 255, 255, 0.10);
+  --panel-border-strong: #334155;
+  --panel-text-primary:   #f1f5f9;
+  --panel-text-secondary: #cbd5e1;
+  --panel-text-muted:     #94a3b8;
+  --panel-text-faint:     #64748b;
+}
