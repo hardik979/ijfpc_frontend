@@ -276,6 +276,17 @@ function orderByRank(items: RankedSection[], rank: Map<SectionKey, number>) {
 
 /* -------------------- REUSABLE BLOCKS -------------------- */
 
+/** Just the coloured bar + section title. Extracted so list components
+ *  (ExperienceList/ProjectsBlock) can weld the heading to their first entry. */
+function SectionHeading({ title, palette }: { title: string; palette: ThemePalette }) {
+  return (
+    <View>
+      <View style={{ ...styles.sectionBar, backgroundColor: palette.primary }} />
+      <Text style={{ ...styles.heading, color: palette.primary }}>{title}</Text>
+    </View>
+  );
+}
+
 function Section({
   title,
   children,
@@ -291,12 +302,13 @@ function Section({
 }) {
   return (
     <View style={styles.section} wrap={keepTogether ? false : undefined}>
-      {/* minPresenceAhead: if less than ~64pt of space is left below the heading
-          (room for the heading plus ~2 lines), push the heading to the next
-          page instead of orphaning it at the bottom */}
-      <View minPresenceAhead={64}>
-        <View style={{ ...styles.sectionBar, backgroundColor: palette.primary }} />
-        <Text style={{ ...styles.heading, color: palette.primary }}>{title}</Text>
+      {/* keepTogether sections are atomic already, so their heading can never
+          orphan. For the rest (summary/certifications — single blocks that
+          can't weld to a "first entry"), a modest reserve keeps a lone heading
+          off the page bottom. Experience/Projects don't use this: they bind
+          the heading to their first entry inside the list components instead. */}
+      <View minPresenceAhead={keepTogether ? undefined : 48}>
+        <SectionHeading title={title} palette={palette} />
       </View>
       {children}
     </View>
@@ -496,7 +508,16 @@ function HighlightedSummary({
   );
 }
 
-function ProjectsBlock({ data, palette }: { data: ResumeData; palette: ThemePalette }) {
+function ProjectsBlock({
+  data,
+  palette,
+  heading,
+}: {
+  data: ResumeData;
+  palette: ThemePalette;
+  /** Optional section heading welded to the first project so it never orphans. */
+  heading?: React.ReactNode;
+}) {
   const projects = safeArray((data as any).projects).filter((project: any) => {
     const bullets = nonEmptyArray(project?.bullets);
     return (
@@ -507,39 +528,54 @@ function ProjectsBlock({ data, palette }: { data: ResumeData; palette: ThemePale
     );
   });
 
-  if (!projects.length) return null;
+  if (!projects.length) return heading ? <>{heading}</> : null;
+
+  // Project name + tech + link — kept together via minPresenceAhead.
+  const renderMeta = (project: any) => (
+    <View minPresenceAhead={30}>
+      <Text style={{ ...styles.itemTitle, color: palette.primary }}>
+        {cleanText(project.name) || "Project"}
+      </Text>
+
+      {hasText(project.techStack) && (
+        <Text style={{ ...styles.subText, color: palette.subText }}>
+          Tech: {project.techStack}
+        </Text>
+      )}
+
+      {hasText(project.link) && (
+        <Link
+          src={project.link!}
+          style={{ ...styles.subText, ...styles.link, color: palette.secondary }}
+        >
+          {project.link}
+        </Link>
+      )}
+    </View>
+  );
+
+  const renderBullets = (project: any) =>
+    nonEmptyArray(project.bullets).map((bullet, i) => (
+      <BulletItem key={i} text={bullet} color={palette.text} />
+    ));
+
+  const renderProject = (project: any, index: number) => (
+    <View key={index} style={{ ...styles.expCard, borderBottomColor: palette.border }}>
+      {renderMeta(project)}
+      {renderBullets(project)}
+    </View>
+  );
 
   return (
     <View>
-      {projects.map((project: any, index: number) => (
-        <View key={index} style={{ ...styles.expCard, borderBottomColor: palette.border }}>
-          {/* keep project name + meta together with at least a couple of bullets */}
-          <View minPresenceAhead={30}>
-            <Text style={{ ...styles.itemTitle, color: palette.primary }}>
-              {cleanText(project.name) || "Project"}
-            </Text>
-
-            {hasText(project.techStack) && (
-              <Text style={{ ...styles.subText, color: palette.subText }}>
-                Tech: {project.techStack}
-              </Text>
-            )}
-
-            {hasText(project.link) && (
-              <Link
-                src={project.link!}
-                style={{ ...styles.subText, ...styles.link, color: palette.secondary }}
-              >
-                {project.link}
-              </Link>
-            )}
-          </View>
-
-          {nonEmptyArray(project.bullets).map((bullet, i) => (
-            <BulletItem key={i} text={bullet} color={palette.text} />
-          ))}
-        </View>
-      ))}
+      {/* The heading carries a minPresenceAhead reserve big enough for the
+          heading + the first project's name/meta, so it drags the first project
+          along and never orphans — WITHOUT a wrap={false} block (which react-pdf
+          crams against previous content when it lands at a page boundary in the
+          two-column flow). If the reserve isn't met, the heading relocates
+          cleanly to the next page. */}
+      {heading ? <View minPresenceAhead={72}>{heading}</View> : null}
+      {projects.map((project: any, i: number) => renderProject(project, i))}
     </View>
   );
 }
@@ -605,74 +641,95 @@ function NaukriStyleTemplate({ data }: { data: ResumeData }) {
           </Section>
         ) : null;
 
-      case "experience":
-        return experience.length > 0 ? (
-          <Section title="Work Experience" palette={bluePalette}>
-            <View>
-              {experience.map((exp: any, index: number) => {
-                const points = nonEmptyArray(exp?.bullets?.length ? exp.bullets : exp?.points);
-                const start = cleanText(exp.startDate || exp.start);
-                const end = cleanText(exp.endDate || exp.end);
+      case "experience": {
+        if (!experience.length) return null;
 
-                return (
-                  <View
-                    key={index}
-                    style={{
-                      ...styles.expCard,
-                      borderBottomColor: "#E5E7EB",
-                      paddingBottom: 8,
-                      marginBottom: 8,
-                    }}
-                  >
-                    <View
-                      minPresenceAhead={30}
-                      style={{
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                        alignItems: "flex-start",
-                      }}
-                    >
-                      <View style={{ width: "72%" }}>
-                        <Text style={{ fontSize: 10.7, fontWeight: 700, color: "#111827" }}>
-                          {cleanText(exp.jobTitle) || "Role"}
-                        </Text>
-                        {hasText(exp.company) && (
-                          <Text style={{ fontSize: 9.1, color: bluePalette.secondary, marginTop: 2 }}>
-                            {exp.company}
-                          </Text>
-                        )}
-                      </View>
+        const cardStyle = {
+          ...styles.expCard,
+          borderBottomColor: "#E5E7EB",
+          paddingBottom: 8,
+          marginBottom: 8,
+        };
 
-                      {(start || end) && (
-                        <Text style={{ fontSize: 8.4, color: "#6B7280", textAlign: "right" }}>
-                          {start}
-                          {start || end ? " – " : ""}
-                          {end || "Present"}
-                        </Text>
-                      )}
-                    </View>
+        const renderCardHeader = (exp: any) => {
+          const start = cleanText(exp.startDate || exp.start);
+          const end = cleanText(exp.endDate || exp.end);
+          return (
+            <View
+              // reserve enough for the title+company row plus the first bullet
+              // so a job header never lands split (title alone) at a page bottom
+              minPresenceAhead={42}
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+              }}
+            >
+              {/* keep title + company atomic so they never split across a page */}
+              <View wrap={false} style={{ width: "72%" }}>
+                <Text style={{ fontSize: 10.7, fontWeight: 700, color: "#111827" }}>
+                  {cleanText(exp.jobTitle) || "Role"}
+                </Text>
+                {hasText(exp.company) && (
+                  <Text style={{ fontSize: 9.1, color: bluePalette.secondary, marginTop: 2 }}>
+                    {exp.company}
+                  </Text>
+                )}
+              </View>
 
-                    {nonEmptyArray((exp as any).metrics).length > 0 && (
-                      <View style={styles.naukriMetricWrap}>
-                        {nonEmptyArray((exp as any).metrics).map((metric, mi) => (
-                          <Text key={`${metric}-${mi}`} style={styles.naukriMetric}>
-                            {metric}
-                          </Text>
-                        ))}
-                      </View>
-                    )}
-
-                    <View style={{ marginTop: 4 }}>
-                      {points.map((point, i) => (
-                        <BulletItem key={i} text={point} color="#111827" />
-                      ))}
-                    </View>
-                  </View>
-                );
-              })}
+              {(start || end) && (
+                <Text style={{ fontSize: 8.4, color: "#6B7280", textAlign: "right" }}>
+                  {start}
+                  {start || end ? " – " : ""}
+                  {end || "Present"}
+                </Text>
+              )}
             </View>
-          </Section>
-        ) : null;
+          );
+        };
+
+        const renderCardBody = (exp: any) => {
+          const points = nonEmptyArray(exp?.bullets?.length ? exp.bullets : exp?.points);
+          return (
+            <>
+              {nonEmptyArray((exp as any).metrics).length > 0 && (
+                <View style={styles.naukriMetricWrap}>
+                  {nonEmptyArray((exp as any).metrics).map((metric, mi) => (
+                    <Text key={`${metric}-${mi}`} style={styles.naukriMetric}>
+                      {metric}
+                    </Text>
+                  ))}
+                </View>
+              )}
+
+              <View style={{ marginTop: 4 }}>
+                {points.map((point, i) => (
+                  <BulletItem key={i} text={point} color="#111827" />
+                ))}
+              </View>
+            </>
+          );
+        };
+
+        const renderExpCard = (exp: any, index: number) => (
+          <View key={index} style={cardStyle}>
+            {renderCardHeader(exp)}
+            {renderCardBody(exp)}
+          </View>
+        );
+
+        return (
+          <View style={styles.section}>
+            {/* The heading reserves room for itself + the first card's title row
+                so it drags the first card along and never orphans, without a
+                wrap={false} block that react-pdf could cram at a page boundary. */}
+            <View minPresenceAhead={64}>
+              <SectionHeading title="Work Experience" palette={bluePalette} />
+            </View>
+            {experience.map((exp: any, i: number) => renderExpCard(exp, i))}
+          </View>
+        );
+      }
 
       case "skills":
         return skills.length > 0 ? (
@@ -743,9 +800,13 @@ function NaukriStyleTemplate({ data }: { data: ResumeData }) {
 
       case "projects":
         return projects.length > 0 ? (
-          <Section title="Projects & Open Source" palette={bluePalette}>
-            <ProjectsBlock data={{ ...data, projects } as ResumeData} palette={bluePalette} />
-          </Section>
+          <View style={styles.section}>
+            <ProjectsBlock
+              data={{ ...data, projects } as ResumeData}
+              palette={bluePalette}
+              heading={<SectionHeading title="Projects & Open Source" palette={bluePalette} />}
+            />
+          </View>
         ) : null;
 
       case "languages":
@@ -973,49 +1034,73 @@ function dateRange(start?: string, end?: string, present = "Present") {
 function ExperienceList({
   items,
   palette,
+  heading,
 }: {
   items: any[];
   palette: ThemePalette;
+  /** Optional section heading welded to the first entry so it never orphans. */
+  heading?: React.ReactNode;
 }) {
+  // The title/company/dates row. minPresenceAhead keeps it from being stranded
+  // alone at the very bottom of a page (it drags ~1 line of the first bullet).
+  const renderHeader = (exp: any, spaced: boolean) => {
+    const range = dateRange(exp.startDate || exp.start, exp.endDate || exp.end);
+    return (
+      <View
+        // reserve enough for the whole title+company row plus the first bullet,
+        // so a job header never lands split (title alone) at the page bottom
+        minPresenceAhead={42}
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          marginBottom: 4,
+          ...(spaced ? { marginTop: 9 } : {}),
+        }}
+      >
+        {/* keep title + company as one atomic block so they never split across
+            a page (the row's flex column would otherwise break between them) */}
+        <View wrap={false} style={{ width: "72%" }}>
+          <Text style={{ fontSize: 10.5, fontWeight: 700, color: palette.text }}>
+            {cleanText(exp.jobTitle) || "Role"}
+          </Text>
+          {hasText(exp.company) && (
+            <Text style={{ fontSize: 9.2, color: palette.secondary, marginTop: 2 }}>
+              {exp.company}
+            </Text>
+          )}
+        </View>
+        {!!range && (
+          <Text style={{ fontSize: 8.4, color: palette.subText, textAlign: "right" }}>
+            {range}
+          </Text>
+        )}
+      </View>
+    );
+  };
+
+  const bulletsOf = (exp: any) =>
+    nonEmptyArray(exp?.bullets?.length ? exp.bullets : exp?.points);
+
+  if (!items.length) return heading ? <>{heading}</> : null;
+
+  // The heading carries a minPresenceAhead reserve big enough for itself plus
+  // the first job's title row, so it drags the first job along and never
+  // orphans — WITHOUT a wrap={false} block (which react-pdf crams against the
+  // previous content when it lands at a page boundary in the two-column flow).
+  // Everything else is a FLAT sequence of headers + individual bullets so
+  // react-pdf can break between any two lines and fill each page fully.
   return (
     <View>
-      {items.map((exp: any, index: number) => {
-        const points = nonEmptyArray(exp?.bullets?.length ? exp.bullets : exp?.points);
-        const range = dateRange(exp.startDate || exp.start, exp.endDate || exp.end);
-        return (
-          <View key={index} style={{ marginBottom: 9 }}>
-            <View
-              minPresenceAhead={30}
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "flex-start",
-              }}
-            >
-              <View style={{ width: "72%" }}>
-                <Text style={{ fontSize: 10.5, fontWeight: 700, color: palette.text }}>
-                  {cleanText(exp.jobTitle) || "Role"}
-                </Text>
-                {hasText(exp.company) && (
-                  <Text style={{ fontSize: 9.2, color: palette.secondary, marginTop: 2 }}>
-                    {exp.company}
-                  </Text>
-                )}
-              </View>
-              {!!range && (
-                <Text style={{ fontSize: 8.4, color: palette.subText, textAlign: "right" }}>
-                  {range}
-                </Text>
-              )}
-            </View>
-            <View style={{ marginTop: 4 }}>
-              {points.map((point, i) => (
-                <BulletItem key={i} text={point} color={palette.text} />
-              ))}
-            </View>
-          </View>
-        );
-      })}
+      {heading ? <View minPresenceAhead={64}>{heading}</View> : null}
+      {items.map((exp: any, i: number) => (
+        <React.Fragment key={i}>
+          {renderHeader(exp, i > 0)}
+          {bulletsOf(exp).map((point, j) => (
+            <BulletItem key={`${i}-${j}`} text={point} color={palette.text} />
+          ))}
+        </React.Fragment>
+      ))}
     </View>
   );
 }
@@ -1199,6 +1284,7 @@ function CorporateSidebarTemplate({ data }: { data: ResumeData }) {
     rank
   );
 
+  // Only the summary stays beside the sidebar in the two-column intro row.
   const mainSections = orderByRank(
     [
       {
@@ -1209,22 +1295,41 @@ function CorporateSidebarTemplate({ data }: { data: ResumeData }) {
           </Section>
         ) : null,
       },
+    ],
+    rank
+  );
+
+  // Experience & Projects flow FULL-WIDTH below the two-column intro row.
+  // react-pdf cannot page-break content inside a flexDirection:"row", so while
+  // these long sections lived in the main column they jumped wholesale to page 2
+  // when they didn't fit next to the sidebar — leaving page 1 half-empty. Moving
+  // them out of the row lets them fill page 1 and split naturally onto page 2.
+  const flowSections = orderByRank(
+    [
       {
         key: "experience",
         node:
           experience.length > 0 ? (
-            <Section title="Work Experience" palette={palette}>
-              <ExperienceList items={experience} palette={palette} />
-            </Section>
+            <View style={styles.section}>
+              <ExperienceList
+                items={experience}
+                palette={palette}
+                heading={<SectionHeading title="Work Experience" palette={palette} />}
+              />
+            </View>
           ) : null,
       },
       {
         key: "projects",
         node:
           projects.length > 0 ? (
-            <Section title="Projects" palette={palette}>
-              <ProjectsBlock data={{ ...data, projects } as ResumeData} palette={palette} />
-            </Section>
+            <View style={styles.section}>
+              <ProjectsBlock
+                data={{ ...data, projects } as ResumeData}
+                palette={palette}
+                heading={<SectionHeading title="Projects" palette={palette} />}
+              />
+            </View>
           ) : null,
       },
     ],
@@ -1241,10 +1346,16 @@ function CorporateSidebarTemplate({ data }: { data: ResumeData }) {
           // repeats on every page → proper top/bottom margin on page 2+
           paddingTop: 16,
           paddingBottom: 16,
+          // horizontal padding lives on the Page so the full-width flow region
+          // below the intro row inherits a proper left/right margin on every page
+          paddingHorizontal: 28,
         }}
       >
-        {/* negative top margin keeps the sidebar flush with the page top on page 1 */}
-        <View style={{ flexDirection: "row", minHeight: "100%", marginTop: -16 }}>
+        {/* Intro row: sidebar + summary. Negative margins bleed it back out to
+            the page edges so the dark sidebar stays flush with the top/left edge
+            on page 1. No minHeight — the row is only as tall as the intro, so
+            Experience/Projects can fill the rest of the page below it. */}
+        <View style={{ flexDirection: "row", marginTop: -16, marginHorizontal: -28 }}>
           {/* Sidebar */}
           <View
             style={{
@@ -1286,12 +1397,22 @@ function CorporateSidebarTemplate({ data }: { data: ResumeData }) {
           </View>
 
           {/* Main */}
-          <View style={{ width: "67%", paddingVertical: 22, paddingHorizontal: 20 }}>
+          <View style={{ width: "67%", paddingVertical: 22, paddingLeft: 20, paddingRight: 28 }}>
             {mainSections.map((s) => (
               <React.Fragment key={s.key}>{s.node}</React.Fragment>
             ))}
           </View>
         </View>
+
+        {/* Experience & Projects — full-width below the intro row, so they can
+            flow across pages instead of being trapped in the sidebar row. */}
+        {flowSections.length > 0 && (
+          <View style={{ paddingTop: 14 }}>
+            {flowSections.map((s) => (
+              <React.Fragment key={s.key}>{s.node}</React.Fragment>
+            ))}
+          </View>
+        )}
       </Page>
     </Document>
   );
@@ -1302,10 +1423,10 @@ function CorporateSidebarTemplate({ data }: { data: ResumeData }) {
 function AtsSectionTitle({ title, palette }: { title: string; palette: ThemePalette }) {
   return (
     <View
-      // reserve enough space that a heading never lands alone at the page
-      // bottom — if there isn't room for the heading plus ~2 lines below it,
-      // react-pdf pushes the heading (and its content) to the next page
-      minPresenceAhead={64}
+      // No minPresenceAhead reserve: splittable sections (experience/projects)
+      // now weld this title to their first entry via the list `heading` prop,
+      // and short sections wrap the title in a wrap={false} atomic block — so a
+      // heading can never orphan, and we don't waste page-bottom whitespace.
       style={{
         borderBottomWidth: 1,
         borderBottomStyle: "solid",
@@ -1364,18 +1485,20 @@ function AtsClassicTemplate({ data }: { data: ResumeData }) {
 
       case "experience":
         return experience.length > 0 ? (
-          <View>
-            <AtsSectionTitle title="Professional Experience" palette={palette} />
-            <ExperienceList items={experience} palette={palette} />
-          </View>
+          <ExperienceList
+            items={experience}
+            palette={palette}
+            heading={<AtsSectionTitle title="Professional Experience" palette={palette} />}
+          />
         ) : null;
 
       case "projects":
         return projects.length > 0 ? (
-          <View>
-            <AtsSectionTitle title="Projects" palette={palette} />
-            <ProjectsBlock data={{ ...data, projects } as ResumeData} palette={palette} />
-          </View>
+          <ProjectsBlock
+            data={{ ...data, projects } as ResumeData}
+            palette={palette}
+            heading={<AtsSectionTitle title="Projects" palette={palette} />}
+          />
         ) : null;
 
       case "education":
@@ -1526,6 +1649,7 @@ function ModernBandTemplate({ data }: { data: ResumeData }) {
     rank
   );
 
+  // Only the profile summary stays in the right column of the two-column band.
   const rightSections = orderByRank(
     [
       {
@@ -1536,22 +1660,41 @@ function ModernBandTemplate({ data }: { data: ResumeData }) {
           </Section>
         ) : null,
       },
+    ],
+    rank
+  );
+
+  // Experience & Projects flow FULL-WIDTH below the two-column band. react-pdf
+  // cannot page-break content inside a flexDirection:"row", so while these long
+  // sections lived in the right column they jumped wholesale to page 2 when they
+  // didn't fit next to the left column — leaving page 1 half-empty. Full-width
+  // flow lets them fill page 1 and split naturally onto page 2.
+  const flowSections = orderByRank(
+    [
       {
         key: "experience",
         node:
           experience.length > 0 ? (
-            <Section title="Experience" palette={palette}>
-              <ExperienceList items={experience} palette={palette} />
-            </Section>
+            <View style={styles.section}>
+              <ExperienceList
+                items={experience}
+                palette={palette}
+                heading={<SectionHeading title="Experience" palette={palette} />}
+              />
+            </View>
           ) : null,
       },
       {
         key: "projects",
         node:
           projects.length > 0 ? (
-            <Section title="Projects" palette={palette}>
-              <ProjectsBlock data={{ ...data, projects } as ResumeData} palette={palette} />
-            </Section>
+            <View style={styles.section}>
+              <ProjectsBlock
+                data={{ ...data, projects } as ResumeData}
+                palette={palette}
+                heading={<SectionHeading title="Projects" palette={palette} />}
+              />
+            </View>
           ) : null,
       },
     ],
@@ -1568,6 +1711,9 @@ function ModernBandTemplate({ data }: { data: ResumeData }) {
           // repeats on every page → proper top/bottom margin on page 2+
           paddingTop: 16,
           paddingBottom: 20,
+          // horizontal padding lives on the Page so the full-width flow region
+          // below the band inherits a proper left/right margin on every page
+          paddingHorizontal: 24,
         }}
       >
         {/* Header band */}
@@ -1578,8 +1724,9 @@ function ModernBandTemplate({ data }: { data: ResumeData }) {
             paddingHorizontal: 28,
             flexDirection: "row",
             alignItems: "center",
-            // cancel page top padding so the band stays edge-to-edge on page 1
+            // cancel the page padding so the band stays edge-to-edge on page 1
             marginTop: -16,
+            marginHorizontal: -24,
           }}
         >
           <View style={{ flex: 1 }}>
@@ -1601,7 +1748,7 @@ function ModernBandTemplate({ data }: { data: ResumeData }) {
           )}
         </View>
 
-        <View style={{ flexDirection: "row", paddingHorizontal: 24, paddingTop: 20 }}>
+        <View style={{ flexDirection: "row", paddingTop: 20 }}>
           {/* Left narrow column */}
           <View style={{ width: "34%", paddingRight: 16 }}>
             {leftSections.map((s) => (
@@ -1622,6 +1769,16 @@ function ModernBandTemplate({ data }: { data: ResumeData }) {
             ))}
           </View>
         </View>
+
+        {/* Experience & Projects — full-width below the band, so they can flow
+            across pages instead of being trapped in the two-column body. */}
+        {flowSections.length > 0 && (
+          <View style={{ paddingTop: 6 }}>
+            {flowSections.map((s) => (
+              <React.Fragment key={s.key}>{s.node}</React.Fragment>
+            ))}
+          </View>
+        )}
       </Page>
     </Document>
   );
