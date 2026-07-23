@@ -225,7 +225,10 @@ const StudentsZoneUpdatePage: React.FC = () => {
         `${API_LMS_URL}/api/student-info/students-zone-update`,
         {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" ,"x-api-key" : "Jobs.tenx@123"},          
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": process.env.NEXT_PUBLIC_STUDENT_INFO_API_KEY || "",
+          },
           credentials: "include",
           body: JSON.stringify({
             clerkIds: Array.from(selected),

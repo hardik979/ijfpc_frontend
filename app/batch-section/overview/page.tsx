@@ -1,9 +1,9 @@
 "use client";
 
 import { Suspense } from "react";
-import UpdateBatchStatus from "@/components/batch/UpdateBatchStatus";
+import BatchOverview from "@/components/batch/BatchOverview";
 
-export default function UpdateBatchStatusPage() {
+export default function BatchOverviewPage() {
   return (
     <Suspense
       fallback={
@@ -12,7 +12,7 @@ export default function UpdateBatchStatusPage() {
         </div>
       }
     >
-      <UpdateBatchStatus />
+      <BatchOverview />
     </Suspense>
   );
 }

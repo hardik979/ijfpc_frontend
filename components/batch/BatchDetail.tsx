@@ -18,6 +18,12 @@ import {
   X,
   Check,
   AlertTriangle,
+  Tag,
+  GraduationCap,
+  MapPin,
+  Calendar,
+  Clock,
+  Plus,
 } from "lucide-react";
 
 type Course = { _id: string; title?: string };
@@ -34,11 +40,38 @@ type Batch = {
   _id: string;
   batch?: string;
   status?: string;
+  topic?: string;
+  trainerName?: string;
+  classRoom?: string;
+  classDate?: string;
+  classTime?: string;
+  sessions?: Session[];
   course?: Course | string | null;
   students?: Student[];
 };
 
+type Session = { _id?: string; topic?: string; time?: string };
+
 const ALLOWED_STATUS = ["Upcoming", "Active", "Completed"] as const;
+// Keep in sync with the `topic` enum in lms-backend/models/Batches.js
+const TOPIC_OPTIONS = [
+  "SQL",
+  "Linux",
+  "Grafana",
+  "Dynatrace",
+  "ITIL",
+  "Python",
+  "Excel",
+  "MySQL",
+  "Capstone_Projects",
+  "ML",
+  "Communication",
+  "DS Projects",
+  "Recorded Lectures",
+  "Mock Interviews",
+  "HR Calling",
+] as const;
+const topicLabel = (t?: string) => (t ? t.replace(/_/g, " ") : "");
 
 const zoneBadge = (zone?: string) => {
   const z = (zone || "").toLowerCase();
@@ -73,7 +106,7 @@ export default function BatchDetail({ batchId }: { batchId: string }) {
   const [removingBulk, setRemovingBulk] = useState(false);
 
   // which modal is open
-  const [modal, setModal] = useState<null | "add" | "rename" | "status" | "delete">(null);
+  const [modal, setModal] = useState<null | "add" | "rename" | "status" | "topic" | "details" | "sessions" | "delete">(null);
 
   const loadBatch = useCallback(async () => {
     try {
@@ -236,7 +269,41 @@ export default function BatchDetail({ batchId }: { batchId: string }) {
                         <span className="font-semibold text-[var(--panel-text-primary)]">{students.length}</span>
                         student{students.length === 1 ? "" : "s"}
                       </span>
+                      <span className="flex items-center gap-1.5">
+                        <Tag className="h-4 w-4 text-fuchsia-400" />
+                        {batch.topic ? topicLabel(batch.topic) : "No topic"}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <GraduationCap className="h-4 w-4 text-amber-400" />
+                        {batch.trainerName || "No trainer"}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <MapPin className="h-4 w-4 text-rose-400" />
+                        {batch.classRoom || "No venue"}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <Calendar className="h-4 w-4 text-sky-400" />
+                        {batch.classDate || "No date"}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <Clock className="h-4 w-4 text-teal-400" />
+                        {batch.classTime || "No time"}
+                      </span>
                     </div>
+                    {batch.sessions && batch.sessions.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {batch.sessions.map((s, i) => (
+                          <span
+                            key={s._id || i}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-teal-500/30 bg-teal-500/10 px-2.5 py-1 text-xs font-medium text-teal-700"
+                          >
+                            <Clock className="h-3.5 w-3.5" />
+                            {topicLabel(s.topic) || "—"}
+                            {s.time ? <span className="text-teal-700/70">· {s.time}</span> : null}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <button
                     onClick={loadBatch}
@@ -264,6 +331,21 @@ export default function BatchDetail({ batchId }: { batchId: string }) {
                     onClick={() => setModal("status")}
                     icon={<RefreshCw className="h-4 w-4" />}
                     label="Change Status"
+                  />
+                  <ToolbarButton
+                    onClick={() => setModal("topic")}
+                    icon={<Tag className="h-4 w-4" />}
+                    label="Change Topic"
+                  />
+                  <ToolbarButton
+                    onClick={() => setModal("details")}
+                    icon={<GraduationCap className="h-4 w-4" />}
+                    label="Trainer / Venue"
+                  />
+                  <ToolbarButton
+                    onClick={() => setModal("sessions")}
+                    icon={<Clock className="h-4 w-4" />}
+                    label="Timetable"
                   />
                   <ToolbarButton
                     onClick={() => setModal("delete")}
@@ -428,6 +510,44 @@ export default function BatchDetail({ batchId }: { batchId: string }) {
           onClose={() => setModal(null)}
           onDone={(status) => {
             setBatch((prev) => (prev ? { ...prev, status } : prev));
+            setModal(null);
+          }}
+        />
+      )}
+      {modal === "topic" && batch && (
+        <TopicModal
+          batchId={batchId}
+          currentTopic={batch.topic || ""}
+          onClose={() => setModal(null)}
+          onDone={(topic) => {
+            setBatch((prev) => (prev ? { ...prev, topic } : prev));
+            setModal(null);
+          }}
+        />
+      )}
+      {modal === "details" && batch && (
+        <DetailsModal
+          batchId={batchId}
+          current={{
+            trainerName: batch.trainerName || "",
+            classRoom: batch.classRoom || "",
+            classDate: batch.classDate || "",
+            classTime: batch.classTime || "",
+          }}
+          onClose={() => setModal(null)}
+          onDone={(patch) => {
+            setBatch((prev) => (prev ? { ...prev, ...patch } : prev));
+            setModal(null);
+          }}
+        />
+      )}
+      {modal === "sessions" && batch && (
+        <SessionsModal
+          batchId={batchId}
+          current={batch.sessions || []}
+          onClose={() => setModal(null)}
+          onDone={(sessions) => {
+            setBatch((prev) => (prev ? { ...prev, sessions } : prev));
             setModal(null);
           }}
         />
@@ -873,6 +993,359 @@ function StatusModal({
               <Check className="h-4 w-4" />
             )}
             Save
+          </button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
+/* ---------------- Topic modal ---------------- */
+
+function TopicModal({
+  batchId,
+  currentTopic,
+  onClose,
+  onDone,
+}: {
+  batchId: string;
+  currentTopic: string;
+  onClose: () => void;
+  onDone: (topic: string) => void;
+}) {
+  const [topic, setTopic] = useState(currentTopic);
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    if (!topic) {
+      toast.error("Please select a topic");
+      return;
+    }
+    try {
+      setSaving(true);
+      const res = await fetch(
+        `${API_LMS_URL}/api/batches/update-batch-topic/${encodeURIComponent(batchId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ topic }),
+        }
+      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.message || "Failed to update topic");
+      toast.success("Batch topic updated");
+      onDone(json?.data?.topic || topic);
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to update topic");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ModalShell title="Change batch topic" onClose={onClose}>
+      <div className="space-y-4 p-5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {TOPIC_OPTIONS.map((t) => {
+            const active = topic === t;
+            return (
+              <button
+                key={t}
+                onClick={() => setTopic(t)}
+                className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-semibold transition ${
+                  active
+                    ? "border-[var(--panel-border)] bg-[var(--panel-border)] text-[var(--panel-text-primary)]"
+                    : "border-[var(--panel-border)] bg-[var(--panel-card-soft)] text-[var(--panel-text-secondary)] hover:bg-[var(--panel-card)]"
+                }`}
+              >
+                <Tag className="h-3.5 w-3.5 text-fuchsia-400" />
+                {topicLabel(t)}
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-4 py-2.5 text-sm font-medium text-[var(--panel-text-secondary)] transition hover:bg-[var(--panel-border)]"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={save}
+            disabled={saving || !topic || topic === currentTopic}
+            className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-gradient-to-r from-fuchsia-500 to-pink-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-fuchsia-500/25 transition hover:shadow-xl disabled:opacity-50"
+          >
+            {saving ? (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+            ) : (
+              <Check className="h-4 w-4" />
+            )}
+            Save
+          </button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
+/* ---------------- Details modal (trainer / classroom / date / time) ---------------- */
+
+type BatchDetails = {
+  trainerName: string;
+  classRoom: string;
+  classDate: string;
+  classTime: string;
+};
+
+function DetailsModal({
+  batchId,
+  current,
+  onClose,
+  onDone,
+}: {
+  batchId: string;
+  current: BatchDetails;
+  onClose: () => void;
+  onDone: (patch: BatchDetails) => void;
+}) {
+  const [trainer, setTrainer] = useState(current.trainerName);
+  const [classRoom, setClassRoom] = useState(current.classRoom);
+  const [classDate, setClassDate] = useState(current.classDate);
+  const [classTime, setClassTime] = useState(current.classTime);
+  const [saving, setSaving] = useState(false);
+
+  const unchanged =
+    trainer.trim() === current.trainerName.trim() &&
+    classRoom.trim() === current.classRoom.trim() &&
+    classDate.trim() === current.classDate.trim() &&
+    classTime.trim() === current.classTime.trim();
+
+  const save = async () => {
+    try {
+      setSaving(true);
+      const payload = {
+        trainerName: trainer.trim(),
+        classRoom: classRoom.trim(),
+        classDate: classDate.trim(),
+        classTime: classTime.trim(),
+      };
+      const res = await fetch(
+        `${API_LMS_URL}/api/batches/update-batch-details/${encodeURIComponent(batchId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.message || "Failed to update details");
+      toast.success("Batch details updated");
+      onDone({
+        trainerName: json?.data?.trainerName ?? payload.trainerName,
+        classRoom: json?.data?.classRoom ?? payload.classRoom,
+        classDate: json?.data?.classDate ?? payload.classDate,
+        classTime: json?.data?.classTime ?? payload.classTime,
+      });
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to update details");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ModalShell title="Batch details" onClose={onClose}>
+      <div className="space-y-4 p-5">
+        <div>
+          <label className="mb-2 flex items-center gap-2 text-sm font-medium text-[var(--panel-text-secondary)]">
+            <GraduationCap className="h-4 w-4 text-amber-400" />
+            Trainer name
+          </label>
+          <input
+            value={trainer}
+            onChange={(e) => setTrainer(e.target.value)}
+            autoFocus
+            placeholder="Enter trainer name"
+            className="w-full rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] px-4 py-3 text-sm text-[var(--panel-text-primary)] outline-none focus:border-amber-500/50"
+          />
+        </div>
+        <div>
+          <label className="mb-2 flex items-center gap-2 text-sm font-medium text-[var(--panel-text-secondary)]">
+            <MapPin className="h-4 w-4 text-rose-400" />
+            Venue
+          </label>
+          <input
+            value={classRoom}
+            onChange={(e) => setClassRoom(e.target.value)}
+            placeholder="e.g. Ground Floor [Learning Lab-1]"
+            className="w-full rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] px-4 py-3 text-sm text-[var(--panel-text-primary)] outline-none focus:border-rose-500/50"
+          />
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className="mb-2 flex items-center gap-2 text-sm font-medium text-[var(--panel-text-secondary)]">
+              <Calendar className="h-4 w-4 text-sky-400" />
+              Batch date
+            </label>
+            <input
+              type="date"
+              value={classDate}
+              onChange={(e) => setClassDate(e.target.value)}
+              className="w-full rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] px-4 py-3 text-sm text-[var(--panel-text-primary)] outline-none focus:border-sky-500/50 [color-scheme:dark]"
+            />
+          </div>
+          <div>
+            <label className="mb-2 flex items-center gap-2 text-sm font-medium text-[var(--panel-text-secondary)]">
+              <Clock className="h-4 w-4 text-teal-400" />
+              Class time
+            </label>
+            <input
+              value={classTime}
+              onChange={(e) => setClassTime(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !unchanged && save()}
+              placeholder="e.g. 10:00 AM - 12:00 PM"
+              className="w-full rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] px-4 py-3 text-sm text-[var(--panel-text-primary)] outline-none focus:border-teal-500/50"
+            />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-4 py-2.5 text-sm font-medium text-[var(--panel-text-secondary)] transition hover:bg-[var(--panel-border)]"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={save}
+            disabled={saving || unchanged}
+            className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-gradient-to-r from-amber-500 to-orange-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-amber-500/25 transition hover:shadow-xl disabled:opacity-50"
+          >
+            {saving ? (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+            ) : (
+              <Check className="h-4 w-4" />
+            )}
+            Save
+          </button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
+/* ---------------- Sessions modal (daily timetable) ---------------- */
+
+function SessionsModal({
+  batchId,
+  current,
+  onClose,
+  onDone,
+}: {
+  batchId: string;
+  current: Session[];
+  onClose: () => void;
+  onDone: (sessions: Session[]) => void;
+}) {
+  const [rows, setRows] = useState<Session[]>(
+    current.length ? current.map((s) => ({ topic: s.topic || "", time: s.time || "" })) : [{ topic: "", time: "" }]
+  );
+  const [saving, setSaving] = useState(false);
+
+  const addRow = () => setRows((prev) => [...prev, { topic: "", time: "" }]);
+  const removeRow = (i: number) => setRows((prev) => prev.filter((_, idx) => idx !== i));
+  const updateRow = (i: number, field: "topic" | "time", value: string) =>
+    setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, [field]: value } : r)));
+
+  const save = async () => {
+    try {
+      setSaving(true);
+      const sessions = rows
+        .map((r) => ({ topic: (r.topic || "").trim(), time: (r.time || "").trim() }))
+        .filter((r) => r.topic || r.time);
+      const res = await fetch(
+        `${API_LMS_URL}/api/batches/update-batch-sessions/${encodeURIComponent(batchId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessions }),
+        }
+      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.message || "Failed to update timetable");
+      toast.success("Timetable updated");
+      onDone(Array.isArray(json?.data?.sessions) ? json.data.sessions : sessions);
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to update timetable");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ModalShell
+      title="Daily timetable"
+      subtitle="Classes this batch attends in a day"
+      onClose={onClose}
+      maxW="max-w-lg"
+    >
+      <div className="space-y-3 p-5">
+        {rows.map((r, i) => (
+          <div key={i} className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <select
+              value={r.topic}
+              onChange={(e) => updateRow(i, "topic", e.target.value)}
+              className="flex-1 appearance-none rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] px-3 py-2.5 text-sm text-[var(--panel-text-primary)] outline-none focus:border-teal-500/50"
+            >
+              <option value="">Select topic</option>
+              {TOPIC_OPTIONS.map((t) => (
+                <option key={t} value={t}>
+                  {topicLabel(t)}
+                </option>
+              ))}
+            </select>
+            <input
+              value={r.time}
+              onChange={(e) => updateRow(i, "time", e.target.value)}
+              placeholder="e.g. 10:30 AM - 12:00 PM"
+              className="flex-1 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] px-3 py-2.5 text-sm text-[var(--panel-text-primary)] outline-none focus:border-teal-500/50"
+            />
+            <button
+              onClick={() => removeRow(i)}
+              title="Remove class"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center self-end rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-700 transition hover:bg-rose-500/20 sm:self-auto"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        ))}
+
+        <button
+          onClick={addRow}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-teal-500/30 bg-teal-500/10 px-3 py-2 text-xs font-semibold text-teal-700 transition hover:bg-teal-500/20"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add class
+        </button>
+
+        <div className="flex justify-end gap-2 pt-1">
+          <button
+            onClick={onClose}
+            className="rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-4 py-2.5 text-sm font-medium text-[var(--panel-text-secondary)] transition hover:bg-[var(--panel-border)]"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={save}
+            disabled={saving}
+            className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-gradient-to-r from-teal-500 to-cyan-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-teal-500/25 transition hover:shadow-xl disabled:opacity-50"
+          >
+            {saving ? (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+            ) : (
+              <Check className="h-4 w-4" />
+            )}
+            Save timetable
           </button>
         </div>
       </div>

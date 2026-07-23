@@ -1,9 +1,9 @@
 "use client";
 
 import { Suspense } from "react";
-import UpdateBatchName from "@/components/batch/UpdateBatchName";
+import StudentZoneUpdate from "@/components/batch/StudentZoneUpdate";
 
-export default function UpdateBatchNamePage() {
+export default function StudentEligibilityPage() {
   return (
     <Suspense
       fallback={
@@ -12,7 +12,7 @@ export default function UpdateBatchNamePage() {
         </div>
       }
     >
-      <UpdateBatchName />
+      <StudentZoneUpdate />
     </Suspense>
   );
 }
