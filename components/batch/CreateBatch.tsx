@@ -154,13 +154,16 @@ export default function CreateBatch() {
 
   const filteredStudents = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const notPlaced = students.filter((s) => !s.isPlaced);
-    if (!q) return notPlaced;
-    return notPlaced.filter((s) => (s.fullName || "").toLowerCase().includes(q) || (s.email || "").toLowerCase().includes(q));
+    console.log('✌️q --->', q);
+
+    // const notPlaced = students.filter((s) => !s.isPlaced);
+    // console.log('✌️notPlaced --->', notPlaced);
+
+    if (!q) return students;
+    return students.filter((s) => (s.fullName || "").toLowerCase().includes(q) || (s.email || "").toLowerCase().includes(q));
   }, [students, search]);
 
-  const allFilteredSelected =
-    filteredStudents.length > 0 && filteredStudents.every((s) => selected.has(s._id));
+  const allFilteredSelected = filteredStudents.length > 0 && filteredStudents.every((s) => selected.has(s._id));
 
   const toggle = (id: string) =>
     setSelected((prev) => {

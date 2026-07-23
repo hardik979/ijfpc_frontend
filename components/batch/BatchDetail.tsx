@@ -687,9 +687,9 @@ function AddStudentsModal({
   // Only students enrolled in the course who are NOT already in this batch
   const available = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const list = students.filter((s) => !existingIds.has(s._id) && !s.isPlaced);
-    if (!q) return list;
-    return list.filter(
+   // const list = students.filter((s) =>  !s.isPlaced);//!existingIds.has(s._id) &&
+    if (!q) return students;
+    return students.filter(
       (s) =>
         (s.fullName || "").toLowerCase().includes(q) ||
         (s.email || "").toLowerCase().includes(q)
