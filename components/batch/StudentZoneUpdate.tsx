@@ -235,8 +235,8 @@ const StudentZoneUpdate: React.FC = () => {
                     {/* Header */}
                     <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
                         <div>
-                            <h1 className="text-3xl font-bold text-[var(--panel-text-primary)]">Students Zone Management</h1>
-                            <p className="text-[var(--panel-text-secondary)] mt-2">View and manage all enrolled students</p>
+                            <h1 className="text-3xl font-bold text-[var(--panel-text-primary)]">Student Eligibility</h1>
+                            <p className="text-[var(--panel-text-secondary)] mt-2">Mark students eligible for today&rsquo;s attendance</p>
                         </div>
                         <ThemeToggle />
                     </div>

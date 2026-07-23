@@ -121,6 +121,8 @@ export type StatItem = {
   label: string;
   value: number | string;
   accent: Accent;
+  /** Optional small secondary line under the value (e.g. "22 students"). */
+  sub?: string;
 };
 
 export function StatCards({
@@ -150,7 +152,7 @@ export function StatCards({
   );
 }
 
-function StatCard({ label, value, accent }: StatItem) {
+function StatCard({ label, value, accent, sub }: StatItem) {
   const a = ACCENTS[accent];
   return (
     <div className="relative overflow-hidden rounded-xl border border-[var(--panel-border-strong)] bg-[var(--panel-card)] p-4 shadow-sm">
@@ -163,6 +165,11 @@ function StatCard({ label, value, accent }: StatItem) {
           {label}
         </div>
         <div className={`mt-1 text-3xl font-semibold ${a.value}`}>{value}</div>
+        {sub && (
+          <div className="mt-0.5 text-xs font-medium text-[var(--panel-text-muted)]">
+            {sub}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -5,7 +5,7 @@
 // two-level drill-down (student → their records → one record's detail) — all
 // driven by the useMonthDay hook. Kept in one file so the pattern is easy to
 // compare. Every table is numbered 1, 2, 3… via the shared serial column.
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 import DataPresentationTable from "@/healper/DataPresentationTable";
 import {
@@ -21,6 +21,7 @@ import {
   isAiCallDnp,
   fetchQuizMonth,
   fetchQuizDay,
+  fetchQuizMonthStudentCount,
   fetchMockMonth,
   fetchMockDay,
   fetchAiMonth,
@@ -154,6 +155,19 @@ export function DailyQuizTab({
   const [student, setStudent] = useState<QuizStudentRow | null>(null);
   const [selected, setSelected] = useState<QuizAttemptRow | null>(null);
 
+  // Distinct students who attempted at least once this month (counted once even
+  // if they attempted on several days). Loaded alongside the month summary.
+  const [monthStudentCount, setMonthStudentCount] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    fetchQuizMonthStudentCount(month, course)
+      .then((n) => !cancelled && setMonthStudentCount(n))
+      .catch(() => !cancelled && setMonthStudentCount(0));
+    return () => {
+      cancelled = true;
+    };
+  }, [month, courseId, refreshKey]);
+
   // Unique students for the selected day, with per-status tallies.
   const students = useMemo(() => groupQuizByStudent(dayRows), [dayRows]);
 
@@ -195,19 +209,25 @@ export function DailyQuizTab({
       {selectedDate ? (
         <StatCards
           items={[
-            { label: "Total Students", value: students.length, accent: "blue" },
-            { label: "Total Attempts", value: dayRows.length, accent: "violet" },
+            {
+              label: "Total Attempts",
+              value: dayRows.length,
+              sub: `${students.length} student${students.length === 1 ? "" : "s"} attempted`,
+              accent: "violet",
+            },
             { label: "Evaluated", value: dayStats.evaluated, accent: "emerald" },
             { label: "Pending", value: dayStats.pending, accent: "amber" },
           ]}
         />
       ) : (
         <StatCards
+          columns={5}
           items={[
             { label: "Total Attempts", value: monthTotals.totalAttempts, accent: "blue" },
+            { label: "Students Attempted", value: monthStudentCount, accent: "violet" },
             { label: "Evaluated", value: monthTotals.evaluatedCount, accent: "emerald" },
             { label: "Pending", value: monthTotals.pendingCount, accent: "amber" },
-            { label: "Student-days", value: monthTotals.uniqueStudentCount, accent: "violet" },
+            { label: "Student-days", value: monthTotals.uniqueStudentCount, accent: "slate" },
           ]}
         />
       )}
@@ -230,6 +250,7 @@ export function DailyQuizTab({
           onDateSelect={loadDay}
           metrics={[
             { key: "totalAttempts", label: "Attempts" },
+            { key: "uniqueStudentCount", label: "Students", className: "text-blue-700" },
             { key: "evaluatedCount", label: "Evaluated", className: "text-emerald-800" },
             { key: "pendingCount", label: "Pending", className: "text-amber-700" },
           ]}

@@ -611,6 +611,23 @@ export async function fetchQuizDay(
   return data?.attempts ?? [];
 }
 
+/**
+ * Count of DISTINCT students who attempted at least once in the month (a student
+ * who attempts on several days is counted once). Course-optional. Comes from the
+ * same by-date endpoint's `distinctStudentCount`, so it stays in sync with the
+ * calendar/chart data without summing per-day uniques (which is student-days).
+ */
+export async function fetchQuizMonthStudentCount(
+  month: string,
+  courseId?: string
+): Promise<number> {
+  const { data } = await axios.get(
+    `${LMS}/api/daily-quiz/students-results/by-date`,
+    { params: { month, ...(courseId ? { courseId } : {}) } }
+  );
+  return typeof data?.distinctStudentCount === "number" ? data.distinctStudentCount : 0;
+}
+
 /* --------------------------- Mock Interview --------------------------- */
 export async function fetchMockMonth(
   month: string,
