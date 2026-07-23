@@ -248,6 +248,12 @@ body {
 [data-theme="dark"] .hover\:from-\[\#FFFDF9\]:hover { --tw-gradient-from: var(--bg-accent) !important; }
 [data-theme="dark"] .hover\:to-\[\#FFF8F0\]:hover   { --tw-gradient-to:   var(--bg-accent) !important; }
 
+/* ── Batch Overview — zone-tinted rows keep their zone color on hover ──
+   (more specific than the generic "tr:hover" rule above, so it wins) ── */
+[data-theme="dark"] tr.bg-blue-500\/15:hover    { background: rgba(59, 130, 246, 0.28) !important; }
+[data-theme="dark"] tr.bg-yellow-500\/15:hover  { background: rgba(234, 179, 8, 0.28) !important; }
+[data-theme="dark"] tr.bg-emerald-500\/15:hover { background: rgba(16, 185, 129, 0.28) !important; }
+
 /* ── Badge pill backgrounds ──────────────────────────────────────── */
 [data-theme="dark"] .bg-gradient-to-br.from-\[\#F7F1E8\].to-\[\#EDE3D5\] {
   background: var(--bg-accent) !important;

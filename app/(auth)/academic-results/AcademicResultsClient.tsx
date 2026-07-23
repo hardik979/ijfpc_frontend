@@ -5,13 +5,14 @@ import Link from "next/link";
 import { ArrowLeft, CalendarDays, GraduationCap, RefreshCw } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useTheme } from "@/context/ThemeContext";
-import { currentMonth, type TabKey } from "./data";
+import { currentMonth, QUIZ_ALLOWED_COURSE_IDS, type TabKey } from "./data";
 import { TabBar, CourseFilter } from "./ui";
 import {
   DailyQuizTab,
   MockInterviewTab,
   AiHrCallingTab,
   RealHrCallingTab,
+  MockCompletedButton,
 } from "./tabs";
 
 const DESCRIPTIONS: Record<TabKey, string> = {
@@ -50,10 +51,14 @@ export default function AcademicResultsClient() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <ThemeToggle />
-            {(tab === "quiz" || tab === "mock" || tab === "ai") && (
-              <CourseFilter value={courseId} onChange={setCourseId} />
+            {tab === "quiz" && (
+              <CourseFilter
+                value={courseId}
+                onChange={setCourseId}
+                allowedIds={QUIZ_ALLOWED_COURSE_IDS}
+              />
             )}
             <div className="relative">
               <CalendarDays className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--panel-text-muted)]" />
@@ -75,7 +80,10 @@ export default function AcademicResultsClient() {
           </div>
         </div>
 
-        <TabBar active={tab} onChange={setTab} />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <TabBar active={tab} onChange={setTab} />
+          {tab === "mock" && <MockCompletedButton refreshKey={refreshKey} />}
+        </div>
 
         {/* Only the active tab is mounted, so switching tabs fetches fresh data. */}
         {tab === "quiz" && (
@@ -89,7 +97,6 @@ export default function AcademicResultsClient() {
         {tab === "mock" && (
           <MockInterviewTab
             month={month}
-            courseId={courseId}
             refreshKey={refreshKey}
             onMonthChange={setMonth}
           />
@@ -97,7 +104,6 @@ export default function AcademicResultsClient() {
         {tab === "ai" && (
           <AiHrCallingTab
             month={month}
-            courseId={courseId}
             refreshKey={refreshKey}
             onMonthChange={setMonth}
           />

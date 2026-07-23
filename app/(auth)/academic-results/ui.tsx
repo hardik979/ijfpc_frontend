@@ -39,9 +39,12 @@ import { absentColumns } from "./columns";
 export function CourseFilter({
   value,
   onChange,
+  allowedIds,
 }: {
   value: string;
   onChange: (v: string) => void;
+  /** When set, only these course ids are selectable (others are hidden). */
+  allowedIds?: string[];
 }) {
   const [courses, setCourses] = useState<Course[]>([]);
 
@@ -50,6 +53,10 @@ export function CourseFilter({
       .then(setCourses)
       .catch(() => setCourses([]));
   }, []);
+
+  const visibleCourses = allowedIds
+    ? courses.filter((c) => allowedIds.includes(c._id))
+    : courses;
 
   return (
     <div className="relative">
@@ -60,7 +67,7 @@ export function CourseFilter({
         className="rounded-md border border-[var(--panel-border-strong)] bg-[var(--panel-card)] py-1.5 pl-8 pr-3 text-sm text-[var(--panel-text-primary)] focus:outline-none focus:ring-2 focus:ring-blue-500"
       >
         <option value="">All courses</option>
-        {courses.map((c) => (
+        {visibleCourses.map((c) => (
           <option key={c._id} value={c._id}>
             {c.title ?? c.name ?? c._id}
           </option>

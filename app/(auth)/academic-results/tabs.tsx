@@ -6,7 +6,7 @@
 // driven by the useMonthDay hook. Kept in one file so the pattern is easy to
 // compare. Every table is numbered 1, 2, 3… via the shared serial column.
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight, Download } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Users } from "lucide-react";
 import DataPresentationTable from "@/healper/DataPresentationTable";
 import {
   useMonthDay,
@@ -28,12 +28,15 @@ import {
   fetchAiDay,
   fetchRealHrMonth,
   fetchRealHrDay,
+  fetchMockInterviewCompleted,
+  JOB_READY_BOOTCAMP_COURSE_ID,
   type QuizByDateRow,
   type QuizAttemptRow,
   type QuizStudentRow,
   type MockByDateRow,
   type MockAttemptRow,
   type MockStudentRow,
+  type MockCompletedRow,
   type AiCallingByDateRow,
   type AiCallingRow,
   type AiStudentRow,
@@ -45,6 +48,7 @@ import {
   quizStudentColumns,
   mockStudentColumns,
   mockLevelBadge,
+  mockCompletedColumns,
   aiStudentColumns,
   realHrStudentColumns,
 } from "./columns";
@@ -349,25 +353,82 @@ export function DailyQuizTab({
   );
 }
 
+/**
+ * Standing roster (not date-scoped): students who've used all 7 of their AI
+ * mock-interview attempts. Self-contained (own fetch + modal) so it can sit
+ * next to the TabBar as a persistent action, instead of floating inside the
+ * Mock Interview tab's day/month content.
+ */
+export function MockCompletedButton({ refreshKey }: { refreshKey: number }) {
+  const [completed, setCompleted] = useState<MockCompletedRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetchMockInterviewCompleted()
+      .then((rows) => !cancelled && setCompleted(rows))
+      .catch(() => !cancelled && setCompleted([]))
+      .finally(() => !cancelled && setLoading(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshKey]);
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--panel-border-strong)] bg-[var(--panel-card)] px-3 py-1.5 text-sm font-medium text-[var(--panel-text-primary)] shadow-sm transition hover:bg-[var(--panel-card)]"
+      >
+        <Users className="h-4 w-4" />
+        Completed 7 Interviews
+        <span className="rounded-full bg-blue-600 px-1.5 py-0.5 text-xs font-bold text-white">
+          {completed.length}
+        </span>
+      </button>
+
+      <DrillDownModal
+        open={open}
+        title="Completed 7 Mock Interviews"
+        subtitle={`${completed.length} student${completed.length === 1 ? "" : "s"} reached the interview limit`}
+        onClose={() => setOpen(false)}
+      >
+        <DataPresentationTable<MockCompletedRow>
+          data={completed}
+          columns={mockCompletedColumns}
+          loading={loading}
+          searchable
+          paginated
+          pageSize={15}
+          rowKey="id"
+          stickyHeader
+          emptyMessage="No students have completed 7 mock interviews yet"
+        />
+      </DrillDownModal>
+    </>
+  );
+}
+
 /* ═════════════════════════ Mock Interview ══════════════════════ */
 export function MockInterviewTab({
   month,
-  courseId,
   refreshKey,
   onMonthChange,
 }: {
   month: string;
-  courseId: string;
   refreshKey: number;
   onMonthChange: (m: string) => void;
 }) {
-  const course = courseId || undefined;
+  // Fixed to the 100% Job-Ready Bootcamp only — not a user-selectable filter.
+  const course = JOB_READY_BOOTCAMP_COURSE_ID;
   const { byDate, loadingMonth, selectedDate, dayRows, loadingDay, loadDay } =
     useMonthDay<MockByDateRow, MockAttemptRow>(
       month,
       (m) => fetchMockMonth(m, course),
       (d) => fetchMockDay(d, course),
-      [courseId, refreshKey]
+      [refreshKey]
     );
 
   // Drill-down state: a student (level 2) and, within them, one interview (level 3).
@@ -565,22 +626,21 @@ export function MockInterviewTab({
 /* ═══════════════════════════ AI HR Calling ═════════════════════ */
 export function AiHrCallingTab({
   month,
-  courseId,
   refreshKey,
   onMonthChange,
 }: {
   month: string;
-  courseId: string;
   refreshKey: number;
   onMonthChange: (m: string) => void;
 }) {
-  const course = courseId || undefined;
+  // Fixed to the 100% Job-Ready Bootcamp only — not a user-selectable filter.
+  const course = JOB_READY_BOOTCAMP_COURSE_ID;
   const { byDate, loadingMonth, selectedDate, dayRows, loadingDay, loadDay } =
     useMonthDay<AiCallingByDateRow, AiCallingRow>(
       month,
       (m) => fetchAiMonth(m, course),
       (d) => fetchAiDay(d, course),
-      [courseId, refreshKey]
+      [refreshKey]
     );
 
   // Drill-down state: a candidate (level 2) and, within them, one call (level 3).
@@ -784,11 +844,13 @@ export function RealHrCallingTab({
   refreshKey: number;
   onMonthChange: (m: string) => void;
 }) {
+  // Fixed to the 100% Job-Ready Bootcamp only — not a user-selectable filter.
+  const course = JOB_READY_BOOTCAMP_COURSE_ID;
   const { byDate, loadingMonth, selectedDate, dayRows, loadingDay, loadDay } =
     useMonthDay<RealHrByDateRow, RealHrRow>(
       month,
-      (m) => fetchRealHrMonth(m),
-      (d) => fetchRealHrDay(d),
+      (m) => fetchRealHrMonth(m, course),
+      (d) => fetchRealHrDay(d, course),
       [refreshKey]
     );
 

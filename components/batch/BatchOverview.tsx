@@ -37,6 +37,11 @@ type Batch = {
 const ZONES = ["blue", "yellow", "green"] as const;
 type ZoneFilter = "all" | (typeof ZONES)[number];
 
+// Display order for zone rows: blue, then yellow, then green — anything else
+// (e.g. "newly_enrolled" or no zone) sorts last.
+const ZONE_RANK: Record<string, number> = { blue: 0, yellow: 1, green: 2 };
+const zoneRank = (zone?: string) => ZONE_RANK[(zone || "").toLowerCase()] ?? 99;
+
 const topicLabel = (t?: string) => (t ? t.replace(/_/g, " ") : "—");
 
 const fmtDate = (iso?: string) => {
@@ -212,6 +217,10 @@ export default function BatchOverview() {
       }
     }
 
+    // Blue batches first, then yellow, then green (stable within each zone,
+    // so batches keep their existing relative order — newest-first per zone).
+    out.sort((a, b) => zoneRank(a.zone) - zoneRank(b.zone));
+
     return out;
   }, [batches, search, zone]);
 
@@ -282,21 +291,16 @@ export default function BatchOverview() {
       </div>
 
       <div className="relative z-10 mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
-        {/* Back */}
-        <div className="mb-8 flex items-center justify-between gap-3">
-          <button
-            onClick={() => router.push("/batch-section")}
-            className="group inline-flex items-center gap-2.5 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-4 py-2.5 text-sm font-medium text-[var(--panel-text-secondary)] backdrop-blur-sm transition-all hover:text-[var(--panel-text-primary)]"
-          >
-            <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
-            <span>Back to Batches</span>
-          </button>
-          <ThemeToggle />
-        </div>
-
         {/* Header */}
         <div className="mb-6 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex items-start gap-4">
+            <button
+              onClick={() => router.push("/batch-section")}
+              className="group inline-flex h-14 shrink-0 items-center gap-2.5 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-4 text-sm font-medium text-[var(--panel-text-secondary)] backdrop-blur-sm transition-all hover:text-[var(--panel-text-primary)]"
+            >
+              <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+              <span>Back</span>
+            </button>
             <div className="relative">
               <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 blur-xl" />
               <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl border border-[var(--panel-border)] bg-gradient-to-br from-cyan-500/10 to-blue-500/10 backdrop-blur-sm">
@@ -330,6 +334,7 @@ export default function BatchOverview() {
             >
               <RefreshCw className={`h-4.5 w-4.5 ${loading ? "animate-spin" : ""}`} />
             </button>
+            <ThemeToggle />
           </div>
         </div>
 

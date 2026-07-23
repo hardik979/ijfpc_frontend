@@ -235,6 +235,30 @@ export type Course = {
   name?: string;
 };
 
+/**
+ * Fixed course scoping for the Academic Results dashboard (mirrors the ids in
+ * lms-backend config/Quizcourseconfig.js and routes/academicAbsent.routes.js).
+ * Daily Quiz is filterable between the two; Mock Interview, AI HR Calling, and
+ * Real HR Calling are always restricted to the Bootcamp only (not selectable).
+ */
+export const JOB_READY_BOOTCAMP_COURSE_ID = "68fc62edc1dd02f23abdbcf9";
+export const DATA_ANALYST_COURSE_ID = "69b2a39602fee72dcc6a2121";
+export const QUIZ_ALLOWED_COURSE_IDS = [
+  JOB_READY_BOOTCAMP_COURSE_ID,
+  DATA_ANALYST_COURSE_ID,
+];
+
+/* ------------------- Mock Interview — completed roster ----------------- */
+// A student who has used all 7 of their AI mock-interview attempts (a standing
+// roster, not date-scoped).
+export type MockCompletedRow = {
+  id: string;
+  studentName: string;
+  email: string | null;
+  zone: string | null;
+  interviewCount: number;
+};
+
 /* ══════════════════════════ FORMATTING ═════════════════════════ */
 
 export function currentMonth(): string {
@@ -676,17 +700,21 @@ export async function fetchAiDay(
 
 /* ------------------- Real HR Calling (call recordings) ---------------- */
 export async function fetchRealHrMonth(
-  month: string
+  month: string,
+  courseId?: string
 ): Promise<RealHrByDateRow[]> {
   const { data } = await axios.get(`${LMS}/api/recordings/calendar`, {
-    params: { month },
+    params: { month, ...(courseId ? { courseId } : {}) },
   });
   return data?.data ?? [];
 }
 
-export async function fetchRealHrDay(date: string): Promise<RealHrRow[]> {
+export async function fetchRealHrDay(
+  date: string,
+  courseId?: string
+): Promise<RealHrRow[]> {
   const { data } = await axios.get(`${LMS}/api/recordings/by-date`, {
-    params: { date },
+    params: { date, ...(courseId ? { courseId } : {}) },
   });
   return data?.attempts ?? [];
 }
@@ -695,6 +723,14 @@ export async function fetchRealHrDay(date: string): Promise<RealHrRow[]> {
 export async function fetchCourses(): Promise<Course[]> {
   const { data } = await axios.get(`${LMS}/api/courses/list`);
   return Array.isArray(data) ? data : [];
+}
+
+/* ------------------- Mock Interview — completed roster ----------------- */
+export async function fetchMockInterviewCompleted(): Promise<MockCompletedRow[]> {
+  const { data } = await axios.get(
+    `${LMS}/api/academic-results/mock-interview/completed`
+  );
+  return data?.students ?? [];
 }
 
 /* -------------------------- Absent students --------------------------- */
