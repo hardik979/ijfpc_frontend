@@ -11,6 +11,7 @@ import {
   type MockAttemptRow,
   type MockLevel,
   type MockStudentRow,
+  type MockCompletedRow,
   type AiCallingRow,
   type AiStudentRow,
   type RealHrRow,
@@ -430,6 +431,40 @@ export const mockStudentColumns: Column<MockStudentRow>[] = [
     accessor: "lastAttemptAt",
     sortable: true,
     render: (r) => formatIST(r.lastAttemptAt),
+  },
+];
+
+/* --------------- Mock Interview — completed (7+) roster ---------------- */
+export const mockCompletedColumns: Column<MockCompletedRow>[] = [
+  serialColumn<MockCompletedRow>(),
+  {
+    key: "studentName",
+    header: "Student",
+    accessor: (r) => `${r.studentName ?? ""} ${r.email ?? ""}`.trim(),
+    sortable: true,
+    searchable: true,
+    render: (r) => (
+      <div className="flex flex-col">
+        <span className="font-medium text-gray-900">{r.studentName}</span>
+        {r.email && <span className="text-xs text-gray-500">{r.email}</span>}
+      </div>
+    ),
+  },
+  {
+    key: "zone",
+    header: "Zone",
+    accessor: "zone",
+    sortable: true,
+    align: "center",
+    render: (r) => zonePill(r.zone),
+  },
+  {
+    key: "interviewCount",
+    header: "Interviews",
+    accessor: (r) => r.interviewCount,
+    sortable: true,
+    align: "center",
+    render: (r) => glowTotal(r.interviewCount),
   },
 ];
 
