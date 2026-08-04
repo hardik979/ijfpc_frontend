@@ -121,16 +121,16 @@ const pctClass = (p: number) =>
 // Per-call status pills for the drill-down call lists.
 function aiCallStatusBadge(c: AiCallingRow) {
   if (c.analyzed) return pill("Analyzed", "bg-green-50 text-green-700");
-  if (isAiCallDnp(c)) return pill("Not Answered", "bg-slate-100 text-slate-600");
+  if (isAiCallDnp(c)) return pill("Not Answered", "bg-slate-100 text-slate-600 dark:bg-slate-400/15 dark:text-slate-300");
   return pill(c.analysisStatus ?? "Pending", "bg-amber-50 text-amber-700");
 }
 
 function realHrCallStatusBadge(c: RealHrRow) {
   if (c.analyzed) return pill("Analyzed", "bg-green-50 text-green-700");
   if (c.type === "manual")
-    return pill(c.manualStatus ?? "Manual", "bg-slate-100 text-slate-600");
+    return pill(c.manualStatus ?? "Manual", "bg-slate-100 text-slate-600 dark:bg-slate-400/15 dark:text-slate-300");
   if ((c.status ?? "").toUpperCase() === "FAILED")
-    return pill("Failed", "bg-rose-50 text-rose-700");
+    return pill("Failed", "bg-rose-50 text-rose-700 dark:bg-rose-500/15");
   return pill(c.status ?? "Pending", "bg-amber-50 text-amber-700");
 }
 
