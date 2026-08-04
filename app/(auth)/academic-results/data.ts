@@ -266,55 +266,6 @@ export function currentMonth(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-/* ───────────────────────────── Percentages ───────────────────────────── */
-// Every headline figure on this dashboard is a rate, not a raw count. Two
-// denominators are in play and they are deliberately never mixed:
-//
-//   • Participation rates ("how many of the students we assigned this to
-//     actually did it") divide by the tab's *expected roster* — the same
-//     zone/course roster the Absent list is built from. See useExpectedRoster.
-//   • Status rates (Evaluated, Analyzed, Strong/Average/Needs work, …) divide
-//     by the number of *records* in the same window, because a status is a
-//     property of an attempt/interview/call, not of a student. A student with
-//     three attempts contributes three records, so dividing these by the roster
-//     would be meaningless (and could exceed 100%).
-//
-// The raw counts are never thrown away: they stay visible under each
-// percentage as the "x of y" sub-line, so a figure can always be verified.
-
-/**
- * Whole-number percentage of `part` out of `whole`, or null when there is no
- * usable denominator (roster still loading, or no records that day).
- */
-export function pct(part: number, whole: number): number | null {
-  if (!Number.isFinite(whole) || whole <= 0) return null;
-  if (!Number.isFinite(part)) return null;
-  return Math.round((part / whole) * 100);
-}
-
-/**
- * A percentage for display: "63%", or "—" when there's no denominator.
- * Rounding is nudged away from 0% and 100% so a non-zero part never reads as
- * "0%" and an incomplete one never reads as a full "100%".
- */
-export function pctLabel(part: number, whole: number): string {
-  const p = pct(part, whole);
-  if (p == null) return "—";
-  if (p === 0 && part > 0) return "<1%";
-  if (p === 100 && part < whole) return ">99%";
-  return `${p}%`;
-}
-
-/** The counts behind a percentage, e.g. "19 of 30 students". */
-export function countLabel(
-  part: number,
-  whole: number,
-  noun: string,
-  plural = `${noun}s`
-): string {
-  return `${part} of ${whole} ${whole === 1 ? noun : plural}`;
-}
-
 export function formatDuration(sec?: number | null): string {
   if (!sec || sec <= 0) return "—";
   const m = Math.floor(sec / 60);
@@ -886,8 +837,7 @@ export function useMonthDay<MRow, DRow>(
 export function useAbsent(
   tab: TabKey,
   date: string | null,
-  refreshKey: number,
-  courseId?: string
+  refreshKey: number
 ) {
   const [rows, setRows] = useState<AbsentRow[]>([]);
   const [expected, setExpected] = useState(0);
@@ -901,7 +851,7 @@ export function useAbsent(
     }
     let cancelled = false;
     setLoading(true);
-    fetchAbsent(tab, date, courseId)
+    fetchAbsent(tab, date)
       .then((res) => {
         if (cancelled) return;
         setRows(res.students);
@@ -919,16 +869,29 @@ export function useAbsent(
     return () => {
       cancelled = true;
     };
-  }, [tab, date, refreshKey, courseId]);
+  }, [tab, date, refreshKey]);
 
   return { rows, expected, loading };
 }
 
-/* ═════════════════════════ useExpectedRoster ═══════════════════════════ */
+/* ═══════════════════ monthly chart — percentage scale ══════════════════ */
+// Support for plotting the monthly chart as "% of students" instead of a raw
+// head count. Used only by MonthlyChart and the four tabs that feed it; every
+// other figure on the dashboard stays a count.
 
 /**
- * Size of the tab's expected roster — the students the activity was assigned
- * to, and the denominator for every participation percentage on the dashboard.
+ * Whole-number percentage of `part` out of `whole`, or null when there is no
+ * usable denominator (roster still loading, or nothing expected).
+ */
+export function pct(part: number, whole: number): number | null {
+  if (!Number.isFinite(whole) || whole <= 0) return null;
+  if (!Number.isFinite(part)) return null;
+  return Math.round((part / whole) * 100);
+}
+
+/**
+ * Size of the tab's expected roster — the denominator the chart's percentages
+ * are taken against.
  *
  * It reuses the absent endpoint because that endpoint already owns the roster
  * definition (zone + course + active, per tab). The roster query there is

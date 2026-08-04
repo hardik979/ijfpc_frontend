@@ -12,8 +12,6 @@ import {
   useMonthDay,
   useExpectedRoster,
   pct,
-  pctLabel,
-  countLabel,
   formatDuration,
   formatIST,
   downloadCsv,
@@ -65,7 +63,6 @@ import {
   AttendancePanel,
   DrillDownModal,
   DetailRow,
-  type StatItem,
 } from "./ui";
 
 /* ═══════════════════════ shared drill-down pieces ══════════════════════ */
@@ -123,38 +120,6 @@ const pill = (text: string, cls: string) => (
 const pctClass = (p: number) =>
   p >= 75 ? "text-green-600" : p >= 40 ? "text-amber-600" : "text-red-600";
 
-/* ═════════════════════ shared percentage helpers ═══════════════════════ */
-// Every headline figure on these tabs is a rate, with the underlying counts
-// kept as the small sub-line so it stays checkable. Participation rates divide
-// by the tab's expected roster; status rates divide by the records in the same
-// window — see the "Percentages" block in data.ts for why the two never mix.
-
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
-
-/** The roster card each tab opens with — the 100% everything else is a share of. */
-const assignedCard = (expected: number, noun: string): StatItem => ({
-  label: "Assigned",
-  value: pctLabel(expected, expected),
-  sub: expected > 0 ? `${plural(expected, noun)} expected` : "roster unavailable",
-  accent: "blue",
-});
-
-type DayRowLike = Record<string, unknown>;
-
-const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
-
-/**
- * A calendar-cell figure as a percentage. Falls back to the raw count when the
- * denominator is missing (roster fetch failed, or a day with no records), so a
- * cell degrades to the old display instead of showing "—" all month.
- */
-const cellRate =
-  (part: (r: DayRowLike) => number, whole: (r: DayRowLike) => number) =>
-  (r: DayRowLike) => {
-    const w = whole(r);
-    return w > 0 ? pctLabel(part(r), w) : String(part(r));
-  };
-
 // Per-call status pills for the drill-down call lists.
 function aiCallStatusBadge(c: AiCallingRow) {
   if (c.analyzed) return pill("Analyzed", "bg-green-50 text-green-700");
@@ -209,11 +174,18 @@ export function DailyQuizTab({
     };
   }, [month, courseId, refreshKey]);
 
-  // Students the quiz is assigned to — the denominator for every participation
-  // percentage on this tab. Narrowed by the course filter, so the rate always
-  // compares like with like.
+  // Roster the monthly chart's percentages are taken against. Narrowed by the
+  // course filter so the rate compares like with like.
   const { expected } = useExpectedRoster("quiz", month, refreshKey, course);
   const hasRoster = expected > 0;
+  const rateByDate = useMemo(
+    () =>
+      byDate.map((r) => ({
+        ...r,
+        rate: pct(r.uniqueStudentCount, expected) ?? 0,
+      })),
+    [byDate, expected]
+  );
 
   // Unique students for the selected day, with per-status tallies.
   const students = useMemo(() => groupQuizByStudent(dayRows), [dayRows]);
@@ -246,16 +218,6 @@ export function DailyQuizTab({
     [byDate]
   );
 
-  // Daily attendance as a share of the roster, for the monthly chart.
-  const rateByDate = useMemo(
-    () =>
-      byDate.map((r) => ({
-        ...r,
-        rate: pct(r.uniqueStudentCount, expected) ?? 0,
-      })),
-    [byDate, expected]
-  );
-
   const closeStudent = () => {
     setStudent(null);
     setSelected(null);
@@ -266,72 +228,25 @@ export function DailyQuizTab({
       {selectedDate ? (
         <StatCards
           items={[
-            assignedCard(expected, "student"),
             {
-              label: "Attempted",
-              value: pctLabel(students.length, expected),
-              sub: countLabel(students.length, expected, "student"),
+              label: "Total Attempts",
+              value: dayRows.length,
+              sub: `${students.length} student${students.length === 1 ? "" : "s"} attempted`,
               accent: "violet",
             },
-            {
-              // Status is a property of an attempt, so these are shares of the
-              // day's attempts — not of the class.
-              label: "Evaluated",
-              value: pctLabel(dayStats.evaluated, dayRows.length),
-              sub: countLabel(dayStats.evaluated, dayRows.length, "attempt"),
-              accent: "emerald",
-            },
-            {
-              label: "Pending",
-              value: pctLabel(dayStats.pending, dayRows.length),
-              sub: countLabel(dayStats.pending, dayRows.length, "attempt"),
-              accent: "amber",
-            },
+            { label: "Evaluated", value: dayStats.evaluated, accent: "emerald" },
+            { label: "Pending", value: dayStats.pending, accent: "amber" },
           ]}
         />
       ) : (
         <StatCards
           columns={5}
           items={[
-            assignedCard(expected, "student"),
-            {
-              // Distinct students who attempted at least once this month.
-              label: "Students Attempted",
-              value: pctLabel(monthStudentCount, expected),
-              sub: countLabel(monthStudentCount, expected, "student"),
-              accent: "violet",
-            },
-            {
-              label: "Evaluated",
-              value: pctLabel(monthTotals.evaluatedCount, monthTotals.totalAttempts),
-              sub: countLabel(
-                monthTotals.evaluatedCount,
-                monthTotals.totalAttempts,
-                "attempt"
-              ),
-              accent: "emerald",
-            },
-            {
-              label: "Pending",
-              value: pctLabel(monthTotals.pendingCount, monthTotals.totalAttempts),
-              sub: countLabel(
-                monthTotals.pendingCount,
-                monthTotals.totalAttempts,
-                "attempt"
-              ),
-              accent: "amber",
-            },
-            {
-              // Student-days ÷ (roster × days the quiz actually ran): the share
-              // of the class that turned up on a typical active day.
-              label: "Avg Daily Attendance",
-              value: pctLabel(monthTotals.uniqueStudentCount, expected * byDate.length),
-              sub: `${monthTotals.uniqueStudentCount} student-days · ${plural(
-                byDate.length,
-                "active day"
-              )}`,
-              accent: "slate",
-            },
+            { label: "Total Attempts", value: monthTotals.totalAttempts, accent: "blue" },
+            { label: "Students Attempted", value: monthStudentCount, accent: "violet" },
+            { label: "Evaluated", value: monthTotals.evaluatedCount, accent: "emerald" },
+            { label: "Pending", value: monthTotals.pendingCount, accent: "amber" },
+            { label: "Student-days", value: monthTotals.uniqueStudentCount, accent: "slate" },
           ]}
         />
       )}
@@ -370,33 +285,10 @@ export function DailyQuizTab({
           onMonthChange={onMonthChange}
           onDateSelect={loadDay}
           metrics={[
-            {
-              key: "uniqueStudentCount",
-              label: "Students",
-              className: "text-blue-700",
-              display: cellRate(
-                (r) => num(r.uniqueStudentCount),
-                () => expected
-              ),
-            },
-            {
-              key: "evaluatedCount",
-              label: "Evaluated",
-              className: "text-emerald-800",
-              display: cellRate(
-                (r) => num(r.evaluatedCount),
-                (r) => num(r.totalAttempts)
-              ),
-            },
-            {
-              key: "pendingCount",
-              label: "Pending",
-              className: "text-amber-700",
-              display: cellRate(
-                (r) => num(r.pendingCount),
-                (r) => num(r.totalAttempts)
-              ),
-            },
+            { key: "totalAttempts", label: "Attempts" },
+            { key: "uniqueStudentCount", label: "Students", className: "text-blue-700" },
+            { key: "evaluatedCount", label: "Evaluated", className: "text-emerald-800" },
+            { key: "pendingCount", label: "Pending", className: "text-amber-700" },
           ]}
         />
       </div>
@@ -408,15 +300,10 @@ export function DailyQuizTab({
         title={selectedDate ? `Students on ${selectedDate}` : "Quiz attempts"}
         attendedSubtitle={
           selectedDate
-            ? `${pctLabel(students.length, expected)} attended · ${countLabel(
-                students.length,
-                expected,
-                "student"
-              )} · ${plural(dayRows.length, "attempt")}`
+            ? `${students.length} student${students.length === 1 ? "" : "s"} · ${dayRows.length} attempt${dayRows.length === 1 ? "" : "s"}`
             : undefined
         }
         attendedCount={students.length}
-        courseId={course}
       >
         <DataPresentationTable<QuizStudentRow>
           data={students}
@@ -580,9 +467,14 @@ export function MockInterviewTab({
   const [student, setStudent] = useState<MockStudentRow | null>(null);
   const [selected, setSelected] = useState<MockAttemptRow | null>(null);
 
-  // Students the mock interview is assigned to — the participation denominator.
+  // Roster the monthly chart's percentages are taken against.
   const { expected } = useExpectedRoster("mock", month, refreshKey);
   const hasRoster = expected > 0;
+  const rateByDate = useMemo(
+    () =>
+      byDate.map((r) => ({ ...r, rate: pct(r.uniqueUserCount, expected) ?? 0 })),
+    [byDate, expected]
+  );
 
   // Unique students for the selected day, with per-level tallies.
   const students = useMemo(() => groupMockByStudent(dayRows), [dayRows]);
@@ -617,13 +509,6 @@ export function MockInterviewTab({
     [byDate]
   );
 
-  // Daily attendance as a share of the roster, for the monthly chart.
-  const rateByDate = useMemo(
-    () =>
-      byDate.map((r) => ({ ...r, rate: pct(r.uniqueUserCount, expected) ?? 0 })),
-    [byDate, expected]
-  );
-
   const closeStudent = () => {
     setStudent(null);
     setSelected(null);
@@ -635,57 +520,20 @@ export function MockInterviewTab({
         <StatCards
           columns={6}
           items={[
-            assignedCard(expected, "student"),
-            {
-              label: "Attempted",
-              value: pctLabel(students.length, expected),
-              sub: countLabel(students.length, expected, "student"),
-              accent: "violet",
-            },
-            // Strong / Average / Needs work / Not analyzed partition the day's
-            // interviews, so each is a share of dayRows.length (not of the class).
-            {
-              label: "Strong",
-              value: pctLabel(dayStats.strong, dayRows.length),
-              sub: countLabel(dayStats.strong, dayRows.length, "interview"),
-              accent: "emerald",
-            },
-            {
-              label: "Average",
-              value: pctLabel(dayStats.average, dayRows.length),
-              sub: countLabel(dayStats.average, dayRows.length, "interview"),
-              accent: "amber",
-            },
-            {
-              label: "Needs Work",
-              value: pctLabel(dayStats.needs, dayRows.length),
-              sub: countLabel(dayStats.needs, dayRows.length, "interview"),
-              accent: "rose",
-            },
-            {
-              label: "Not Analyzed",
-              value: pctLabel(dayStats.unanalyzed, dayRows.length),
-              sub: countLabel(dayStats.unanalyzed, dayRows.length, "interview"),
-              accent: "slate",
-            },
+            { label: "Total Students", value: students.length, accent: "blue" },
+            { label: "Total Mock Interviews", value: dayRows.length, accent: "violet" },
+            { label: "Strong", value: dayStats.strong, accent: "emerald" },
+            { label: "Average", value: dayStats.average, accent: "amber" },
+            { label: "Needs Work", value: dayStats.needs, accent: "rose" },
+            { label: "Not Analyzed", value: dayStats.unanalyzed, accent: "slate" },
           ]}
         />
       ) : (
         <StatCards
           items={[
-            assignedCard(expected, "student"),
-            {
-              // Student-days ÷ (roster × days interviews actually ran).
-              label: "Avg Daily Attendance",
-              value: pctLabel(monthTotals.uniqueUserCount, expected * byDate.length),
-              sub: `${monthTotals.uniqueUserCount} student-days · ${plural(
-                monthTotals.totalAttempts,
-                "interview"
-              )} · ${plural(byDate.length, "active day")}`,
-              accent: "emerald",
-            },
+            { label: "Total Interviews", value: monthTotals.totalAttempts, accent: "blue" },
+            { label: "Student-days", value: monthTotals.uniqueUserCount, accent: "emerald" },
           ]}
-          columns={2}
         />
       )}
 
@@ -719,15 +567,8 @@ export function MockInterviewTab({
           onMonthChange={onMonthChange}
           onDateSelect={loadDay}
           metrics={[
-            {
-              key: "uniqueUserCount",
-              label: "Students",
-              className: "text-emerald-800",
-              display: cellRate(
-                (r) => num(r.uniqueUserCount),
-                () => expected
-              ),
-            },
+            { key: "totalAttempts", label: "Interviews" },
+            { key: "uniqueUserCount", label: "Students", className: "text-emerald-800" },
           ]}
         />
       </div>
@@ -739,11 +580,7 @@ export function MockInterviewTab({
         title={selectedDate ? `Students on ${selectedDate}` : "Mock interviews"}
         attendedSubtitle={
           selectedDate
-            ? `${pctLabel(students.length, expected)} attended · ${countLabel(
-                students.length,
-                expected,
-                "student"
-              )} · ${plural(dayRows.length, "interview")}`
+            ? `${students.length} student${students.length === 1 ? "" : "s"} · ${dayRows.length} interview${dayRows.length === 1 ? "" : "s"}`
             : undefined
         }
         attendedCount={students.length}
@@ -864,9 +701,17 @@ export function AiHrCallingTab({
   const [student, setStudent] = useState<AiStudentRow | null>(null);
   const [selected, setSelected] = useState<AiCallingRow | null>(null);
 
-  // Candidates the AI HR agent is meant to call — the participation denominator.
+  // Roster the monthly chart's percentages are taken against.
   const { expected } = useExpectedRoster("ai", month, refreshKey);
   const hasRoster = expected > 0;
+  const rateByDate = useMemo(
+    () =>
+      byDate.map((r) => ({
+        ...r,
+        rate: pct(r.uniqueCandidateCount, expected) ?? 0,
+      })),
+    [byDate, expected]
+  );
 
   // Unique candidates for the selected day, with per-status tallies.
   const students = useMemo(() => groupAiByStudent(dayRows), [dayRows]);
@@ -899,16 +744,6 @@ export function AiHrCallingTab({
     [byDate]
   );
 
-  // Daily reach as a share of the roster, for the monthly chart.
-  const rateByDate = useMemo(
-    () =>
-      byDate.map((r) => ({
-        ...r,
-        rate: pct(r.uniqueCandidateCount, expected) ?? 0,
-      })),
-    [byDate, expected]
-  );
-
   const closeStudent = () => {
     setStudent(null);
     setSelected(null);
@@ -918,57 +753,19 @@ export function AiHrCallingTab({
     <div className="space-y-6">
       {selectedDate ? (
         <StatCards
-          columns={5}
           items={[
-            assignedCard(expected, "candidate"),
-            {
-              label: "Called",
-              value: pctLabel(students.length, expected),
-              sub: countLabel(students.length, expected, "candidate"),
-              accent: "violet",
-            },
-            // Analyzed / Not answered / Pending partition the day's calls.
-            {
-              label: "Analyzed",
-              value: pctLabel(dayStats.analyzed, dayRows.length),
-              sub: countLabel(dayStats.analyzed, dayRows.length, "call"),
-              accent: "emerald",
-            },
-            {
-              label: "Not Answered",
-              value: pctLabel(dayStats.notAnswered, dayRows.length),
-              sub: countLabel(dayStats.notAnswered, dayRows.length, "call"),
-              accent: "slate",
-            },
-            {
-              label: "Pending",
-              value: pctLabel(dayStats.pending, dayRows.length),
-              sub: countLabel(dayStats.pending, dayRows.length, "call"),
-              accent: "amber",
-            },
+            { label: "Total Candidates", value: students.length, accent: "blue" },
+            { label: "Total Calls", value: dayRows.length, accent: "violet" },
+            { label: "Analyzed", value: dayStats.analyzed, accent: "emerald" },
+            { label: "Not Answered", value: dayStats.notAnswered, accent: "slate" },
           ]}
         />
       ) : (
         <StatCards
-          columns={3}
           items={[
-            assignedCard(expected, "candidate"),
-            {
-              // Candidate-days ÷ (roster × days calls actually ran).
-              label: "Avg Daily Reach",
-              value: pctLabel(totals.uniqueCandidateCount, expected * byDate.length),
-              sub: `${totals.uniqueCandidateCount} candidate-days · ${plural(
-                totals.totalCalls,
-                "call"
-              )} · ${plural(byDate.length, "active day")}`,
-              accent: "emerald",
-            },
-            {
-              label: "Analyzed",
-              value: pctLabel(totals.analyzedCount, totals.totalCalls),
-              sub: countLabel(totals.analyzedCount, totals.totalCalls, "call"),
-              accent: "violet",
-            },
+            { label: "Total Calls", value: totals.totalCalls, accent: "blue" },
+            { label: "Candidate-days", value: totals.uniqueCandidateCount, accent: "emerald" },
+            { label: "Analyzed", value: totals.analyzedCount, accent: "violet" },
           ]}
         />
       )}
@@ -1007,24 +804,9 @@ export function AiHrCallingTab({
           onMonthChange={onMonthChange}
           onDateSelect={loadDay}
           metrics={[
-            {
-              key: "uniqueCandidateCount",
-              label: "Candidates",
-              className: "text-emerald-800",
-              display: cellRate(
-                (r) => num(r.uniqueCandidateCount),
-                () => expected
-              ),
-            },
-            {
-              key: "analyzedCount",
-              label: "Analyzed",
-              className: "text-violet-700",
-              display: cellRate(
-                (r) => num(r.analyzedCount),
-                (r) => num(r.totalCalls)
-              ),
-            },
+            { key: "totalCalls", label: "Calls" },
+            { key: "uniqueCandidateCount", label: "Candidates", className: "text-emerald-800" },
+            { key: "analyzedCount", label: "Analyzed", className: "text-violet-700" },
           ]}
         />
       </div>
@@ -1036,11 +818,7 @@ export function AiHrCallingTab({
         title={selectedDate ? `Candidates on ${selectedDate}` : "AI HR calls"}
         attendedSubtitle={
           selectedDate
-            ? `${pctLabel(students.length, expected)} reached · ${countLabel(
-                students.length,
-                expected,
-                "candidate"
-              )} · ${plural(dayRows.length, "call")}`
+            ? `${students.length} candidate${students.length === 1 ? "" : "s"} · ${dayRows.length} call${dayRows.length === 1 ? "" : "s"}`
             : undefined
         }
         attendedCount={students.length}
@@ -1163,9 +941,14 @@ export function RealHrCallingTab({
   const [student, setStudent] = useState<RealHrStudentRow | null>(null);
   const [selected, setSelected] = useState<RealHrRow | null>(null);
 
-  // Students expected to log HR calls — the participation denominator.
+  // Roster the monthly chart's percentages are taken against.
   const { expected } = useExpectedRoster("realhr", month, refreshKey);
   const hasRoster = expected > 0;
+  const rateByDate = useMemo(
+    () =>
+      byDate.map((r) => ({ ...r, rate: pct(r.uniqueLeadCount, expected) ?? 0 })),
+    [byDate, expected]
+  );
 
   // Unique leads/students for the selected day, with per-status tallies.
   const students = useMemo(() => groupRealHrByStudent(dayRows), [dayRows]);
@@ -1199,13 +982,6 @@ export function RealHrCallingTab({
     [byDate]
   );
 
-  // Daily participation as a share of the roster, for the monthly chart.
-  const rateByDate = useMemo(
-    () =>
-      byDate.map((r) => ({ ...r, rate: pct(r.uniqueLeadCount, expected) ?? 0 })),
-    [byDate, expected]
-  );
-
   const closeStudent = () => {
     setStudent(null);
     setSelected(null);
@@ -1215,62 +991,20 @@ export function RealHrCallingTab({
     <div className="space-y-6">
       {selectedDate ? (
         <StatCards
-          columns={5}
           items={[
-            assignedCard(expected, "student"),
-            {
-              label: "Attempted",
-              value: pctLabel(students.length, expected),
-              sub: countLabel(students.length, expected, "student"),
-              accent: "violet",
-            },
-            // Analyzed / Pending / Manual partition the day's calls.
-            {
-              label: "Analyzed",
-              value: pctLabel(dayStats.analyzed, dayRows.length),
-              sub: countLabel(dayStats.analyzed, dayRows.length, "call"),
-              accent: "emerald",
-            },
-            {
-              label: "Pending",
-              value: pctLabel(dayStats.pending, dayRows.length),
-              sub: countLabel(dayStats.pending, dayRows.length, "call"),
-              accent: "amber",
-            },
-            {
-              label: "Manual",
-              value: pctLabel(dayStats.manual, dayRows.length),
-              sub: countLabel(dayStats.manual, dayRows.length, "call"),
-              accent: "slate",
-            },
+            { label: "Total Students", value: students.length, accent: "blue" },
+            { label: "Total Calls", value: dayRows.length, accent: "violet" },
+            { label: "Analyzed", value: dayStats.analyzed, accent: "emerald" },
+            { label: "Pending", value: dayStats.pending, accent: "amber" },
           ]}
         />
       ) : (
         <StatCards
           items={[
-            assignedCard(expected, "student"),
-            {
-              // Lead-days ÷ (roster × days calls actually ran).
-              label: "Avg Daily Attendance",
-              value: pctLabel(totals.uniqueLeadCount, expected * byDate.length),
-              sub: `${totals.uniqueLeadCount} lead-days · ${plural(
-                byDate.length,
-                "active day"
-              )}`,
-              accent: "emerald",
-            },
-            {
-              label: "Recorded",
-              value: pctLabel(totals.recordedCount, totals.totalCalls),
-              sub: countLabel(totals.recordedCount, totals.totalCalls, "call"),
-              accent: "violet",
-            },
-            {
-              label: "Analyzed",
-              value: pctLabel(totals.analyzedCount, totals.totalCalls),
-              sub: countLabel(totals.analyzedCount, totals.totalCalls, "call"),
-              accent: "amber",
-            },
+            { label: "Total Calls", value: totals.totalCalls, accent: "blue" },
+            { label: "Recorded", value: totals.recordedCount, accent: "emerald" },
+            { label: "Analyzed", value: totals.analyzedCount, accent: "violet" },
+            { label: "Lead-days", value: totals.uniqueLeadCount, accent: "amber" },
           ]}
         />
       )}
@@ -1282,7 +1016,7 @@ export function RealHrCallingTab({
               ? "Percentage of students who logged a call, per day"
               : "Unique leads per day"
           }
-          yLabel={hasRoster ? "% of students" : "Number of students"}
+          yLabel={hasRoster ? "% of students" : "Number of Students "}
           month={month}
           data={hasRoster ? rateByDate : byDate}
           percent={hasRoster}
@@ -1305,32 +1039,8 @@ export function RealHrCallingTab({
           onMonthChange={onMonthChange}
           onDateSelect={loadDay}
           metrics={[
-            {
-              key: "uniqueLeadCount",
-              label: "Students",
-              display: cellRate(
-                (r) => num(r.uniqueLeadCount),
-                () => expected
-              ),
-            },
-            {
-              key: "recordedCount",
-              label: "Recorded",
-              className: "text-emerald-800",
-              display: cellRate(
-                (r) => num(r.recordedCount),
-                (r) => num(r.totalCalls)
-              ),
-            },
-            {
-              key: "analyzedCount",
-              label: "Analyzed",
-              className: "text-violet-700",
-              display: cellRate(
-                (r) => num(r.analyzedCount),
-                (r) => num(r.totalCalls)
-              ),
-            },
+            { key: "uniqueLeadCount", label: "Students" },
+            { key: "totalCalls", label: "Calls", className: "text-emerald-800" },
           ]}
         />
       </div>
@@ -1342,11 +1052,7 @@ export function RealHrCallingTab({
         title={selectedDate ? `Students on ${selectedDate}` : "HR calls"}
         attendedSubtitle={
           selectedDate
-            ? `${pctLabel(students.length, expected)} attended · ${countLabel(
-                students.length,
-                expected,
-                "student"
-              )} · ${plural(dayRows.length, "call")}`
+            ? `${students.length} student${students.length === 1 ? "" : "s"} · ${dayRows.length} call${dayRows.length === 1 ? "" : "s"}`
             : undefined
         }
         attendedCount={students.length}
