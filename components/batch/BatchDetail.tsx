@@ -50,7 +50,8 @@ type Batch = {
   students?: Student[];
 };
 
-type Session = { _id?: string; topic?: string; time?: string };
+// trainerName is per-class — blank means "use the batch-level trainer"
+type Session = { _id?: string; topic?: string; time?: string; trainerName?: string };
 
 const ALLOWED_STATUS = ["Upcoming", "Active", "Completed"] as const;
 // Keep in sync with the `topic` enum in lms-backend/models/Batches.js
@@ -300,6 +301,9 @@ export default function BatchDetail({ batchId }: { batchId: string }) {
                             <Clock className="h-3.5 w-3.5" />
                             {topicLabel(s.topic) || "—"}
                             {s.time ? <span className="text-teal-700/70">· {s.time}</span> : null}
+                            {s.trainerName || batch.trainerName ? (
+                              <span className="text-teal-700/70">· {s.trainerName || batch.trainerName}</span>
+                            ) : null}
                           </span>
                         ))}
                       </div>
@@ -1248,21 +1252,27 @@ function SessionsModal({
   onDone: (sessions: Session[]) => void;
 }) {
   const [rows, setRows] = useState<Session[]>(
-    current.length ? current.map((s) => ({ topic: s.topic || "", time: s.time || "" })) : [{ topic: "", time: "" }]
+    current.length
+      ? current.map((s) => ({ topic: s.topic || "", time: s.time || "", trainerName: s.trainerName || "" }))
+      : [{ topic: "", time: "", trainerName: "" }]
   );
   const [saving, setSaving] = useState(false);
 
-  const addRow = () => setRows((prev) => [...prev, { topic: "", time: "" }]);
+  const addRow = () => setRows((prev) => [...prev, { topic: "", time: "", trainerName: "" }]);
   const removeRow = (i: number) => setRows((prev) => prev.filter((_, idx) => idx !== i));
-  const updateRow = (i: number, field: "topic" | "time", value: string) =>
+  const updateRow = (i: number, field: "topic" | "time" | "trainerName", value: string) =>
     setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, [field]: value } : r)));
 
   const save = async () => {
     try {
       setSaving(true);
       const sessions = rows
-        .map((r) => ({ topic: (r.topic || "").trim(), time: (r.time || "").trim() }))
-        .filter((r) => r.topic || r.time);
+        .map((r) => ({
+          topic: (r.topic || "").trim(),
+          time: (r.time || "").trim(),
+          trainerName: (r.trainerName || "").trim(),
+        }))
+        .filter((r) => r.topic || r.time || r.trainerName);
       const res = await fetch(
         `${API_LMS_URL}/api/batches/update-batch-sessions/${encodeURIComponent(batchId)}`,
         {
@@ -1285,17 +1295,20 @@ function SessionsModal({
   return (
     <ModalShell
       title="Daily timetable"
-      subtitle="Classes this batch attends in a day"
+      subtitle="Classes this batch attends in a day — each can have its own trainer"
       onClose={onClose}
-      maxW="max-w-lg"
+      maxW="max-w-2xl"
     >
       <div className="space-y-3 p-5">
         {rows.map((r, i) => (
-          <div key={i} className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div
+            key={i}
+            className="flex flex-col gap-2 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] p-3 sm:flex-row sm:items-center"
+          >
             <select
               value={r.topic}
               onChange={(e) => updateRow(i, "topic", e.target.value)}
-              className="flex-1 appearance-none rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] px-3 py-2.5 text-sm text-[var(--panel-text-primary)] outline-none focus:border-teal-500/50"
+              className="flex-1 appearance-none rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-3 py-2.5 text-sm text-[var(--panel-text-primary)] outline-none focus:border-teal-500/50"
             >
               <option value="">Select topic</option>
               {TOPIC_OPTIONS.map((t) => (
@@ -1308,7 +1321,13 @@ function SessionsModal({
               value={r.time}
               onChange={(e) => updateRow(i, "time", e.target.value)}
               placeholder="e.g. 10:30 AM - 12:00 PM"
-              className="flex-1 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] px-3 py-2.5 text-sm text-[var(--panel-text-primary)] outline-none focus:border-teal-500/50"
+              className="flex-1 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-3 py-2.5 text-sm text-[var(--panel-text-primary)] outline-none focus:border-teal-500/50"
+            />
+            <input
+              value={r.trainerName}
+              onChange={(e) => updateRow(i, "trainerName", e.target.value)}
+              placeholder="Trainer for this class"
+              className="flex-1 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-3 py-2.5 text-sm text-[var(--panel-text-primary)] outline-none focus:border-teal-500/50"
             />
             <button
               onClick={() => removeRow(i)}
@@ -1319,6 +1338,9 @@ function SessionsModal({
             </button>
           </div>
         ))}
+        <p className="text-xs text-[var(--panel-text-faint)]">
+          Leave the trainer blank to use the batch trainer.
+        </p>
 
         <button
           onClick={addRow}

@@ -17,7 +17,8 @@ type Student = {
   isPlaced?: boolean;
 };
 
-type Session = { _id?: string; topic?: string; time?: string };
+// trainerName is per-class — blank means "use the batch-level trainer"
+type Session = { _id?: string; topic?: string; time?: string; trainerName?: string };
 
 type Batch = {
   _id: string;
@@ -163,7 +164,9 @@ export default function BatchOverview() {
 
       if (zone !== "all" && dzone !== zone) continue;
 
-      const sess = (b.sessions || []).filter((s) => (s.topic || "").trim() || (s.time || "").trim());
+      const sess = (b.sessions || []).filter(
+        (s) => (s.topic || "").trim() || (s.time || "").trim() || (s.trainerName || "").trim()
+      );
 
       const batchMatches =
         !q ||
@@ -172,7 +175,11 @@ export default function BatchOverview() {
         topicLabel(b.topic).toLowerCase().includes(q) ||
         courseTitle(b.course).toLowerCase().includes(q) ||
         (b.classRoom || "").toLowerCase().includes(q) ||
-        sess.some((s) => topicLabel(s.topic).toLowerCase().includes(q));
+        sess.some(
+          (s) =>
+            topicLabel(s.topic).toLowerCase().includes(q) ||
+            (s.trainerName || "").toLowerCase().includes(q)
+        );
 
       let names: string[];
       if (batchMatches) {
@@ -204,6 +211,8 @@ export default function BatchOverview() {
             key: `${b._id}-s${si}`,
             time: s.time?.trim() ? s.time : b.classTime?.trim() ? b.classTime : fmtTime(b.createdAt),
             topic: topicLabel(s.topic),
+            // Each class can have its own trainer; fall back to the batch trainer
+            trainer: s.trainerName?.trim() ? s.trainerName.trim() : shared.trainer,
           });
         });
       } else {

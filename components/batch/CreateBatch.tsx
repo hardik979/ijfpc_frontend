@@ -58,7 +58,8 @@ const TOPIC_OPTIONS = [
 type Topic = (typeof TOPIC_OPTIONS)[number];
 const topicLabel = (t: string) => t.replace(/_/g, " ");
 
-type Session = { topic: string; time: string };
+// trainerName is per-class — blank means "use the batch-level trainer"
+type Session = { topic: string; time: string; trainerName: string };
 
 const zoneBadge = (zone?: string) => {
   const z = (zone || "").toLowerCase();
@@ -83,7 +84,7 @@ export default function CreateBatch() {
   const [classTime, setClassTime] = useState("");
   const [sessions, setSessions] = useState<Session[]>([]);
 
-  const addSession = () => setSessions((prev) => [...prev, { topic: "", time: "" }]);
+  const addSession = () => setSessions((prev) => [...prev, { topic: "", time: "", trainerName: "" }]);
   const removeSession = (i: number) => setSessions((prev) => prev.filter((_, idx) => idx !== i));
   const updateSession = (i: number, field: keyof Session, value: string) =>
     setSessions((prev) => prev.map((s, idx) => (idx === i ? { ...s, [field]: value } : s)));
@@ -202,8 +203,12 @@ export default function CreateBatch() {
           classDate: classDate || undefined,
           classTime: classTime.trim() || undefined,
           sessions: sessions
-            .map((s) => ({ topic: s.topic, time: s.time.trim() }))
-            .filter((s) => s.topic || s.time),
+            .map((s) => ({
+              topic: s.topic,
+              time: s.time.trim(),
+              trainerName: (s.trainerName || "").trim(),
+            }))
+            .filter((s) => s.topic || s.time || s.trainerName),
         }),
       });
       const json = await res.json();
@@ -451,7 +456,8 @@ export default function CreateBatch() {
                 {sessions.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-[var(--panel-border)] bg-[var(--panel-card-soft)] px-4 py-6 text-center text-sm text-[var(--panel-text-faint)]">
                     No classes added. Click &ldquo;Add class&rdquo; to build the day&rsquo;s timetable
-                    (e.g. Python 10:30&ndash;12:00, then SQL 12:00&ndash;1:30).
+                    (e.g. Python 10:30&ndash;12:00, then SQL 12:00&ndash;1:30). Leave a class&rsquo;s
+                    trainer blank to use the batch trainer.
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -482,6 +488,15 @@ export default function CreateBatch() {
                             value={s.time}
                             onChange={(e) => updateSession(i, "time", e.target.value)}
                             placeholder="e.g. 10:30 AM - 12:00 PM"
+                            className="w-full bg-transparent px-3 py-2.5 text-sm text-[var(--panel-text-primary)] outline-none"
+                          />
+                        </div>
+                        <div className="flex-1 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)]">
+                          <input
+                            type="text"
+                            value={s.trainerName}
+                            onChange={(e) => updateSession(i, "trainerName", e.target.value)}
+                            placeholder="Trainer for this class"
                             className="w-full bg-transparent px-3 py-2.5 text-sm text-[var(--panel-text-primary)] outline-none"
                           />
                         </div>
