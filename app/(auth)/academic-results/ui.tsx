@@ -27,7 +27,9 @@ import {
 import CalendarFormate from "@/healper/calendarFormate";
 import DataPresentationTable from "@/healper/DataPresentationTable";
 import {
+  countLabel,
   fetchCourses,
+  pctLabel,
   useAbsent,
   type Course,
   type TabKey,
@@ -183,7 +185,16 @@ function StatCard({ label, value, accent, sub }: StatItem) {
 }
 
 /* ═════════════════════════════ MonthlyChart ════════════════════ */
-export type ChartSeries = { key: string; name: string; color: string };
+export type ChartSeries = {
+  key: string;
+  name: string;
+  color: string;
+  /**
+   * Field holding the raw count behind `key`. Only used in `percent` mode, to
+   * show "40% (12 of 30)" in the tooltip so the rate stays verifiable.
+   */
+  countKey?: string;
+};
 
 export function MonthlyChart({
   data,
@@ -191,6 +202,8 @@ export function MonthlyChart({
   title,
   yLabel,
   month,
+  percent = false,
+  percentBase,
 }: {
   data: Array<{ date: string } & Record<string, unknown>>;
   series: ChartSeries[];
@@ -202,6 +215,15 @@ export function MonthlyChart({
    * days with no records show 0 instead of being skipped.
    */
   month?: string;
+  /**
+   * Plot the series as percentages: axis ticks, bar labels and tooltips all get
+   * a "%" suffix and the axis runs to at least 100. The axis is *not* capped at
+   * 100 — a day can exceed the roster (e.g. a student who has since been placed
+   * still counts as having attended), and clamping would hide that.
+   */
+  percent?: boolean;
+  /** Denominator the percentages were computed against, shown in the tooltip. */
+  percentBase?: number;
 }) {
   // Show the day-of-month on the x-axis for a compact monthly view.
   const chartData = useMemo(() => {
@@ -212,7 +234,9 @@ export function MonthlyChart({
     // Day 0 of the next month is the last day of this one.
     const daysInMonth = new Date(year, mon, 0).getDate();
     const byDate = new Map(data.map((d) => [d.date, d]));
-    const zeros = Object.fromEntries(series.map((s) => [s.key, 0]));
+    const zeros = Object.fromEntries(
+      series.flatMap((s) => (s.countKey ? [[s.key, 0], [s.countKey, 0]] : [[s.key, 0]]))
+    );
     return Array.from({ length: daysInMonth }, (_, i) => {
       const dd = String(i + 1).padStart(2, "0");
       const date = `${month}-${dd}`;
@@ -248,6 +272,12 @@ export function MonthlyChart({
                 tickLine={false}
                 axisLine={false}
                 allowDecimals={false}
+                domain={
+                  percent
+                    ? [0, (max: number) => Math.max(100, Math.ceil(max))]
+                    : undefined
+                }
+                tickFormatter={percent ? (v) => `${v}%` : undefined}
                 label={
                   yLabel
                     ? {
@@ -270,6 +300,21 @@ export function MonthlyChart({
                 }}
                 labelStyle={{ color: "var(--panel-text-secondary)" }}
                 labelFormatter={(label) => `Day ${label}`}
+                // In percent mode show the rate plus the counts behind it, so a
+                // bar can be checked against the table without leaving the page.
+                formatter={
+                  percent
+                    ? (value: unknown, name: unknown, item: any) => {
+                        const s = series.find((x) => x.name === name);
+                        const count = s?.countKey
+                          ? item?.payload?.[s.countKey]
+                          : undefined;
+                        return typeof count === "number" && percentBase && percentBase > 0
+                          ? `${value}% (${count} of ${percentBase})`
+                          : `${value}%`;
+                      }
+                    : undefined
+                }
                 cursor={{ fill: "rgba(148,163,184,0.08)" }}
               />
               <Legend wrapperStyle={{ fontSize: 12, color: "var(--panel-text-muted)" }} />
@@ -287,7 +332,7 @@ export function MonthlyChart({
                     position="top"
                     fontSize={10}
                     fill="var(--panel-text-secondary)"
-                    formatter={(v) => (v ? `${v}` : "")}
+                    formatter={(v) => (v ? (percent ? `${v}%` : `${v}`) : "")}
                   />
                 </Bar>
               ))}
@@ -299,15 +344,21 @@ export function MonthlyChart({
 }
 
 /* ════════════════════════════ ResultsCalendar ══════════════════ */
+type DayRow = { date: string } & Record<string, unknown>;
+
 export type CalendarMetric = {
-  /** Field on the day row to display. */
+  /** Stable id for the row (also the day-row field read by the default display). */
   key: string;
   label: string;
   /** Tailwind text color class for the metric line. */
   className?: string;
+  /**
+   * Renders the cell's figure from the whole day row — used to show a rate
+   * ("63%") rather than the raw field, since a percentage needs a denominator
+   * the day row alone doesn't carry. Falls back to the raw `key` field.
+   */
+  display?: (row: DayRow) => string;
 };
-
-type DayRow = { date: string } & Record<string, unknown>;
 
 export function ResultsCalendar({
   month,
@@ -375,7 +426,7 @@ export function ResultsCalendar({
                   >
                     <span>{m.label}</span>
                     <span className="font-bold">
-                      {String(d[m.key] ?? 0)}
+                      {m.display ? m.display(d) : String(d[m.key] ?? 0)}
                     </span>
                   </div>
                 ))}
@@ -437,12 +488,16 @@ function AttendanceToggle({
   onChange,
   attendedCount,
   absentCount,
+  expected,
 }: {
   view: "attended" | "absent";
   onChange: (v: "attended" | "absent") => void;
   attendedCount: number;
   absentCount: number;
+  /** Roster the two shares are measured against; 0 → fall back to raw counts. */
+  expected: number;
 }) {
+  const share = (n: number) => (expected > 0 ? pctLabel(n, expected) : String(n));
   return (
     <div className="inline-flex shrink-0 rounded-lg border border-gray-300 bg-gray-50 p-0.5 text-sm">
       <button
@@ -453,7 +508,7 @@ function AttendanceToggle({
             : "text-gray-500 hover:text-gray-700"
         }`}
       >
-        Attended <span className="text-xs text-gray-400">({attendedCount})</span>
+        Attended <span className="text-xs text-gray-400">({share(attendedCount)})</span>
       </button>
       <button
         onClick={() => onChange("absent")}
@@ -463,7 +518,7 @@ function AttendanceToggle({
             : "text-gray-500 hover:text-gray-700"
         }`}
       >
-        Absent <span className="text-xs text-gray-400">({absentCount})</span>
+        Absent <span className="text-xs text-gray-400">({share(absentCount)})</span>
       </button>
     </div>
   );
@@ -477,6 +532,7 @@ export function AttendancePanel({
   attendedSubtitle,
   attendedCount,
   extraAction,
+  courseId,
   children,
 }: {
   tab: TabKey;
@@ -488,13 +544,16 @@ export function AttendancePanel({
   attendedCount: number;
   /** Extra control (e.g. a download button) shown only in the Attended view. */
   extraAction?: React.ReactNode;
+  /** Daily Quiz only — narrows the roster to the selected course (see fetchAbsent). */
+  courseId?: string;
   children: React.ReactNode;
 }) {
   const [view, setView] = useState<"attended" | "absent">("attended");
   const { rows: absentRows, expected, loading: absentLoading } = useAbsent(
     tab,
     selectedDate,
-    refreshKey
+    refreshKey,
+    courseId
   );
 
   return (
@@ -504,7 +563,11 @@ export function AttendancePanel({
         !selectedDate
           ? undefined
           : view === "absent"
-          ? `${absentRows.length} absent · ${expected} expected`
+          ? `${pctLabel(absentRows.length, expected)} absent · ${countLabel(
+              absentRows.length,
+              expected,
+              "student"
+            )} expected`
           : attendedSubtitle
       }
       empty={!selectedDate}
@@ -517,6 +580,7 @@ export function AttendancePanel({
               onChange={setView}
               attendedCount={attendedCount}
               absentCount={absentRows.length}
+              expected={expected}
             />
           </div>
         ) : null
