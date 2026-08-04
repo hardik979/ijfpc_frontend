@@ -88,22 +88,33 @@ function toneFor(score: number, max: number) {
   return { text: "text-rose-500", bar: "bg-rose-500", hex: "#f43f5e", glow: "rgba(244,63,94,0.55)" };
 }
 
+// Donut is drawn with a radial mask instead of an opaque inner disc, so the
+// hole shows the card behind it — correct on both the light surface and the
+// dark glass panel (an inner `bg-white` used to punch a white hole in dark).
+const RING_MASK =
+  "radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 8px))";
+
 function ReadinessRing({ value }: { value: number }) {
   const tone = toneFor(value, 100);
   const deg = Math.max(0, Math.min(100, value)) * 3.6;
   return (
+    // Outer wrapper carries the glow: `filter` is applied before `mask`, so the
+    // drop-shadow has to live on a parent or the mask would clip it away.
     <div
-      className="relative grid h-20 w-20 shrink-0 place-items-center rounded-full"
-      style={{
-        background: `conic-gradient(${tone.hex} ${deg}deg, #e5e7eb ${deg}deg)`,
-        filter: `drop-shadow(0 0 8px ${tone.glow})`,
-      }}
+      className="relative grid h-20 w-20 shrink-0 place-items-center"
+      style={{ filter: `drop-shadow(0 0 8px ${tone.glow})` }}
     >
-      <div className="grid h-[58px] w-[58px] place-items-center rounded-full bg-white">
-        <span className={`text-lg font-bold ${tone.text}`}>
-          {Math.round(value)}%
-        </span>
-      </div>
+      <div
+        className="absolute inset-0 rounded-full"
+        style={{
+          background: `conic-gradient(${tone.hex} ${deg}deg, var(--panel-border-strong) ${deg}deg)`,
+          WebkitMask: RING_MASK,
+          mask: RING_MASK,
+        }}
+      />
+      <span className={`relative text-lg font-bold ${tone.text}`}>
+        {Math.round(value)}%
+      </span>
     </div>
   );
 }
@@ -121,7 +132,7 @@ function SubjectCard({
 }) {
   const tone = toneFor(score, max);
   return (
-    <div className="relative flex flex-col items-center gap-1.5 overflow-hidden rounded-xl border border-gray-200 bg-white p-3 text-center">
+    <div className="relative flex flex-col items-center gap-1.5 overflow-hidden rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] p-3 text-center">
       {/* soft colored halo behind the icon */}
       <span
         className="pointer-events-none absolute -top-5 h-16 w-16 rounded-full blur-2xl"
@@ -131,7 +142,9 @@ function SubjectCard({
         className={`relative h-7 w-7 ${tone.text}`}
         style={{ filter: `drop-shadow(0 0 7px ${tone.glow})` }}
       />
-      <span className="relative text-xs font-medium text-gray-600">{label}</span>
+      <span className="relative text-xs font-medium text-[var(--panel-text-muted)]">
+        {label}
+      </span>
       <span className={`relative text-sm font-bold ${tone.text}`}>
         {score}/{max}
       </span>
@@ -152,12 +165,12 @@ function ScoreBar({
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between text-xs">
-        <span className="text-gray-600">{label}</span>
+        <span className="text-[var(--panel-text-secondary)]">{label}</span>
         <span className={`font-semibold ${tone.text}`}>
           {score}/{max}
         </span>
       </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--panel-border)]">
         <div
           className={`h-full rounded-full ${tone.bar}`}
           style={{ width: `${Math.min(100, (score / max) * 100)}%` }}
@@ -170,8 +183,10 @@ function ScoreBar({
 function TextBlock({ label, text }: { label: string; text: string }) {
   return (
     <div>
-      <p className="mb-1 text-sm font-medium text-gray-700">{label}</p>
-      <p className="whitespace-pre-line rounded-lg bg-gray-50 p-3 text-sm leading-relaxed text-gray-600">
+      <p className="mb-1 text-sm font-medium text-[var(--panel-text-primary)]">
+        {label}
+      </p>
+      <p className="whitespace-pre-line rounded-lg border border-[var(--panel-border)] bg-[var(--panel-card-soft)] p-3 text-sm leading-relaxed text-[var(--panel-text-secondary)]">
         {text}
       </p>
     </div>
@@ -182,15 +197,15 @@ function TextBlock({ label, text }: { label: string; text: string }) {
 // provider-side failure, not a poor performance by the student.
 function VapiUnavailableNotice({ hasRecording }: { hasRecording: boolean }) {
   return (
-    <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-200 text-slate-600">
+    <div className="flex items-start gap-3 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] p-4">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[var(--panel-bg-900)] text-[var(--panel-text-muted)]">
         <Info className="h-4 w-4" />
       </span>
       <div className="min-w-0">
-        <p className="text-sm font-semibold text-slate-800">
+        <p className="text-sm font-semibold text-[var(--panel-text-primary)]">
           Analysis unavailable
         </p>
-        <p className="mt-0.5 text-sm leading-relaxed text-slate-600">
+        <p className="mt-0.5 text-sm leading-relaxed text-[var(--panel-text-secondary)]">
           The interview provider didn’t return an evaluation for this attempt.
           This is a processing issue on the provider’s side and does{" "}
           <span className="font-medium">not</span> reflect the student’s
@@ -226,7 +241,7 @@ function CallFacts({ interview }: { interview: MockAttemptRow }) {
               href={interview.recordingUrl}
               target="_blank"
               rel="noreferrer"
-              className="text-blue-600 hover:underline"
+              className="font-medium text-blue-600 hover:underline dark:text-blue-300"
             >
               Listen
             </a>
@@ -276,28 +291,30 @@ export function MockEvaluationPanel({ interview }: { interview: MockAttemptRow }
   return (
     <div className="space-y-5">
       {/* Header: readiness ring + level / threshold + verdict */}
-      <div className="flex items-center gap-4 rounded-xl border border-gray-200 bg-gray-50/60 p-4">
+      <div className="flex items-center gap-4 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] p-4">
         {readiness != null && <ReadinessRing value={readiness} />}
         <div className="min-w-0 space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
             {mockLevelBadge(level)}
             {meets != null &&
               (meets ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-emerald-600/20 dark:bg-emerald-500/15 dark:ring-emerald-400/30">
                   <CheckCircle2 className="h-3.5 w-3.5" /> Meets bar
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700">
+                <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700 ring-1 ring-rose-600/20 dark:bg-rose-500/15 dark:ring-rose-400/30">
                   <XCircle className="h-3.5 w-3.5" /> Below bar
                 </span>
               ))}
           </div>
           {verdict ? (
-            <p className="text-sm text-gray-600">{verdict}</p>
+            <p className="text-sm leading-relaxed text-[var(--panel-text-secondary)]">
+              {verdict}
+            </p>
           ) : (
             readiness == null &&
             interview.evaluation != null && (
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-[var(--panel-text-muted)]">
                 Evaluation: {String(interview.evaluation)}
               </p>
             )
@@ -308,7 +325,7 @@ export function MockEvaluationPanel({ interview }: { interview: MockAttemptRow }
       {/* Subjects with glowing icons */}
       {subjects.length > 0 && (
         <section className="space-y-2">
-          <h4 className="text-sm font-semibold text-gray-800">
+          <h4 className="text-sm font-semibold text-[var(--panel-text-primary)]">
             Subject proficiency
           </h4>
           <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
@@ -328,7 +345,7 @@ export function MockEvaluationPanel({ interview }: { interview: MockAttemptRow }
       {/* Competency bars */}
       {competencies.length > 0 && (
         <section className="space-y-2.5">
-          <h4 className="text-sm font-semibold text-gray-800">
+          <h4 className="text-sm font-semibold text-[var(--panel-text-primary)]">
             Interview competencies
           </h4>
           <div className="space-y-2.5">

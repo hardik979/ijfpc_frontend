@@ -284,12 +284,16 @@ export const mockColumns: Column<MockAttemptRow>[] = [
 ];
 
 /* ------------------ Mock Interview — unique students ------------------ */
+// The `dark:` fills are required: globals.css re-tints text-emerald-700 /
+// text-rose-700 / text-slate-700 to pale dark-mode shades but has no override
+// for the rose/emerald/slate *backgrounds*, so without them the pill renders
+// pale-on-pale (near invisible) once the dark theme is on.
 const LEVEL_BADGE: Record<MockLevel, string> = {
-  strong: "bg-emerald-50 text-emerald-700",
+  strong: "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15",
   average: "bg-amber-50 text-amber-700",
-  needs: "bg-rose-50 text-rose-700",
+  needs: "bg-rose-50 text-rose-700 dark:bg-rose-500/15",
   // Neutral, not red: a missing Vapi report is not a failing student.
-  unanalyzed: "bg-slate-100 text-slate-600",
+  unanalyzed: "bg-slate-100 text-slate-600 dark:bg-slate-400/15 dark:text-slate-300",
 };
 
 /** Colored pill for a Strong / Average / Needs-work level. */
@@ -515,7 +519,7 @@ export const aiColumns: Column<AiCallingRow>[] = [
     render: (r) => {
       if (r.analyzed) return badge("Analyzed", "bg-green-50 text-green-700");
       // No-answer calls were never picked up — show a terminal state, not "Pending".
-      if (isAiCallDnp(r)) return badge("Not Answered", "bg-slate-100 text-slate-600");
+      if (isAiCallDnp(r)) return badge("Not Answered", "bg-slate-100 text-slate-600 dark:bg-slate-400/15 dark:text-slate-300");
       return badge(r.analysisStatus ?? "Pending", "bg-amber-50 text-amber-700");
     },
   },

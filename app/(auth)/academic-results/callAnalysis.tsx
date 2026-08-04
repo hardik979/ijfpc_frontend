@@ -90,10 +90,10 @@ type Tone = {
   hex: string;
   glow: string;
 };
-const TONE_GOOD: Tone = { text: "text-emerald-600", bg: "bg-emerald-50 text-emerald-700", ring: "ring-emerald-200", dot: "bg-emerald-500", hex: "#10b981", glow: "rgba(16,185,129,0.55)" };
+const TONE_GOOD: Tone = { text: "text-emerald-600", bg: "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15", ring: "ring-emerald-200", dot: "bg-emerald-500", hex: "#10b981", glow: "rgba(16,185,129,0.55)" };
 const TONE_MID: Tone = { text: "text-amber-600", bg: "bg-amber-50 text-amber-700", ring: "ring-amber-200", dot: "bg-amber-500", hex: "#f59e0b", glow: "rgba(245,158,11,0.55)" };
-const TONE_BAD: Tone = { text: "text-rose-600", bg: "bg-rose-50 text-rose-700", ring: "ring-rose-200", dot: "bg-rose-500", hex: "#f43f5e", glow: "rgba(244,63,94,0.55)" };
-const TONE_NEUTRAL: Tone = { text: "text-slate-600", bg: "bg-slate-100 text-slate-700", ring: "ring-slate-200", dot: "bg-slate-400", hex: "#64748b", glow: "rgba(100,116,139,0.45)" };
+const TONE_BAD: Tone = { text: "text-rose-600", bg: "bg-rose-50 text-rose-700 dark:bg-rose-500/15", ring: "ring-rose-200", dot: "bg-rose-500", hex: "#f43f5e", glow: "rgba(244,63,94,0.55)" };
+const TONE_NEUTRAL: Tone = { text: "text-slate-600", bg: "bg-slate-100 text-slate-700 dark:bg-slate-400/15", ring: "ring-slate-200", dot: "bg-slate-400", hex: "#64748b", glow: "rgba(100,116,139,0.45)" };
 
 // Map a free-text rating / outcome word to a tone. Negative is tested first so
 // "not interested" doesn't trip the "interested" branch.
@@ -292,7 +292,7 @@ function IssueCards({ items }: { items: IssueItem[] }) {
                 </p>
               )}
               {asString(it.suggestion) && (
-                <p className="mt-2 flex gap-1.5 rounded-lg bg-emerald-50 p-2.5 text-xs leading-relaxed text-emerald-800">
+                <p className="mt-2 flex gap-1.5 rounded-lg bg-emerald-50 p-2.5 text-xs leading-relaxed text-emerald-800 dark:bg-emerald-500/10">
                   <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
                   <span>
                     <span className="font-semibold">Suggestion: </span>
@@ -346,7 +346,7 @@ function QuestionCards({ items }: { items: QwaItem[] }) {
                 {asString(q.studentAnswer)}
               </p>
             ) : (
-              <p className="mt-2 rounded-lg bg-rose-50 p-2.5 text-sm text-rose-600">
+              <p className="mt-2 rounded-lg bg-rose-50 p-2.5 text-sm text-rose-600 dark:bg-rose-500/10 dark:text-rose-300">
                 No answer given.
               </p>
             )}
@@ -387,10 +387,10 @@ function FlagsSection({ items }: { items: unknown[] }) {
       </h4>
       <div className="space-y-2">
         {flags.map((f, i) => (
-          <div key={i} className="rounded-lg border border-rose-200 bg-rose-50 p-3">
+          <div key={i} className="rounded-lg border border-rose-200 bg-rose-50 p-3 dark:border-rose-400/25 dark:bg-rose-500/10">
             <p className="text-sm font-medium text-rose-700">{f.flag}</p>
             {f.evidenceQuote && (
-              <p className="mt-1 border-l-2 border-rose-300 pl-2 text-xs italic leading-relaxed text-rose-600">
+              <p className="mt-1 border-l-2 border-rose-300 pl-2 text-xs italic leading-relaxed text-rose-600 dark:border-rose-400/40 dark:text-rose-300">
                 “{f.evidenceQuote}”
               </p>
             )}
