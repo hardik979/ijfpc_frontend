@@ -266,6 +266,55 @@ export function currentMonth(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+/* ───────────────────────────── Percentages ───────────────────────────── */
+// Every headline figure on this dashboard is a rate, not a raw count. Two
+// denominators are in play and they are deliberately never mixed:
+//
+//   • Participation rates ("how many of the students we assigned this to
+//     actually did it") divide by the tab's *expected roster* — the same
+//     zone/course roster the Absent list is built from. See useExpectedRoster.
+//   • Status rates (Evaluated, Analyzed, Strong/Average/Needs work, …) divide
+//     by the number of *records* in the same window, because a status is a
+//     property of an attempt/interview/call, not of a student. A student with
+//     three attempts contributes three records, so dividing these by the roster
+//     would be meaningless (and could exceed 100%).
+//
+// The raw counts are never thrown away: they stay visible under each
+// percentage as the "x of y" sub-line, so a figure can always be verified.
+
+/**
+ * Whole-number percentage of `part` out of `whole`, or null when there is no
+ * usable denominator (roster still loading, or no records that day).
+ */
+export function pct(part: number, whole: number): number | null {
+  if (!Number.isFinite(whole) || whole <= 0) return null;
+  if (!Number.isFinite(part)) return null;
+  return Math.round((part / whole) * 100);
+}
+
+/**
+ * A percentage for display: "63%", or "—" when there's no denominator.
+ * Rounding is nudged away from 0% and 100% so a non-zero part never reads as
+ * "0%" and an incomplete one never reads as a full "100%".
+ */
+export function pctLabel(part: number, whole: number): string {
+  const p = pct(part, whole);
+  if (p == null) return "—";
+  if (p === 0 && part > 0) return "<1%";
+  if (p === 100 && part < whole) return ">99%";
+  return `${p}%`;
+}
+
+/** The counts behind a percentage, e.g. "19 of 30 students". */
+export function countLabel(
+  part: number,
+  whole: number,
+  noun: string,
+  plural = `${noun}s`
+): string {
+  return `${part} of ${whole} ${whole === 1 ? noun : plural}`;
+}
+
 export function formatDuration(sec?: number | null): string {
   if (!sec || sec <= 0) return "—";
   const m = Math.floor(sec / 60);
@@ -734,15 +783,18 @@ export async function fetchMockInterviewCompleted(): Promise<MockCompletedRow[]>
 }
 
 /* -------------------------- Absent students --------------------------- */
-// The absent roster is zone-based (mirrors the daily report) and therefore
-// course-independent, so no courseId is sent.
+// The absent roster is zone-based (mirrors the daily report). Course scoping is
+// fixed per tab, so `courseId` is only meaningful for Daily Quiz — the one tab
+// with a user-selectable course — where it narrows the roster to that course's
+// purchasers. Every other tab ignores it.
 export async function fetchAbsent(
   tab: TabKey,
-  date: string
+  date: string,
+  courseId?: string
 ): Promise<AbsentResult> {
   const { data } = await axios.get(
     `${LMS}/api/academic-results/absent/${tab}`,
-    { params: { date } }
+    { params: { date, ...(courseId ? { courseId } : {}) } }
   );
   return {
     students: data?.students ?? [],
@@ -834,7 +886,8 @@ export function useMonthDay<MRow, DRow>(
 export function useAbsent(
   tab: TabKey,
   date: string | null,
-  refreshKey: number
+  refreshKey: number,
+  courseId?: string
 ) {
   const [rows, setRows] = useState<AbsentRow[]>([]);
   const [expected, setExpected] = useState(0);
@@ -848,7 +901,7 @@ export function useAbsent(
     }
     let cancelled = false;
     setLoading(true);
-    fetchAbsent(tab, date)
+    fetchAbsent(tab, date, courseId)
       .then((res) => {
         if (cancelled) return;
         setRows(res.students);
@@ -866,7 +919,53 @@ export function useAbsent(
     return () => {
       cancelled = true;
     };
-  }, [tab, date, refreshKey]);
+  }, [tab, date, refreshKey, courseId]);
 
   return { rows, expected, loading };
+}
+
+/* ═════════════════════════ useExpectedRoster ═══════════════════════════ */
+
+/**
+ * Size of the tab's expected roster — the students the activity was assigned
+ * to, and the denominator for every participation percentage on the dashboard.
+ *
+ * It reuses the absent endpoint because that endpoint already owns the roster
+ * definition (zone + course + active, per tab). The roster query there is
+ * date-independent — the date only decides who *attended* — so probing with any
+ * valid day of the viewed month returns the roster the whole month is measured
+ * against, and it always agrees with the "expected" shown by the Absent list.
+ */
+export function useExpectedRoster(
+  tab: TabKey,
+  month: string,
+  refreshKey: number,
+  courseId?: string
+) {
+  const [expected, setExpected] = useState(0);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!/^\d{4}-\d{2}$/.test(month)) {
+      setExpected(0);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    fetchAbsent(tab, `${month}-01`, courseId)
+      .then((res) => !cancelled && setExpected(res.expected))
+      .catch((err) => {
+        if (cancelled) return;
+        console.error("[useExpectedRoster] load failed", err);
+        setExpected(0);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, month, refreshKey, courseId]);
+
+  return { expected, loading };
 }
