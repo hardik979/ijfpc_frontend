@@ -27,9 +27,7 @@ import {
 import CalendarFormate from "@/healper/calendarFormate";
 import DataPresentationTable from "@/healper/DataPresentationTable";
 import {
-  countLabel,
   fetchCourses,
-  pctLabel,
   useAbsent,
   type Course,
   type TabKey,
@@ -344,21 +342,15 @@ export function MonthlyChart({
 }
 
 /* ════════════════════════════ ResultsCalendar ══════════════════ */
-type DayRow = { date: string } & Record<string, unknown>;
-
 export type CalendarMetric = {
-  /** Stable id for the row (also the day-row field read by the default display). */
+  /** Field on the day row to display. */
   key: string;
   label: string;
   /** Tailwind text color class for the metric line. */
   className?: string;
-  /**
-   * Renders the cell's figure from the whole day row — used to show a rate
-   * ("63%") rather than the raw field, since a percentage needs a denominator
-   * the day row alone doesn't carry. Falls back to the raw `key` field.
-   */
-  display?: (row: DayRow) => string;
 };
+
+type DayRow = { date: string } & Record<string, unknown>;
 
 export function ResultsCalendar({
   month,
@@ -426,7 +418,7 @@ export function ResultsCalendar({
                   >
                     <span>{m.label}</span>
                     <span className="font-bold">
-                      {m.display ? m.display(d) : String(d[m.key] ?? 0)}
+                      {String(d[m.key] ?? 0)}
                     </span>
                   </div>
                 ))}
@@ -488,16 +480,12 @@ function AttendanceToggle({
   onChange,
   attendedCount,
   absentCount,
-  expected,
 }: {
   view: "attended" | "absent";
   onChange: (v: "attended" | "absent") => void;
   attendedCount: number;
   absentCount: number;
-  /** Roster the two shares are measured against; 0 → fall back to raw counts. */
-  expected: number;
 }) {
-  const share = (n: number) => (expected > 0 ? pctLabel(n, expected) : String(n));
   return (
     <div className="inline-flex shrink-0 rounded-lg border border-gray-300 bg-gray-50 p-0.5 text-sm">
       <button
@@ -508,7 +496,7 @@ function AttendanceToggle({
             : "text-gray-500 hover:text-gray-700"
         }`}
       >
-        Attended <span className="text-xs text-gray-400">({share(attendedCount)})</span>
+        Attended <span className="text-xs text-gray-400">({attendedCount})</span>
       </button>
       <button
         onClick={() => onChange("absent")}
@@ -518,7 +506,7 @@ function AttendanceToggle({
             : "text-gray-500 hover:text-gray-700"
         }`}
       >
-        Absent <span className="text-xs text-gray-400">({share(absentCount)})</span>
+        Absent <span className="text-xs text-gray-400">({absentCount})</span>
       </button>
     </div>
   );
@@ -532,7 +520,6 @@ export function AttendancePanel({
   attendedSubtitle,
   attendedCount,
   extraAction,
-  courseId,
   children,
 }: {
   tab: TabKey;
@@ -544,16 +531,13 @@ export function AttendancePanel({
   attendedCount: number;
   /** Extra control (e.g. a download button) shown only in the Attended view. */
   extraAction?: React.ReactNode;
-  /** Daily Quiz only — narrows the roster to the selected course (see fetchAbsent). */
-  courseId?: string;
   children: React.ReactNode;
 }) {
   const [view, setView] = useState<"attended" | "absent">("attended");
   const { rows: absentRows, expected, loading: absentLoading } = useAbsent(
     tab,
     selectedDate,
-    refreshKey,
-    courseId
+    refreshKey
   );
 
   return (
@@ -563,11 +547,7 @@ export function AttendancePanel({
         !selectedDate
           ? undefined
           : view === "absent"
-          ? `${pctLabel(absentRows.length, expected)} absent · ${countLabel(
-              absentRows.length,
-              expected,
-              "student"
-            )} expected`
+          ? `${absentRows.length} absent · ${expected} expected`
           : attendedSubtitle
       }
       empty={!selectedDate}
@@ -580,7 +560,6 @@ export function AttendancePanel({
               onChange={setView}
               attendedCount={attendedCount}
               absentCount={absentRows.length}
-              expected={expected}
             />
           </div>
         ) : null
