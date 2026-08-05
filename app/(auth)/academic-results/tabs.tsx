@@ -11,6 +11,10 @@ import DataPresentationTable from "@/healper/DataPresentationTable";
 import {
   useMonthDay,
   useExpectedRoster,
+  useStudentMeta,
+  attachStudentMeta,
+  courseOptionsOf,
+  filterByCourse,
   pct,
   formatDuration,
   formatIST,
@@ -45,6 +49,7 @@ import {
   type RealHrByDateRow,
   type RealHrRow,
   type RealHrStudentRow,
+  type WithMeta,
 } from "./data";
 import {
   quizStudentColumns,
@@ -187,12 +192,34 @@ export function DailyQuizTab({
     [byDate, expected]
   );
 
-  // Unique students for the selected day, with per-status tallies.
-  const students = useMemo(() => groupQuizByStudent(dayRows), [dayRows]);
+  // Unique students for the selected day, with per-status tallies, each carrying
+  // their batch + course (quiz attempts key on the student's Clerk id).
+  const lookupMeta = useStudentMeta(refreshKey);
+  const allStudents = useMemo(
+    () =>
+      attachStudentMeta(
+        groupQuizByStudent(dayRows),
+        (r) => ({ clerkId: r.userId }),
+        lookupMeta
+      ),
+    [dayRows, lookupMeta]
+  );
+
+  // Table-level course filter — narrows the rows shown, not the day's totals.
+  const [tableCourse, setTableCourse] = useState("");
+  const students = useMemo(
+    () => filterByCourse(allStudents, tableCourse),
+    [allStudents, tableCourse]
+  );
+  const courseOptions = useMemo(() => courseOptionsOf(allStudents), [allStudents]);
+  const shownAttempts = useMemo(
+    () => students.reduce((n, g) => n + g.total, 0),
+    [students]
+  );
 
   const dayStats = useMemo(
     () =>
-      students.reduce(
+      allStudents.reduce(
         (acc, g) => {
           acc.evaluated += g.evaluated;
           acc.pending += g.pending;
@@ -200,7 +227,7 @@ export function DailyQuizTab({
         },
         { evaluated: 0, pending: 0 }
       ),
-    [students]
+    [allStudents]
   );
 
   const monthTotals = useMemo(
@@ -231,7 +258,7 @@ export function DailyQuizTab({
             {
               label: "Total Attempts",
               value: dayRows.length,
-              sub: `${students.length} student${students.length === 1 ? "" : "s"} attempted`,
+              sub: `${allStudents.length} student${allStudents.length === 1 ? "" : "s"} attempted`,
               accent: "violet",
             },
             { label: "Evaluated", value: dayStats.evaluated, accent: "emerald" },
@@ -300,12 +327,16 @@ export function DailyQuizTab({
         title={selectedDate ? `Students on ${selectedDate}` : "Quiz attempts"}
         attendedSubtitle={
           selectedDate
-            ? `${students.length} student${students.length === 1 ? "" : "s"} · ${dayRows.length} attempt${dayRows.length === 1 ? "" : "s"}`
+            ? `${students.length} student${students.length === 1 ? "" : "s"} · ${shownAttempts} attempt${shownAttempts === 1 ? "" : "s"}`
             : undefined
         }
         attendedCount={students.length}
+        rosterCourseId={course}
+        courseFilter={tableCourse}
+        onCourseFilterChange={setTableCourse}
+        courseOptions={courseOptions}
       >
-        <DataPresentationTable<QuizStudentRow>
+        <DataPresentationTable<WithMeta<QuizStudentRow>>
           data={students}
           columns={quizStudentColumns}
           loading={loadingDay}
@@ -396,6 +427,17 @@ export function MockCompletedButton({ refreshKey }: { refreshKey: number }) {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
 
+  const lookupMeta = useStudentMeta(refreshKey);
+  const rows = useMemo(
+    () =>
+      attachStudentMeta(
+        completed,
+        (r) => ({ id: r.id, email: r.email }),
+        lookupMeta
+      ),
+    [completed, lookupMeta]
+  );
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -427,8 +469,8 @@ export function MockCompletedButton({ refreshKey }: { refreshKey: number }) {
         subtitle={`${completed.length} student${completed.length === 1 ? "" : "s"} reached the interview limit`}
         onClose={() => setOpen(false)}
       >
-        <DataPresentationTable<MockCompletedRow>
-          data={completed}
+        <DataPresentationTable<WithMeta<MockCompletedRow>>
+          data={rows}
           columns={mockCompletedColumns}
           loading={loading}
           searchable
@@ -476,13 +518,35 @@ export function MockInterviewTab({
     [byDate, expected]
   );
 
-  // Unique students for the selected day, with per-level tallies.
-  const students = useMemo(() => groupMockByStudent(dayRows), [dayRows]);
+  // Unique students for the selected day, with per-level tallies and their
+  // batch + course (mock interviews key on the student's email).
+  const lookupMeta = useStudentMeta(refreshKey);
+  const allStudents = useMemo(
+    () =>
+      attachStudentMeta(
+        groupMockByStudent(dayRows),
+        (r) => ({ email: r.email }),
+        lookupMeta
+      ),
+    [dayRows, lookupMeta]
+  );
+
+  // Table-level course filter — narrows the rows shown, not the day's totals.
+  const [tableCourse, setTableCourse] = useState("");
+  const students = useMemo(
+    () => filterByCourse(allStudents, tableCourse),
+    [allStudents, tableCourse]
+  );
+  const courseOptions = useMemo(() => courseOptionsOf(allStudents), [allStudents]);
+  const shownInterviews = useMemo(
+    () => students.reduce((n, g) => n + g.total, 0),
+    [students]
+  );
 
   // Day-level Strong/Average/Needs totals (each interview counted once).
   const dayStats = useMemo(
     () =>
-      students.reduce(
+      allStudents.reduce(
         (acc, g) => {
           acc.strong += g.strong;
           acc.average += g.average;
@@ -492,7 +556,7 @@ export function MockInterviewTab({
         },
         { strong: 0, average: 0, needs: 0, unanalyzed: 0 }
       ),
-    [students]
+    [allStudents]
   );
 
   // Month-level totals shown before a day is picked.
@@ -520,7 +584,7 @@ export function MockInterviewTab({
         <StatCards
           columns={6}
           items={[
-            { label: "Total Students", value: students.length, accent: "blue" },
+            { label: "Total Students", value: allStudents.length, accent: "blue" },
             { label: "Total Mock Interviews", value: dayRows.length, accent: "violet" },
             { label: "Strong", value: dayStats.strong, accent: "emerald" },
             { label: "Average", value: dayStats.average, accent: "amber" },
@@ -580,26 +644,35 @@ export function MockInterviewTab({
         title={selectedDate ? `Students on ${selectedDate}` : "Mock interviews"}
         attendedSubtitle={
           selectedDate
-            ? `${students.length} student${students.length === 1 ? "" : "s"} · ${dayRows.length} interview${dayRows.length === 1 ? "" : "s"}`
+            ? `${students.length} student${students.length === 1 ? "" : "s"} · ${shownInterviews} interview${shownInterviews === 1 ? "" : "s"}`
             : undefined
         }
         attendedCount={students.length}
+        courseFilter={tableCourse}
+        onCourseFilterChange={setTableCourse}
+        courseOptions={courseOptions}
         extraAction={
-          selectedDate && dayRows.length > 0 ? (
+          selectedDate && students.length > 0 ? (
             <button
+              // Exports what the table currently shows (course filter included),
+              // one row per interview, with the student's batch and course.
               onClick={() =>
                 downloadCsv(
                   `mock-interviews-${selectedDate}.csv`,
-                  ["Name", "Email", "Interview Type", "Duration", "Attempt Time", "Result", "Status"],
-                  dayRows.map((r) => [
-                    r.name ?? "",
-                    r.email ?? "",
-                    r.interviewType ?? "",
-                    formatDuration(r.durationSeconds),
-                    formatIST(r.startedAt),
-                    mockInterviewLevel(r),
-                    r.completed ? "Completed" : "Incomplete",
-                  ])
+                  ["Name", "Email", "Batch", "Course", "Interview Type", "Duration", "Attempt Time", "Result", "Status"],
+                  students.flatMap((g) =>
+                    g.interviews.map((r) => [
+                      r.name ?? g.name ?? "",
+                      r.email ?? g.email ?? "",
+                      g.batch ?? "",
+                      g.courseNames.join(" | "),
+                      r.interviewType ?? "",
+                      formatDuration(r.durationSeconds),
+                      formatIST(r.startedAt),
+                      mockInterviewLevel(r),
+                      r.completed ? "Completed" : "Incomplete",
+                    ])
+                  )
                 )
               }
               className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50"
@@ -610,7 +683,7 @@ export function MockInterviewTab({
           ) : null
         }
       >
-        <DataPresentationTable<MockStudentRow>
+        <DataPresentationTable<WithMeta<MockStudentRow>>
           data={students}
           columns={mockStudentColumns}
           loading={loadingDay}
@@ -713,12 +786,34 @@ export function AiHrCallingTab({
     [byDate, expected]
   );
 
-  // Unique candidates for the selected day, with per-status tallies.
-  const students = useMemo(() => groupAiByStudent(dayRows), [dayRows]);
+  // Unique candidates for the selected day, with per-status tallies and their
+  // batch + course (AI calls carry a Clerk id and a phone number).
+  const lookupMeta = useStudentMeta(refreshKey);
+  const allStudents = useMemo(
+    () =>
+      attachStudentMeta(
+        groupAiByStudent(dayRows),
+        (r) => ({ clerkId: r.clerkId, phone: r.phone }),
+        lookupMeta
+      ),
+    [dayRows, lookupMeta]
+  );
+
+  // Table-level course filter — narrows the rows shown, not the day's totals.
+  const [tableCourse, setTableCourse] = useState("");
+  const students = useMemo(
+    () => filterByCourse(allStudents, tableCourse),
+    [allStudents, tableCourse]
+  );
+  const courseOptions = useMemo(() => courseOptionsOf(allStudents), [allStudents]);
+  const shownCalls = useMemo(
+    () => students.reduce((n, g) => n + g.total, 0),
+    [students]
+  );
 
   const dayStats = useMemo(
     () =>
-      students.reduce(
+      allStudents.reduce(
         (acc, g) => {
           acc.analyzed += g.analyzed;
           acc.notAnswered += g.notAnswered;
@@ -727,7 +822,7 @@ export function AiHrCallingTab({
         },
         { analyzed: 0, notAnswered: 0, pending: 0 }
       ),
-    [students]
+    [allStudents]
   );
 
   const totals = useMemo(
@@ -754,7 +849,7 @@ export function AiHrCallingTab({
       {selectedDate ? (
         <StatCards
           items={[
-            { label: "Total Candidates", value: students.length, accent: "blue" },
+            { label: "Total Candidates", value: allStudents.length, accent: "blue" },
             { label: "Total Calls", value: dayRows.length, accent: "violet" },
             { label: "Analyzed", value: dayStats.analyzed, accent: "emerald" },
             { label: "Not Answered", value: dayStats.notAnswered, accent: "slate" },
@@ -818,12 +913,15 @@ export function AiHrCallingTab({
         title={selectedDate ? `Candidates on ${selectedDate}` : "AI HR calls"}
         attendedSubtitle={
           selectedDate
-            ? `${students.length} candidate${students.length === 1 ? "" : "s"} · ${dayRows.length} call${dayRows.length === 1 ? "" : "s"}`
+            ? `${students.length} candidate${students.length === 1 ? "" : "s"} · ${shownCalls} call${shownCalls === 1 ? "" : "s"}`
             : undefined
         }
         attendedCount={students.length}
+        courseFilter={tableCourse}
+        onCourseFilterChange={setTableCourse}
+        courseOptions={courseOptions}
       >
-        <DataPresentationTable<AiStudentRow>
+        <DataPresentationTable<WithMeta<AiStudentRow>>
           data={students}
           columns={aiStudentColumns}
           loading={loadingDay}
@@ -950,12 +1048,34 @@ export function RealHrCallingTab({
     [byDate, expected]
   );
 
-  // Unique leads/students for the selected day, with per-status tallies.
-  const students = useMemo(() => groupRealHrByStudent(dayRows), [dayRows]);
+  // Unique leads/students for the selected day, with per-status tallies and
+  // their batch + course (recordings hold the uploader's Clerk id in `leadId`).
+  const lookupMeta = useStudentMeta(refreshKey);
+  const allStudents = useMemo(
+    () =>
+      attachStudentMeta(
+        groupRealHrByStudent(dayRows),
+        (r) => ({ clerkId: r.clerkId, email: r.email, phone: r.phone }),
+        lookupMeta
+      ),
+    [dayRows, lookupMeta]
+  );
+
+  // Table-level course filter — narrows the rows shown, not the day's totals.
+  const [tableCourse, setTableCourse] = useState("");
+  const students = useMemo(
+    () => filterByCourse(allStudents, tableCourse),
+    [allStudents, tableCourse]
+  );
+  const courseOptions = useMemo(() => courseOptionsOf(allStudents), [allStudents]);
+  const shownCalls = useMemo(
+    () => students.reduce((n, g) => n + g.total, 0),
+    [students]
+  );
 
   const dayStats = useMemo(
     () =>
-      students.reduce(
+      allStudents.reduce(
         (acc, g) => {
           acc.analyzed += g.analyzed;
           acc.pending += g.pending;
@@ -964,7 +1084,7 @@ export function RealHrCallingTab({
         },
         { analyzed: 0, pending: 0, manual: 0 }
       ),
-    [students]
+    [allStudents]
   );
 
   const totals = useMemo(
@@ -992,7 +1112,7 @@ export function RealHrCallingTab({
       {selectedDate ? (
         <StatCards
           items={[
-            { label: "Total Students", value: students.length, accent: "blue" },
+            { label: "Total Students", value: allStudents.length, accent: "blue" },
             { label: "Total Calls", value: dayRows.length, accent: "violet" },
             { label: "Analyzed", value: dayStats.analyzed, accent: "emerald" },
             { label: "Pending", value: dayStats.pending, accent: "amber" },
@@ -1052,12 +1172,15 @@ export function RealHrCallingTab({
         title={selectedDate ? `Students on ${selectedDate}` : "HR calls"}
         attendedSubtitle={
           selectedDate
-            ? `${students.length} student${students.length === 1 ? "" : "s"} · ${dayRows.length} call${dayRows.length === 1 ? "" : "s"}`
+            ? `${students.length} student${students.length === 1 ? "" : "s"} · ${shownCalls} call${shownCalls === 1 ? "" : "s"}`
             : undefined
         }
         attendedCount={students.length}
+        courseFilter={tableCourse}
+        onCourseFilterChange={setTableCourse}
+        courseOptions={courseOptions}
       >
-        <DataPresentationTable<RealHrStudentRow>
+        <DataPresentationTable<WithMeta<RealHrStudentRow>>
           data={students}
           columns={realHrStudentColumns}
           loading={loadingDay}
