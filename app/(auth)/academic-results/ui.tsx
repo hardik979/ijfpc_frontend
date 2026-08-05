@@ -27,11 +27,18 @@ import {
 import CalendarFormate from "@/healper/calendarFormate";
 import DataPresentationTable from "@/healper/DataPresentationTable";
 import {
+  attachStudentMeta,
+  courseOptionsOf,
   fetchCourses,
+  filterByCourse,
+  mergeCourseOptions,
   useAbsent,
+  useStudentMeta,
   type Course,
+  type CourseOption,
   type TabKey,
   type AbsentRow,
+  type WithMeta,
 } from "./data";
 import { absentColumns } from "./columns";
 
@@ -512,6 +519,37 @@ function AttendanceToggle({
   );
 }
 
+/** Course dropdown that narrows the table itself (both Attended and Absent). */
+function TableCourseFilter({
+  value,
+  onChange,
+  options,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: CourseOption[];
+}) {
+  if (options.length === 0) return null;
+  return (
+    <div className="relative shrink-0">
+      <BookOpen className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label="Filter table by course"
+        className="rounded-lg border border-gray-300 bg-white py-1 pl-7 pr-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      >
+        <option value="">All courses</option>
+        {options.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.title}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 export function AttendancePanel({
   tab,
   selectedDate,
@@ -519,6 +557,10 @@ export function AttendancePanel({
   title,
   attendedSubtitle,
   attendedCount,
+  rosterCourseId,
+  courseFilter,
+  onCourseFilterChange,
+  courseOptions = [],
   extraAction,
   children,
 }: {
@@ -529,6 +571,20 @@ export function AttendancePanel({
   title: string;
   attendedSubtitle?: string;
   attendedCount: number;
+  /**
+   * The dashboard's course selection (Daily Quiz only). It narrows the absent
+   * roster itself — who was *expected* that day — rather than just hiding rows,
+   * so the panel's "expected" agrees with the chart's denominator.
+   */
+  rosterCourseId?: string;
+  /**
+   * Course filter shared by both views. The tab owns the state because it also
+   * has to narrow its own (attended) rows with it.
+   */
+  courseFilter: string;
+  onCourseFilterChange: (courseId: string) => void;
+  /** Courses present in the attended rows; merged with the absent roster's. */
+  courseOptions?: CourseOption[];
   /** Extra control (e.g. a download button) shown only in the Attended view. */
   extraAction?: React.ReactNode;
   children: React.ReactNode;
@@ -537,7 +593,31 @@ export function AttendancePanel({
   const { rows: absentRows, expected, loading: absentLoading } = useAbsent(
     tab,
     selectedDate,
-    refreshKey
+    refreshKey,
+    rosterCourseId
+  );
+
+  // Absent rows are the eligible roster, so they carry a User _id — the most
+  // reliable key into the directory; email is only a fallback.
+  const lookupMeta = useStudentMeta(refreshKey);
+  const absentWithMeta = useMemo(
+    () =>
+      attachStudentMeta(
+        absentRows,
+        (r) => ({ id: r.id, email: r.email }),
+        lookupMeta
+      ),
+    [absentRows, lookupMeta]
+  );
+  const absentFiltered = useMemo(
+    () => filterByCourse(absentWithMeta, courseFilter),
+    [absentWithMeta, courseFilter]
+  );
+  // Offer every course either view can show, so switching views never silently
+  // drops the current selection out of the dropdown.
+  const options = useMemo(
+    () => mergeCourseOptions(courseOptions, courseOptionsOf(absentWithMeta)),
+    [courseOptions, absentWithMeta]
   );
 
   return (
@@ -547,27 +627,32 @@ export function AttendancePanel({
         !selectedDate
           ? undefined
           : view === "absent"
-          ? `${absentRows.length} absent · ${expected} expected`
+          ? `${absentFiltered.length} absent · ${expected} expected`
           : attendedSubtitle
       }
       empty={!selectedDate}
       action={
         selectedDate ? (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             {view === "attended" && extraAction}
+            <TableCourseFilter
+              value={courseFilter}
+              onChange={onCourseFilterChange}
+              options={options}
+            />
             <AttendanceToggle
               view={view}
               onChange={setView}
               attendedCount={attendedCount}
-              absentCount={absentRows.length}
+              absentCount={absentFiltered.length}
             />
           </div>
         ) : null
       }
     >
       {view === "absent" ? (
-        <DataPresentationTable<AbsentRow>
-          data={absentRows}
+        <DataPresentationTable<WithMeta<AbsentRow>>
+          data={absentFiltered}
           columns={absentColumns}
           loading={absentLoading}
           searchable
@@ -575,7 +660,11 @@ export function AttendancePanel({
           pageSize={15}
           rowKey="id"
           stickyHeader
-          emptyMessage="No absent students for this date 🎉"
+          emptyMessage={
+            courseFilter && absentWithMeta.length > 0
+              ? "No absent students in this course for this date"
+              : "No absent students for this date 🎉"
+          }
         />
       ) : (
         children

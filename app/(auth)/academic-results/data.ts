@@ -37,6 +37,8 @@ export type QuizAttemptRow = {
 /** One row per unique student for a selected day, with their attempts + tallies. */
 export type QuizStudentRow = {
   key: string;
+  /** The student's Clerk id (quiz attempts store it as `userId`). */
+  userId: string | null;
   studentName: string;
   section: string | null;
   attempts: QuizAttemptRow[];
@@ -139,6 +141,7 @@ export type AiCallingRow = {
 /** One row per unique candidate for a selected day, with their calls + tallies. */
 export type AiStudentRow = {
   key: string;
+  clerkId: string | null;
   candidateName: string | null;
   phone: string | null;
   calls: AiCallingRow[];
@@ -201,6 +204,8 @@ export type RealHrRow = {
  */
 export type RealHrStudentRow = {
   key: string;
+  /** Uploader's Clerk id (recordings store it as `leadId`). */
+  clerkId: string | null;
   studentName: string;
   email: string | null;
   phone: string | null;
@@ -247,6 +252,68 @@ export const QUIZ_ALLOWED_COURSE_IDS = [
   JOB_READY_BOOTCAMP_COURSE_ID,
   DATA_ANALYST_COURSE_ID,
 ];
+
+/* ------------------------- Student directory --------------------------- */
+// Batch + purchased courses for every student, used to put a Batch and a Course
+// column (and the course filter) on every table on the dashboard — attended and
+// absent alike. One shared lookup instead of four per-day endpoints each
+// growing its own join.
+
+export type StudentDirectoryRow = {
+  id: string;
+  clerkId: string | null;
+  email: string | null;
+  phone: string | null;
+  batch: string | null;
+  courseIds: string[];
+};
+
+/** The directory indexed by every identifier an activity record might carry. */
+export type StudentDirectory = {
+  courseTitles: Record<string, string>;
+  byId: Map<string, StudentDirectoryRow>;
+  byClerk: Map<string, StudentDirectoryRow>;
+  byEmail: Map<string, StudentDirectoryRow>;
+  byPhone: Map<string, StudentDirectoryRow>;
+};
+
+/** The batch/course fields mixed into a table row. */
+export type StudentMeta = {
+  batch: string | null;
+  courseIds: string[];
+  courseNames: string[];
+};
+
+export type WithMeta<T> = T & StudentMeta;
+
+/** Shared "nothing known about this student" value (stable identity). */
+export const NO_STUDENT_META: StudentMeta = {
+  batch: null,
+  courseIds: [],
+  courseNames: [],
+};
+
+/** Whatever identifiers a row happens to have; tried in order of reliability. */
+export type StudentKeys = {
+  id?: string | null;
+  clerkId?: string | null;
+  email?: string | null;
+  phone?: string | null;
+};
+
+export type CourseOption = { id: string; title: string };
+
+// Phone numbers are stored with assorted country codes / spacing, so they're
+// matched on their last 10 digits.
+const last10 = (v: string) => v.replace(/\D/g, "").slice(-10);
+
+const emptyDirectory = (): StudentDirectory => ({
+  courseTitles: {},
+  byId: new Map(),
+  byClerk: new Map(),
+  byEmail: new Map(),
+  byPhone: new Map(),
+});
 
 /* ------------------- Mock Interview — completed roster ----------------- */
 // A student who has used all 7 of their AI mock-interview attempts (a standing
@@ -478,6 +545,7 @@ export function groupQuizByStudent(rows: QuizAttemptRow[]): QuizStudentRow[] {
     if (!g) {
       g = {
         key,
+        userId: r.userId ?? null,
         studentName: r.studentName,
         section: r.section,
         attempts: [],
@@ -494,6 +562,7 @@ export function groupQuizByStudent(rows: QuizAttemptRow[]): QuizStudentRow[] {
     if (r.isEvaluated) g.evaluated += 1;
     else g.pending += 1;
     if (r.percentage > g.bestPercentage) g.bestPercentage = r.percentage;
+    if (!g.userId && r.userId) g.userId = r.userId;
     if (!g.section && r.section) g.section = r.section;
     if (!g.lastAttemptAt || (r.attemptedAt && r.attemptedAt > g.lastAttemptAt)) {
       g.lastAttemptAt = r.attemptedAt;
@@ -524,6 +593,7 @@ export function groupAiByStudent(rows: AiCallingRow[]): AiStudentRow[] {
     if (!g) {
       g = {
         key,
+        clerkId: r.clerkId ?? null,
         candidateName: r.candidateName,
         phone: r.phone,
         calls: [],
@@ -540,6 +610,7 @@ export function groupAiByStudent(rows: AiCallingRow[]): AiStudentRow[] {
     if (r.analyzed) g.analyzed += 1;
     else if (isAiCallDnp(r)) g.notAnswered += 1;
     else g.pending += 1;
+    if (!g.clerkId && r.clerkId) g.clerkId = r.clerkId;
     if (!g.candidateName && r.candidateName) g.candidateName = r.candidateName;
     if (!g.phone && r.phone) g.phone = r.phone;
     if (!g.lastCallAt || (r.startedAt && r.startedAt > g.lastCallAt)) {
@@ -572,6 +643,7 @@ export function groupRealHrByStudent(rows: RealHrRow[]): RealHrStudentRow[] {
     if (!g) {
       g = {
         key,
+        clerkId: r.leadId ?? null,
         studentName: r.studentName,
         email: r.email,
         phone: r.phone,
@@ -590,6 +662,7 @@ export function groupRealHrByStudent(rows: RealHrRow[]): RealHrStudentRow[] {
     if (r.analyzed) g.analyzed += 1;
     else if (r.type === "manual") g.manual += 1;
     else g.pending += 1;
+    if (!g.clerkId && r.leadId) g.clerkId = r.leadId;
     if ((!g.studentName || g.studentName === "—") && r.studentName) {
       g.studentName = r.studentName;
     }
@@ -753,6 +826,129 @@ export async function fetchAbsent(
   };
 }
 
+/* -------------------------- Student directory ------------------------- */
+export async function fetchStudentDirectory(): Promise<StudentDirectory> {
+  const { data } = await axios.get(
+    `${LMS}/api/academic-results/student-directory`
+  );
+  const rows: StudentDirectoryRow[] = data?.students ?? [];
+  const dir = emptyDirectory();
+  dir.courseTitles = data?.courses ?? {};
+  for (const r of rows) {
+    dir.byId.set(r.id, r);
+    if (r.clerkId) dir.byClerk.set(r.clerkId, r);
+    if (r.email) dir.byEmail.set(r.email.toLowerCase(), r);
+    const phone = r.phone ? last10(r.phone) : "";
+    if (phone.length === 10) dir.byPhone.set(phone, r);
+  }
+  return dir;
+}
+
+/* ═══════════════════════ useStudentMeta ════════════════════════ */
+
+// The directory is the same for every tab and for the Absent panel, so it is
+// fetched once per refresh and shared: without this cache, the five consumers
+// on the page would each request the whole student list.
+let directoryKey: number | null = null;
+let directoryPromise: Promise<StudentDirectory> | null = null;
+
+function loadStudentDirectory(refreshKey: number): Promise<StudentDirectory> {
+  if (!directoryPromise || directoryKey !== refreshKey) {
+    directoryKey = refreshKey;
+    // A failed load degrades to "no batch / course known" rather than breaking
+    // the table; the cached rejection-free promise also avoids a retry storm.
+    directoryPromise = fetchStudentDirectory().catch((err) => {
+      console.error("[studentDirectory] load failed", err);
+      return emptyDirectory();
+    });
+  }
+  return directoryPromise;
+}
+
+/**
+ * Returns a lookup that resolves a row's identifiers to its student's batch and
+ * course names. Before the directory arrives (and for anyone not in it) the
+ * lookup returns NO_STUDENT_META, so tables render immediately and fill in.
+ */
+export function useStudentMeta(refreshKey: number) {
+  const [dir, setDir] = useState<StudentDirectory | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadStudentDirectory(refreshKey).then((d) => {
+      if (!cancelled) setDir(d);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshKey]);
+
+  return useCallback(
+    (keys: StudentKeys): StudentMeta => {
+      if (!dir) return NO_STUDENT_META;
+      const phone = keys.phone ? last10(keys.phone) : "";
+      const row =
+        (keys.id ? dir.byId.get(keys.id) : undefined) ??
+        (keys.clerkId ? dir.byClerk.get(keys.clerkId) : undefined) ??
+        (keys.email ? dir.byEmail.get(keys.email.toLowerCase()) : undefined) ??
+        (phone.length === 10 ? dir.byPhone.get(phone) : undefined);
+      if (!row) return NO_STUDENT_META;
+      return {
+        batch: row.batch,
+        courseIds: row.courseIds,
+        // An id with no course document (deleted course) falls back to the id
+        // so the row still filters consistently.
+        courseNames: row.courseIds.map((id) => dir.courseTitles[id] ?? id),
+      };
+    },
+    [dir]
+  );
+}
+
+/** Mix each row's batch/course fields in, ready for the shared columns. */
+export function attachStudentMeta<T>(
+  rows: T[],
+  keysOf: (row: T) => StudentKeys,
+  lookup: (keys: StudentKeys) => StudentMeta
+): WithMeta<T>[] {
+  return rows.map((row) => ({ ...row, ...lookup(keysOf(row)) }));
+}
+
+/** The distinct courses present in a set of rows, for the table's filter. */
+export function courseOptionsOf(rows: StudentMeta[]): CourseOption[] {
+  const titles = new Map<string, string>();
+  for (const r of rows) {
+    r.courseIds.forEach((id, i) => {
+      if (!titles.has(id)) titles.set(id, r.courseNames[i] ?? id);
+    });
+  }
+  return Array.from(titles, ([id, title]) => ({ id, title })).sort((a, b) =>
+    a.title.localeCompare(b.title)
+  );
+}
+
+/** Union of several option lists (e.g. the attended and absent tables'). */
+export function mergeCourseOptions(
+  ...lists: CourseOption[][]
+): CourseOption[] {
+  const titles = new Map<string, string>();
+  for (const list of lists) {
+    for (const o of list) if (!titles.has(o.id)) titles.set(o.id, o.title);
+  }
+  return Array.from(titles, ([id, title]) => ({ id, title })).sort((a, b) =>
+    a.title.localeCompare(b.title)
+  );
+}
+
+/** Keep only students who bought `courseId` ("" = no filter). */
+export function filterByCourse<T extends StudentMeta>(
+  rows: T[],
+  courseId: string
+): T[] {
+  if (!courseId) return rows;
+  return rows.filter((r) => r.courseIds.includes(courseId));
+}
+
 /* ══════════════════════════ useMonthDay ════════════════════════ */
 
 // A tab loads a monthly summary (calendar/chart data) and, when a date is
@@ -834,10 +1030,16 @@ export function useMonthDay<MRow, DRow>(
 
 // Loads the absent roster for a tab whenever a day is selected (or refreshed).
 // Returns nothing until a date is picked. Eager so the toggle can show counts.
+//
+// `courseId` is the dashboard's course selection (only Daily Quiz has one). It
+// narrows the roster server-side, exactly as useExpectedRoster does — without it
+// the Absent list would keep listing students the selected course never expected,
+// and its "expected" would disagree with the chart's denominator.
 export function useAbsent(
   tab: TabKey,
   date: string | null,
-  refreshKey: number
+  refreshKey: number,
+  courseId?: string
 ) {
   const [rows, setRows] = useState<AbsentRow[]>([]);
   const [expected, setExpected] = useState(0);
@@ -851,7 +1053,7 @@ export function useAbsent(
     }
     let cancelled = false;
     setLoading(true);
-    fetchAbsent(tab, date)
+    fetchAbsent(tab, date, courseId)
       .then((res) => {
         if (cancelled) return;
         setRows(res.students);
@@ -869,7 +1071,7 @@ export function useAbsent(
     return () => {
       cancelled = true;
     };
-  }, [tab, date, refreshKey]);
+  }, [tab, date, refreshKey, courseId]);
 
   return { rows, expected, loading };
 }

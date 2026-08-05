@@ -17,6 +17,8 @@ import {
   type RealHrRow,
   type RealHrStudentRow,
   type AbsentRow,
+  type StudentMeta,
+  type WithMeta,
 } from "./data";
 
 const dash = <span className="text-gray-400">—</span>;
@@ -51,6 +53,48 @@ const badge = (text: string, cls: string) => (
     {text}
   </span>
 );
+
+/* ──────────────── Batch / Course (shared by every table) ──────────────── */
+// Both read the StudentMeta mixed into the row by attachStudentMeta, so the
+// same pair works for the attended tables and the Absent roster.
+
+export function batchColumn<T extends StudentMeta>(): Column<T> {
+  return {
+    key: "batch",
+    header: "Batch",
+    accessor: (r) => r.batch ?? "",
+    sortable: true,
+    searchable: true,
+    align: "center",
+    render: (r) => (r.batch ? chip(r.batch) : dash),
+  };
+}
+
+export function courseColumn<T extends StudentMeta>(): Column<T> {
+  return {
+    key: "course",
+    header: "Course",
+    // Searchable/sortable on the joined titles; a student may hold more than one.
+    accessor: (r) => r.courseNames.join(", "),
+    sortable: true,
+    searchable: true,
+    render: (r) =>
+      r.courseNames.length === 0 ? (
+        dash
+      ) : (
+        <div className="flex flex-wrap gap-1">
+          {r.courseNames.map((name) => (
+            <span
+              key={name}
+              className="rounded bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-500/15"
+            >
+              {name}
+            </span>
+          ))}
+        </div>
+      ),
+  };
+}
 
 /* ----------------------------- Daily Quiz ----------------------------- */
 export const quizColumns: Column<QuizAttemptRow>[] = [
@@ -123,8 +167,8 @@ export const quizColumns: Column<QuizAttemptRow>[] = [
 ];
 
 /* ------------------- Daily Quiz — unique students -------------------- */
-export const quizStudentColumns: Column<QuizStudentRow>[] = [
-  serialColumn<QuizStudentRow>(),
+export const quizStudentColumns: Column<WithMeta<QuizStudentRow>>[] = [
+  serialColumn<WithMeta<QuizStudentRow>>(),
   {
     key: "studentName",
     header: "Student",
@@ -140,6 +184,8 @@ export const quizStudentColumns: Column<QuizStudentRow>[] = [
       </div>
     ),
   },
+  batchColumn<WithMeta<QuizStudentRow>>(),
+  courseColumn<WithMeta<QuizStudentRow>>(),
   {
     key: "total",
     header: "Attempts",
@@ -390,8 +436,8 @@ const statPills = (
 const pctColor = (p: number) =>
   p >= 75 ? "text-green-600" : p >= 40 ? "text-amber-600" : "text-red-600";
 
-export const mockStudentColumns: Column<MockStudentRow>[] = [
-  serialColumn<MockStudentRow>(),
+export const mockStudentColumns: Column<WithMeta<MockStudentRow>>[] = [
+  serialColumn<WithMeta<MockStudentRow>>(),
   {
     key: "name",
     header: "Student",
@@ -412,6 +458,8 @@ export const mockStudentColumns: Column<MockStudentRow>[] = [
       );
     },
   },
+  batchColumn<WithMeta<MockStudentRow>>(),
+  courseColumn<WithMeta<MockStudentRow>>(),
   {
     key: "total",
     header: "Interviews",
@@ -439,8 +487,8 @@ export const mockStudentColumns: Column<MockStudentRow>[] = [
 ];
 
 /* --------------- Mock Interview — completed (7+) roster ---------------- */
-export const mockCompletedColumns: Column<MockCompletedRow>[] = [
-  serialColumn<MockCompletedRow>(),
+export const mockCompletedColumns: Column<WithMeta<MockCompletedRow>>[] = [
+  serialColumn<WithMeta<MockCompletedRow>>(),
   {
     key: "studentName",
     header: "Student",
@@ -454,6 +502,8 @@ export const mockCompletedColumns: Column<MockCompletedRow>[] = [
       </div>
     ),
   },
+  batchColumn<WithMeta<MockCompletedRow>>(),
+  courseColumn<WithMeta<MockCompletedRow>>(),
   {
     key: "zone",
     header: "Zone",
@@ -543,8 +593,8 @@ export const aiColumns: Column<AiCallingRow>[] = [
 ];
 
 /* ------------------- AI HR Calling — unique candidates ---------------- */
-export const aiStudentColumns: Column<AiStudentRow>[] = [
-  serialColumn<AiStudentRow>(),
+export const aiStudentColumns: Column<WithMeta<AiStudentRow>>[] = [
+  serialColumn<WithMeta<AiStudentRow>>(),
   {
     key: "candidateName",
     header: "Candidate",
@@ -562,6 +612,8 @@ export const aiStudentColumns: Column<AiStudentRow>[] = [
       </div>
     ),
   },
+  batchColumn<WithMeta<AiStudentRow>>(),
+  courseColumn<WithMeta<AiStudentRow>>(),
   {
     key: "total",
     header: "Calls",
@@ -684,8 +736,8 @@ export const realHrColumns: Column<RealHrRow>[] = [
 ];
 
 /* ------------- Real HR Calling — unique leads / students -------------- */
-export const realHrStudentColumns: Column<RealHrStudentRow>[] = [
-  serialColumn<RealHrStudentRow>(),
+export const realHrStudentColumns: Column<WithMeta<RealHrStudentRow>>[] = [
+  serialColumn<WithMeta<RealHrStudentRow>>(),
   {
     key: "studentName",
     header: "Lead / Student",
@@ -699,6 +751,8 @@ export const realHrStudentColumns: Column<RealHrStudentRow>[] = [
       </div>
     ),
   },
+  batchColumn<WithMeta<RealHrStudentRow>>(),
+  courseColumn<WithMeta<RealHrStudentRow>>(),
   {
     key: "total",
     header: "Calls",
@@ -745,8 +799,8 @@ function zonePill(zone: string | null) {
   return badge(z.charAt(0).toUpperCase() + z.slice(1), cls);
 }
 
-export const absentColumns: Column<AbsentRow>[] = [
-  serialColumn<AbsentRow>(),
+export const absentColumns: Column<WithMeta<AbsentRow>>[] = [
+  serialColumn<WithMeta<AbsentRow>>(),
   {
     key: "studentName",
     header: "Student",
@@ -761,6 +815,8 @@ export const absentColumns: Column<AbsentRow>[] = [
       </div>
     ),
   },
+  batchColumn<WithMeta<AbsentRow>>(),
+  courseColumn<WithMeta<AbsentRow>>(),
   {
     key: "zone",
     header: "Zone",
