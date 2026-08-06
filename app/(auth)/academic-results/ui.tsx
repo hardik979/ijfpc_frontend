@@ -29,13 +29,19 @@ import DataPresentationTable from "@/healper/DataPresentationTable";
 import {
   attachStudentMeta,
   courseOptionsOf,
+  datesInRange,
   fetchCourses,
   filterByCourse,
+  isSingleMonth,
   mergeCourseOptions,
+  monthShortLabel,
+  monthsInRange,
+  rangeLabel,
   useAbsent,
   useStudentMeta,
   type Course,
   type CourseOption,
+  type MonthRange,
   type TabKey,
   type AbsentRow,
   type WithMeta,
@@ -80,6 +86,66 @@ export function CourseFilter({
           </option>
         ))}
       </select>
+    </div>
+  );
+}
+
+/* ════════════════════════════ MonthRangePicker ═════════════════ */
+/**
+ * From/To month selection. Both default to the current month, so out of the box
+ * this behaves exactly like the single month picker it replaces — you only
+ * notice the range when you move one end.
+ *
+ * Reversed input is not blocked while typing: the two months are ordered where
+ * they are consumed (normalizeRange), so dragging To behind From shows that span
+ * rather than an error state mid-edit.
+ */
+export function MonthRangePicker({
+  value,
+  onChange,
+  theme,
+}: {
+  value: MonthRange;
+  onChange: (r: MonthRange) => void;
+  /** Drives the native picker's colour scheme so it matches the page theme. */
+  theme?: string;
+}) {
+  const months = monthsInRange(value);
+  const field =
+    "rounded-md border border-[var(--panel-border-strong)] bg-[var(--panel-card)] py-1.5 pl-8 pr-2 text-sm text-[var(--panel-text-primary)] focus:outline-none focus:ring-2 focus:ring-blue-500";
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className="relative">
+        <CalendarDays className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--panel-text-muted)]" />
+        <input
+          type="month"
+          aria-label="From month"
+          title="From month"
+          value={value.from}
+          onChange={(e) => onChange({ ...value, from: e.target.value })}
+          style={{ colorScheme: theme }}
+          className={field}
+        />
+      </div>
+      <span className="text-sm text-[var(--panel-text-muted)]">to</span>
+      <div className="relative">
+        <CalendarDays className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--panel-text-muted)]" />
+        <input
+          type="month"
+          aria-label="To month"
+          title="To month"
+          value={value.to}
+          onChange={(e) => onChange({ ...value, to: e.target.value })}
+          style={{ colorScheme: theme }}
+          className={field}
+        />
+      </div>
+      {months.length > 1 && (
+        <span className="whitespace-nowrap rounded-md bg-blue-500/10 px-2 py-1 text-xs font-medium text-blue-400">
+          {months.length} months
+        </span>
+      )}
     </div>
   );
 }
@@ -206,7 +272,7 @@ export function MonthlyChart({
   series,
   title,
   yLabel,
-  month,
+  range,
   percent = false,
   percentBase,
 }: {
@@ -216,10 +282,11 @@ export function MonthlyChart({
   /** Optional rotated label for the Y-axis (e.g. "Students attempted"). */
   yLabel?: string;
   /**
-   * Month as "YYYY-MM". When provided, every day of the month gets a bar —
-   * days with no records show 0 instead of being skipped.
+   * The span being shown. When provided, every day in it gets a bar — days with
+   * no records show 0 instead of being skipped, so gaps read as "nobody turned
+   * up" rather than silently collapsing the axis.
    */
-  month?: string;
+  range?: MonthRange;
   /**
    * Plot the series as percentages: axis ticks, bar labels and tooltips all get
    * a "%" suffix and the axis runs to at least 100. The axis is *not* capped at
@@ -230,25 +297,34 @@ export function MonthlyChart({
   /** Denominator the percentages were computed against, shown in the tooltip. */
   percentBase?: number;
 }) {
-  // Show the day-of-month on the x-axis for a compact monthly view.
+  // A single month keeps the compact "01…31" axis it always had; a span that
+  // crosses months needs the month too, or day 3 of January and day 3 of March
+  // would be indistinguishable.
+  const spansMonths = range ? !isSingleMonth(range) : false;
+
   const chartData = useMemo(() => {
-    if (!month) {
+    if (!range) {
       return data.map((d) => ({ ...d, day: d.date?.slice(8) ?? d.date }));
     }
-    const [year, mon] = month.split("-").map(Number);
-    // Day 0 of the next month is the last day of this one.
-    const daysInMonth = new Date(year, mon, 0).getDate();
+    const label = (date: string) =>
+      spansMonths
+        ? `${date.slice(8)} ${monthShortLabel(date.slice(0, 7))}`
+        : date.slice(8);
     const byDate = new Map(data.map((d) => [d.date, d]));
     const zeros = Object.fromEntries(
       series.flatMap((s) => (s.countKey ? [[s.key, 0], [s.countKey, 0]] : [[s.key, 0]]))
     );
-    return Array.from({ length: daysInMonth }, (_, i) => {
-      const dd = String(i + 1).padStart(2, "0");
-      const date = `${month}-${dd}`;
+    return datesInRange(range).map((date) => {
       const existing = byDate.get(date);
-      return existing ? { ...existing, day: dd } : { ...zeros, date, day: dd };
+      return existing
+        ? { ...existing, day: label(date) }
+        : { ...zeros, date, day: label(date) };
     });
-  }, [data, month, series]);
+  }, [data, range, series, spansMonths]);
+
+  // ~31 bars fit their labels; a multi-month span does not, so thin the ticks to
+  // roughly one per week and angle them rather than letting them overlap.
+  const tickInterval = chartData.length > 40 ? Math.ceil(chartData.length / 12) : 0;
 
   return (
     <div className="rounded-2xl border border-[var(--panel-border-strong)] bg-[var(--panel-card)] p-4">
@@ -257,13 +333,19 @@ export function MonthlyChart({
       )}
       {chartData.length === 0 ? (
         <div className="flex h-[300px] items-center justify-center text-sm text-[var(--panel-text-faint)]">
-          No data for this month
+          No data for this period
         </div>
       ) : (
         <ResponsiveContainer width="100%" height={300}>
           <BarChart
             data={chartData}
-            margin={{ top: 6, right: 8, left: yLabel ? 12 : -18, bottom: 0 }}
+            margin={{
+              top: 6,
+              right: 8,
+              left: yLabel ? 12 : -18,
+              // Angled labels on a multi-month span need room underneath.
+              bottom: spansMonths ? 18 : 0,
+            }}
           >
               <CartesianGrid strokeDasharray="3 3" stroke="var(--panel-border-strong)" vertical={false} />
               <XAxis
@@ -271,6 +353,10 @@ export function MonthlyChart({
                 tick={{ fill: "var(--panel-text-muted)", fontSize: 11 }}
                 tickLine={false}
                 axisLine={{ stroke: "var(--panel-border-strong)" }}
+                interval={tickInterval}
+                angle={spansMonths ? -35 : 0}
+                textAnchor={spansMonths ? "end" : "middle"}
+                height={spansMonths ? 46 : undefined}
               />
               <YAxis
                 tick={{ fill: "var(--panel-text-muted)", fontSize: 11 }}
@@ -304,7 +390,7 @@ export function MonthlyChart({
                   color: "var(--panel-text-secondary)",
                 }}
                 labelStyle={{ color: "var(--panel-text-secondary)" }}
-                labelFormatter={(label) => `Day ${label}`}
+                labelFormatter={(label) => (spansMonths ? `${label}` : `Day ${label}`)}
                 // In percent mode show the rate plus the counts behind it, so a
                 // bar can be checked against the table without leaving the page.
                 formatter={
@@ -332,13 +418,18 @@ export function MonthlyChart({
                   radius={[4, 4, 0, 0]}
                   maxBarSize={28}
                 >
-                  <LabelList
-                    dataKey={s.key}
-                    position="top"
-                    fontSize={10}
-                    fill="var(--panel-text-secondary)"
-                    formatter={(v) => (v ? (percent ? `${v}%` : `${v}`) : "")}
-                  />
+                  {/* Per-bar values are legible for a month; across a span the
+                      bars are too narrow and the labels collide, so the tooltip
+                      carries the exact figure instead. */}
+                  {chartData.length <= 40 && (
+                    <LabelList
+                      dataKey={s.key}
+                      position="top"
+                      fontSize={10}
+                      fill="var(--panel-text-secondary)"
+                      formatter={(v) => (v ? (percent ? `${v}%` : `${v}`) : "")}
+                    />
+                  )}
                 </Bar>
               ))}
             </BarChart>
@@ -360,30 +451,53 @@ export type CalendarMetric = {
 type DayRow = { date: string } & Record<string, unknown>;
 
 export function ResultsCalendar({
-  month,
+  range,
   data,
   loading,
   metrics,
-  onMonthChange,
   onDateSelect,
 }: {
-  month: string;
+  range: MonthRange;
   data: DayRow[];
   loading: boolean;
   metrics: CalendarMetric[];
-  onMonthChange: (month: string) => void;
   onDateSelect: (date: string) => void;
 }) {
+  // A calendar is a month grid, so a multi-month span is shown one month at a
+  // time. Its arrows now page *within* the selected span instead of changing
+  // what the page is showing — the From/To pickers own that. `data` already
+  // covers the whole span, so paging needs no refetch.
+  const months = monthsInRange(range);
+  const [viewIndex, setViewIndex] = useState(0);
+
+  // Land on the span's first month whenever the span itself changes, and never
+  // leave the cursor past the end of a span that just got shorter.
+  useEffect(() => {
+    setViewIndex(0);
+  }, [range.from, range.to]);
+
+  const safeIndex = Math.min(viewIndex, Math.max(0, months.length - 1));
+  const viewMonth = months[safeIndex] ?? range.from;
+
   return (
     <CalendarFormate
-      // Remount when the month changes externally (top picker / tab switch)
-      // so the internal cursor stays in sync.
-      key={month}
-      title="Monthly Summary"
-      initialMonth={month}
+      // Remount when the displayed month changes (span change, tab switch, or
+      // paging) so the component's internal cursor stays in sync.
+      key={viewMonth}
+      title={
+        months.length > 1
+          ? `Summary — ${rangeLabel(range)} (month ${safeIndex + 1} of ${months.length})`
+          : "Monthly Summary"
+      }
+      initialMonth={viewMonth}
       loading={loading}
       data={data}
-      onMonthChange={onMonthChange}
+      onMonthChange={(next) => {
+        // Clamp paging to the span: stepping past either end is a no-op rather
+        // than silently showing a month the totals above don't include.
+        const i = months.indexOf(next);
+        if (i >= 0) setViewIndex(i);
+      }}
       onDateSelect={(date, dayData) => {
         if (dayData) onDateSelect(date);
       }}

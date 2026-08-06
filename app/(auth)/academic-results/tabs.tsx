@@ -49,6 +49,7 @@ import {
   type RealHrByDateRow,
   type RealHrRow,
   type RealHrStudentRow,
+  type MonthRange,
   type WithMeta,
 } from "./data";
 import {
@@ -143,21 +144,19 @@ function realHrCallStatusBadge(c: RealHrRow) {
 
 /* ═══════════════════════════ Daily Quiz ════════════════════════ */
 export function DailyQuizTab({
-  month,
+  range,
   courseId,
   refreshKey,
-  onMonthChange,
 }: {
-  month: string;
+  range: MonthRange;
   courseId: string;
   refreshKey: number;
-  onMonthChange: (m: string) => void;
 }) {
   const course = courseId || undefined;
   const { byDate, loadingMonth, selectedDate, dayRows, loadingDay, loadDay } =
     useMonthDay<QuizByDateRow, QuizAttemptRow>(
-      month,
-      (m) => fetchQuizMonth(m, course),
+      range,
+      (r) => fetchQuizMonth(r, course),
       (d) => fetchQuizDay(d, course),
       [courseId, refreshKey]
     );
@@ -171,17 +170,17 @@ export function DailyQuizTab({
   const [monthStudentCount, setMonthStudentCount] = useState(0);
   useEffect(() => {
     let cancelled = false;
-    fetchQuizMonthStudentCount(month, course)
+    fetchQuizMonthStudentCount(range, course)
       .then((n) => !cancelled && setMonthStudentCount(n))
       .catch(() => !cancelled && setMonthStudentCount(0));
     return () => {
       cancelled = true;
     };
-  }, [month, courseId, refreshKey]);
+  }, [range.from, range.to, courseId, refreshKey]);
 
   // Roster the monthly chart's percentages are taken against. Narrowed by the
   // course filter so the rate compares like with like.
-  const { expected } = useExpectedRoster("quiz", month, refreshKey, course);
+  const { expected } = useExpectedRoster("quiz", range, refreshKey, course);
   const hasRoster = expected > 0;
   const rateByDate = useMemo(
     () =>
@@ -286,7 +285,7 @@ export function DailyQuizTab({
               : "Number of students per day"
           }
           yLabel={hasRoster ? "% of students" : "Number of students"}
-          month={month}
+          range={range}
           data={hasRoster ? rateByDate : byDate}
           percent={hasRoster}
           percentBase={expected}
@@ -306,10 +305,9 @@ export function DailyQuizTab({
           ]}
         />
         <ResultsCalendar
-          month={month}
+          range={range}
           data={byDate}
           loading={loadingMonth}
-          onMonthChange={onMonthChange}
           onDateSelect={loadDay}
           metrics={[
             { key: "totalAttempts", label: "Attempts" },
@@ -487,20 +485,18 @@ export function MockCompletedButton({ refreshKey }: { refreshKey: number }) {
 
 /* ═════════════════════════ Mock Interview ══════════════════════ */
 export function MockInterviewTab({
-  month,
+  range,
   refreshKey,
-  onMonthChange,
 }: {
-  month: string;
+  range: MonthRange;
   refreshKey: number;
-  onMonthChange: (m: string) => void;
 }) {
   // Fixed to the 100% Job-Ready Bootcamp only — not a user-selectable filter.
   const course = JOB_READY_BOOTCAMP_COURSE_ID;
   const { byDate, loadingMonth, selectedDate, dayRows, loadingDay, loadDay } =
     useMonthDay<MockByDateRow, MockAttemptRow>(
-      month,
-      (m) => fetchMockMonth(m, course),
+      range,
+      (r) => fetchMockMonth(r, course),
       (d) => fetchMockDay(d, course),
       [refreshKey]
     );
@@ -510,7 +506,7 @@ export function MockInterviewTab({
   const [selected, setSelected] = useState<MockAttemptRow | null>(null);
 
   // Roster the monthly chart's percentages are taken against.
-  const { expected } = useExpectedRoster("mock", month, refreshKey);
+  const { expected } = useExpectedRoster("mock", range, refreshKey);
   const hasRoster = expected > 0;
   const rateByDate = useMemo(
     () =>
@@ -609,7 +605,7 @@ export function MockInterviewTab({
               : "Unique students per day"
           }
           yLabel={hasRoster ? "% of students" : "Number of students"}
-          month={month}
+          range={range}
           data={hasRoster ? rateByDate : byDate}
           percent={hasRoster}
           percentBase={expected}
@@ -625,10 +621,9 @@ export function MockInterviewTab({
           ]}
         />
         <ResultsCalendar
-          month={month}
+          range={range}
           data={byDate}
           loading={loadingMonth}
-          onMonthChange={onMonthChange}
           onDateSelect={loadDay}
           metrics={[
             { key: "totalAttempts", label: "Interviews" },
@@ -752,20 +747,18 @@ export function MockInterviewTab({
 
 /* ═══════════════════════════ AI HR Calling ═════════════════════ */
 export function AiHrCallingTab({
-  month,
+  range,
   refreshKey,
-  onMonthChange,
 }: {
-  month: string;
+  range: MonthRange;
   refreshKey: number;
-  onMonthChange: (m: string) => void;
 }) {
   // Fixed to the 100% Job-Ready Bootcamp only — not a user-selectable filter.
   const course = JOB_READY_BOOTCAMP_COURSE_ID;
   const { byDate, loadingMonth, selectedDate, dayRows, loadingDay, loadDay } =
     useMonthDay<AiCallingByDateRow, AiCallingRow>(
-      month,
-      (m) => fetchAiMonth(m, course),
+      range,
+      (r) => fetchAiMonth(r, course),
       (d) => fetchAiDay(d, course),
       [refreshKey]
     );
@@ -775,7 +768,7 @@ export function AiHrCallingTab({
   const [selected, setSelected] = useState<AiCallingRow | null>(null);
 
   // Roster the monthly chart's percentages are taken against.
-  const { expected } = useExpectedRoster("ai", month, refreshKey);
+  const { expected } = useExpectedRoster("ai", range, refreshKey);
   const hasRoster = expected > 0;
   const rateByDate = useMemo(
     () =>
@@ -873,7 +866,7 @@ export function AiHrCallingTab({
               : "Unique candidates per day"
           }
           yLabel={hasRoster ? "% of candidates" : "Unique candidates"}
-          month={month}
+          range={range}
           data={hasRoster ? rateByDate : byDate}
           percent={hasRoster}
           percentBase={expected}
@@ -893,10 +886,9 @@ export function AiHrCallingTab({
           ]}
         />
         <ResultsCalendar
-          month={month}
+          range={range}
           data={byDate}
           loading={loadingMonth}
-          onMonthChange={onMonthChange}
           onDateSelect={loadDay}
           metrics={[
             { key: "totalCalls", label: "Calls" },
@@ -1017,20 +1009,18 @@ export function AiHrCallingTab({
 
 /* ════════════════════ Real HR Calling (recordings) ═════════════ */
 export function RealHrCallingTab({
-  month,
+  range,
   refreshKey,
-  onMonthChange,
 }: {
-  month: string;
+  range: MonthRange;
   refreshKey: number;
-  onMonthChange: (m: string) => void;
 }) {
   // Fixed to the 100% Job-Ready Bootcamp only — not a user-selectable filter.
   const course = JOB_READY_BOOTCAMP_COURSE_ID;
   const { byDate, loadingMonth, selectedDate, dayRows, loadingDay, loadDay } =
     useMonthDay<RealHrByDateRow, RealHrRow>(
-      month,
-      (m) => fetchRealHrMonth(m, course),
+      range,
+      (r) => fetchRealHrMonth(r, course),
       (d) => fetchRealHrDay(d, course),
       [refreshKey]
     );
@@ -1040,7 +1030,7 @@ export function RealHrCallingTab({
   const [selected, setSelected] = useState<RealHrRow | null>(null);
 
   // Roster the monthly chart's percentages are taken against.
-  const { expected } = useExpectedRoster("realhr", month, refreshKey);
+  const { expected } = useExpectedRoster("realhr", range, refreshKey);
   const hasRoster = expected > 0;
   const rateByDate = useMemo(
     () =>
@@ -1137,7 +1127,7 @@ export function RealHrCallingTab({
               : "Unique leads per day"
           }
           yLabel={hasRoster ? "% of students" : "Number of Students "}
-          month={month}
+          range={range}
           data={hasRoster ? rateByDate : byDate}
           percent={hasRoster}
           percentBase={expected}
@@ -1153,10 +1143,9 @@ export function RealHrCallingTab({
           ]}
         />
         <ResultsCalendar
-          month={month}
+          range={range}
           data={byDate}
           loading={loadingMonth}
-          onMonthChange={onMonthChange}
           onDateSelect={loadDay}
           metrics={[
             { key: "uniqueLeadCount", label: "Students" },
