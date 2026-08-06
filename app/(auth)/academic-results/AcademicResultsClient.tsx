@@ -5,8 +5,14 @@ import Link from "next/link";
 import { ArrowLeft, CalendarDays, GraduationCap, RefreshCw } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useTheme } from "@/context/ThemeContext";
-import { currentMonth, QUIZ_ALLOWED_COURSE_IDS, type TabKey } from "./data";
-import { TabBar, CourseFilter } from "./ui";
+import {
+  currentRange,
+  normalizeRange,
+  QUIZ_ALLOWED_COURSE_IDS,
+  type MonthRange,
+  type TabKey,
+} from "./data";
+import { TabBar, CourseFilter, MonthRangePicker } from "./ui";
 import {
   DailyQuizTab,
   MockInterviewTab,
@@ -24,10 +30,16 @@ const DESCRIPTIONS: Record<TabKey, string> = {
 
 export default function AcademicResultsClient() {
   const [tab, setTab] = useState<TabKey>("quiz");
-  const [month, setMonth] = useState<string>(currentMonth());
+  // The span being shown. Defaults to the current month on both ends, so the
+  // page opens on exactly the month it always did.
+  const [range, setRange] = useState<MonthRange>(currentRange);
   const [courseId, setCourseId] = useState<string>("");
   const [refreshKey, setRefreshKey] = useState(0);
   const { theme } = useTheme();
+
+  // Order the span before handing it down, so a To earlier than the From still
+  // shows the months between them rather than nothing.
+  const activeRange = normalizeRange(range);
 
   return (
     <div className="min-h-screen bg-[var(--panel-bg-950)] p-4 text-[var(--panel-text-primary)] sm:p-6">
@@ -60,16 +72,7 @@ export default function AcademicResultsClient() {
                 allowedIds={QUIZ_ALLOWED_COURSE_IDS}
               />
             )}
-            <div className="relative">
-              <CalendarDays className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--panel-text-muted)]" />
-              <input
-                type="month"
-                value={month}
-                onChange={(e) => setMonth(e.target.value)}
-                style={{ colorScheme: theme }}
-                className="rounded-md border border-[var(--panel-border-strong)] bg-[var(--panel-card)] py-1.5 pl-8 pr-3 text-sm text-[var(--panel-text-primary)] focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
+            <MonthRangePicker value={range} onChange={setRange} theme={theme} />
             <button
               onClick={() => setRefreshKey((k) => k + 1)}
               className="inline-flex items-center gap-1.5 rounded-md border border-[var(--panel-border-strong)] bg-[var(--panel-card)] px-3 py-1.5 text-sm text-[var(--panel-text-primary)] hover:bg-[var(--panel-card)]"
@@ -88,32 +91,19 @@ export default function AcademicResultsClient() {
         {/* Only the active tab is mounted, so switching tabs fetches fresh data. */}
         {tab === "quiz" && (
           <DailyQuizTab
-            month={month}
+            range={activeRange}
             courseId={courseId}
             refreshKey={refreshKey}
-            onMonthChange={setMonth}
           />
         )}
         {tab === "mock" && (
-          <MockInterviewTab
-            month={month}
-            refreshKey={refreshKey}
-            onMonthChange={setMonth}
-          />
+          <MockInterviewTab range={activeRange} refreshKey={refreshKey} />
         )}
         {tab === "ai" && (
-          <AiHrCallingTab
-            month={month}
-            refreshKey={refreshKey}
-            onMonthChange={setMonth}
-          />
+          <AiHrCallingTab range={activeRange} refreshKey={refreshKey} />
         )}
         {tab === "realhr" && (
-          <RealHrCallingTab
-            month={month}
-            refreshKey={refreshKey}
-            onMonthChange={setMonth}
-          />
+          <RealHrCallingTab range={activeRange} refreshKey={refreshKey} />
         )}
       </div>
     </div>

@@ -69,7 +69,11 @@ interface StudentInfo {
   feePlan?: string;
   zone?: string;
   joinedMonth?: string;
+  /** Resolved server-side from the batch roster, not the (unset) user.batch field. */
   batch?: string;
+  /** Purchased course titles, joined — a student may hold more than one. */
+  courseName?: string;
+  courseNames?: string[];
   isPlaced?: boolean;
 }
 
@@ -91,6 +95,42 @@ interface AttendanceRecord {
   login_time?: string;
   logout_time?: string;
 };
+
+/** The AI's rubric for one call. Only `scoreOutOf10` is read here. */
+interface AiCallAnalysis {
+  scoreOutOf10?: number;
+  overallRating?: string;
+  [key: string]: unknown;
+}
+
+/** One AI HR agent call, as stored in the "Calling ajent" collection. */
+interface AiCallRecord {
+  candidate_name?: string;
+  started_at?: string | null;
+  ended_at?: string | null;
+  duration_s?: number;
+  end_reason?: string | null;
+  analysisStatus?: string | null;
+  analysis?: AiCallAnalysis | null;
+  transcript?: unknown | null;
+}
+
+/**
+ * A call the candidate never answered — a terminal state, not a queued one, so
+ * it must not be read as "analysis pending". Mirrors isAiCallDnp in the Academic
+ * Results data layer and isAiCallDnp in lms-backend services/reportPdf.js, so
+ * the three stay in step. In this data `no_answer` is the reason that matches;
+ * `user_hangup`, `timeout` and `llm_outage` are genuinely something else.
+ */
+function isAiCallNotAnswered(endReason?: string | null): boolean {
+  const reason = String(endReason || "")
+    .toLowerCase()
+    .replace(/[-_]+/g, " ")
+    .trim();
+  return /\b(no answer|did ?n[o']?t answer|no pick ?up|not picked|unanswered|voicemail|busy|unreachable)\b/.test(
+    reason
+  );
+}
 
 interface AttendanceStats {
   totalDays: number;
@@ -117,6 +157,11 @@ interface ApiResponse {
     attempts?: MockAttempt[];
   };
   callRecordingData?: any;
+  /**
+   * AI HR agent calls for this student, already month-filtered by the API.
+   * The backend has always returned it; the dashboard just never read it.
+   */
+  callingAgentData?: AiCallRecord[];
 }
 
 interface Grade {
@@ -438,6 +483,30 @@ export default function StudentDashboard() {
             negative: 0,
             neutral: 0            
         }
+    };
+  }, [data]);
+
+  // AI HR agent calls (the "Calling ajent" records), already month-scoped by the
+  // API. `analysis` is only present once a call has actually been analysed, so
+  // it is the honest signal for how many of them produced anything.
+  const aiCallStats = useMemo(() => {
+    const calls = Array.isArray(data?.callingAgentData) ? data!.callingAgentData! : [];
+
+    // Only analysed calls carry a score, so the average is taken over those —
+    // not over every call, which would drag it toward zero for calls nobody
+    // ever picked up.
+    const scores = calls
+      .map((c) => (c?.analysis as AiCallAnalysis | null | undefined)?.scoreOutOf10)
+      .filter((s): s is number => typeof s === "number" && Number.isFinite(s));
+
+    return {
+      total: calls.length,
+      analyzed: calls.filter((c) => c?.analysis != null).length,
+      notAnswered: calls.filter((c) => isAiCallNotAnswered(c?.end_reason)).length,
+      scored: scores.length,
+      avgScore: scores.length
+        ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10
+        : null,
     };
   }, [data]);
 
@@ -1080,6 +1149,7 @@ export default function StudentDashboard() {
                   label="Active Period"
                   value={stats?.firstAttempt ? `${formatDate(stats.firstAttempt)} - ${formatDate(stats.lastAttempt)}` : "—"}
                 />
+                <InfoCard label="Course" value={data.student?.courseName} />
               </div>
             </div>
 
@@ -1113,53 +1183,44 @@ export default function StudentDashboard() {
               </div>
             </div>
 
-            {/* Attendance */}
+            {/* AI HR Calling — the AI HR agent's calls with this student, all
+                four figures from the same month-scoped callingAgentData. */}
             <div>
-              <h2 className="mb-4 text-xl font-semibold text-white">Attendance Overview</h2>
-              {attendanceLoading ? (
-                <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-10 text-center">
-                  <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-slate-600 border-t-blue-500" />
-                  <p className="mt-3 text-slate-400">Loading attendance...</p>
-                </div>
-              ) : attendanceError ? (
-                <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-6 text-center text-rose-300">
-                  {attendanceError}
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <ClickableStatCard
-                    label="Total Days"
-                    value={attendanceStats.totalDays}
-                    sub="Attendance recorded"
-                    accent="#3b82f6"
-                    icon={<svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
-                    onClick={() => setActiveModal("attendance-total")}
-                  />
-                  <ClickableStatCard
-                    label="Present"
-                    value={attendanceStats.presentDays}
-                    sub="Days attended"
-                    accent="#10b981"
-                    icon={<svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
-                    onClick={() => setActiveModal("attendance-present")}
-                  />
-                  <ClickableStatCard
-                    label="Absent"
-                    value={attendanceStats.absentDays}
-                    sub="Days missed"
-                    accent="#ef4444"
-                    icon={<svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
-                    onClick={() => setActiveModal("attendance-absent")}
-                  />
-                  <ClickableStatCard
-                    label="Attendance Rate"
-                    value={`${attendanceStats.attendanceRate}%`}
-                    sub="Overall percentage"
-                    accent="#a78bfa"
-                    icon={<svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg>}
-                  />
-                </div>
-              )}
+              <h2 className="mb-4 text-xl font-semibold text-white">AI HR Calling</h2>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <ClickableStatCard
+                  label="Total Calls"
+                  value={aiCallStats.total}
+                  sub="AI HR agent calls"
+                  accent="#3b82f6"
+                  icon={<svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>}
+                />
+                <ClickableStatCard
+                  label="Analysed"
+                  value={aiCallStats.analyzed}
+                  sub="Produced AI feedback"
+                  accent="#10b981"
+                  icon={<svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+                />
+                <ClickableStatCard
+                  label="Avg Score"
+                  value={aiCallStats.avgScore == null ? "—" : `${aiCallStats.avgScore} / 10`}
+                  sub={
+                    aiCallStats.scored === 0
+                      ? "No scored calls yet"
+                      : `Across ${aiCallStats.scored} scored call${aiCallStats.scored === 1 ? "" : "s"}`
+                  }
+                  accent="#a78bfa"
+                  icon={<svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>}
+                />
+                <ClickableStatCard
+                  label="Not Answered"
+                  value={aiCallStats.notAnswered}
+                  sub="Never picked up"
+                  accent="#ef4444"
+                  icon={<svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+                />
+              </div>
             </div>
 
             {/* Mock Interviews */}

@@ -326,12 +326,113 @@ export type MockCompletedRow = {
   interviewCount: number;
 };
 
-/* ══════════════════════════ FORMATTING ═════════════════════════ */
+/* ═══════════════════════════ MONTH RANGE ═══════════════════════ */
+
+/**
+ * The span the dashboard is showing, as two inclusive "YYYY-MM" months.
+ * `from === to` is a single month — the default, and what the page showed
+ * before the range picker existed.
+ */
+export type MonthRange = { from: string; to: string };
 
 export function currentMonth(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
+
+/** Default span: the current month on both ends. */
+export function currentRange(): MonthRange {
+  const m = currentMonth();
+  return { from: m, to: m };
+}
+
+const MONTH_RE = /^\d{4}-\d{2}$/;
+
+export function isValidMonth(m: string): boolean {
+  return MONTH_RE.test(m);
+}
+
+export function isValidRange(r: MonthRange): boolean {
+  return isValidMonth(r.from) && isValidMonth(r.to);
+}
+
+/** True while the span is a single month, i.e. the pre-range-picker behaviour. */
+export function isSingleMonth(r: MonthRange): boolean {
+  return r.from === r.to;
+}
+
+/**
+ * Put the earlier month first. "YYYY-MM" sorts chronologically as a string, so
+ * a plain comparison is enough. Picking a To before the From is a normal thing
+ * to do while adjusting the range, so it is corrected rather than rejected.
+ */
+export function normalizeRange(r: MonthRange): MonthRange {
+  return r.from <= r.to ? r : { from: r.to, to: r.from };
+}
+
+/** Every month in the span, inclusive: ["2026-01", "2026-02", "2026-03"]. */
+export function monthsInRange(r: MonthRange): string[] {
+  if (!isValidRange(r)) return [];
+  const { from, to } = normalizeRange(r);
+  const [fy, fm] = from.split("-").map(Number);
+  const [ty, tm] = to.split("-").map(Number);
+  const months: string[] = [];
+  // Guard against a pathological span (e.g. a mistyped year) walking forever.
+  const limit = 600;
+  for (let y = fy, m = fm; (y < ty || (y === ty && m <= tm)) && months.length < limit; ) {
+    months.push(`${y}-${String(m).padStart(2, "0")}`);
+    if (m === 12) {
+      m = 1;
+      y += 1;
+    } else {
+      m += 1;
+    }
+  }
+  return months;
+}
+
+/** Days in a "YYYY-MM" month. Day 0 of the next month is the last of this one. */
+export function daysInMonth(month: string): number {
+  const [y, m] = month.split("-").map(Number);
+  return new Date(y, m, 0).getDate();
+}
+
+/** Every date in the span as "YYYY-MM-DD", used to zero-fill the chart. */
+export function datesInRange(r: MonthRange): string[] {
+  const out: string[] = [];
+  for (const month of monthsInRange(r)) {
+    const n = daysInMonth(month);
+    for (let d = 1; d <= n; d++) out.push(`${month}-${String(d).padStart(2, "0")}`);
+  }
+  return out;
+}
+
+const MONTH_LABELS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+/** "Aug" for "2026-08" — used on the chart axis when a span crosses months. */
+export function monthShortLabel(month: string): string {
+  const m = Number(month.split("-")[1]);
+  return MONTH_LABELS[m - 1] ?? month;
+}
+
+/** "August 2026", or "Jun – Aug 2026" / "Dec 2025 – Feb 2026" for a span. */
+export function rangeLabel(r: MonthRange): string {
+  const months = monthsInRange(r);
+  if (months.length === 0) return "";
+  const first = months[0];
+  const last = months[months.length - 1];
+  const [fy] = first.split("-");
+  const [ly] = last.split("-");
+  if (first === last) return `${monthShortLabel(first)} ${fy}`;
+  return fy === ly
+    ? `${monthShortLabel(first)} – ${monthShortLabel(last)} ${ly}`
+    : `${monthShortLabel(first)} ${fy} – ${monthShortLabel(last)} ${ly}`;
+}
+
+/* ══════════════════════════ FORMATTING ═════════════════════════ */
 
 export function formatDuration(sec?: number | null): string {
   if (!sec || sec <= 0) return "—";
@@ -686,14 +787,25 @@ export function groupRealHrByStudent(rows: RealHrRow[]): RealHrStudentRow[] {
 
 const LMS = API_LMS_URL;
 
+/**
+ * Query params for a span. The four calendar endpoints accept from+to (and
+ * still accept a single `month`); sending the span server-side rather than
+ * fetching each month and merging keeps whole-span aggregates — above all the
+ * quiz distinct-student count — correct, since distinct counts cannot be summed.
+ */
+function rangeParams(range: MonthRange, courseId?: string) {
+  const { from, to } = normalizeRange(range);
+  return { from, to, ...(courseId ? { courseId } : {}) };
+}
+
 /* ----------------------------- Daily Quiz ----------------------------- */
 export async function fetchQuizMonth(
-  month: string,
+  range: MonthRange,
   courseId?: string
 ): Promise<QuizByDateRow[]> {
   const { data } = await axios.get(
     `${LMS}/api/daily-quiz/students-results/by-date`,
-    { params: { month, ...(courseId ? { courseId } : {}) } }
+    { params: rangeParams(range, courseId) }
   );
   return data?.data ?? [];
 }
@@ -715,24 +827,24 @@ export async function fetchQuizDay(
  * calendar/chart data without summing per-day uniques (which is student-days).
  */
 export async function fetchQuizMonthStudentCount(
-  month: string,
+  range: MonthRange,
   courseId?: string
 ): Promise<number> {
   const { data } = await axios.get(
     `${LMS}/api/daily-quiz/students-results/by-date`,
-    { params: { month, ...(courseId ? { courseId } : {}) } }
+    { params: rangeParams(range, courseId) }
   );
   return typeof data?.distinctStudentCount === "number" ? data.distinctStudentCount : 0;
 }
 
 /* --------------------------- Mock Interview --------------------------- */
 export async function fetchMockMonth(
-  month: string,
+  range: MonthRange,
   courseId?: string
 ): Promise<MockByDateRow[]> {
   const { data } = await axios.get(
     `${LMS}/api/mocinterview-result/mockinterview-result/calendar`,
-    { params: { month, ...(courseId ? { courseId } : {}) } }
+    { params: rangeParams(range, courseId) }
   );
   return data?.data ?? [];
 }
@@ -750,12 +862,12 @@ export async function fetchMockDay(
 
 /* --------------------------- AI HR Calling ---------------------------- */
 export async function fetchAiMonth(
-  month: string,
+  range: MonthRange,
   courseId?: string
 ): Promise<AiCallingByDateRow[]> {
   const { data } = await axios.get(
     `${LMS}/api/callingAgent/calling-data/calendar`,
-    { params: { month, ...(courseId ? { courseId } : {}) } }
+    { params: rangeParams(range, courseId) }
   );
   return data?.data ?? [];
 }
@@ -773,11 +885,11 @@ export async function fetchAiDay(
 
 /* ------------------- Real HR Calling (call recordings) ---------------- */
 export async function fetchRealHrMonth(
-  month: string,
+  range: MonthRange,
   courseId?: string
 ): Promise<RealHrByDateRow[]> {
   const { data } = await axios.get(`${LMS}/api/recordings/calendar`, {
-    params: { month, ...(courseId ? { courseId } : {}) },
+    params: rangeParams(range, courseId),
   });
   return data?.data ?? [];
 }
@@ -951,12 +1063,16 @@ export function filterByCourse<T extends StudentMeta>(
 
 /* ══════════════════════════ useMonthDay ════════════════════════ */
 
-// A tab loads a monthly summary (calendar/chart data) and, when a date is
-// clicked, the per-day rows for the table. Re-runs whenever `month` or any of
-// the extra `deps` (e.g. courseId, refreshKey) change.
+// A tab loads a per-day summary for the selected span (calendar/chart data)
+// and, when a date is clicked, the per-day rows for the table. Re-runs whenever
+// the span or any of the extra `deps` (e.g. courseId, refreshKey) change.
+//
+// The span is depended on by its two month strings rather than by object
+// identity: the caller builds `{from, to}` inline each render, so comparing the
+// object itself would reload on every render.
 export function useMonthDay<MRow, DRow>(
-  month: string,
-  fetchMonth: (month: string) => Promise<MRow[]>,
+  range: MonthRange,
+  fetchMonth: (range: MonthRange) => Promise<MRow[]>,
   fetchDay: (date: string) => Promise<DRow[]>,
   deps: ReadonlyArray<unknown> = []
 ) {
@@ -974,17 +1090,22 @@ export function useMonthDay<MRow, DRow>(
   fetchDayRef.current = fetchDay;
 
   const loadMonth = useCallback(async () => {
+    if (!isValidRange(range)) {
+      // A half-typed month in the picker isn't an error state — keep the last
+      // good data on screen rather than blanking the page mid-edit.
+      return;
+    }
     setLoadingMonth(true);
     try {
-      setByDate(await fetchMonthRef.current(month));
+      setByDate(await fetchMonthRef.current(range));
     } catch (err) {
-      console.error("[useMonthDay] month load failed", err);
+      console.error("[useMonthDay] range load failed", err);
       setByDate([]);
     } finally {
       setLoadingMonth(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [month, ...deps]);
+  }, [range.from, range.to, ...deps]);
 
   const loadDay = useCallback(
     async (date: string) => {
@@ -1096,28 +1217,34 @@ export function pct(part: number, whole: number): number | null {
  * are taken against.
  *
  * It reuses the absent endpoint because that endpoint already owns the roster
- * definition (zone + course + active, per tab). The roster query there is
- * date-independent — the date only decides who *attended* — so probing with any
- * valid day of the viewed month returns the roster the whole month is measured
- * against, and it always agrees with the "expected" shown by the Absent list.
+ * definition (zone + course + active, per tab), so the chart's denominator can
+ * never disagree with the "expected" shown by the Absent list.
+ *
+ * ONE roster is used for the whole span, probed at its first day. Most of the
+ * roster rules are point-in-time state (zone, paused, placed) rather than
+ * per-day, but the quiz roster does move day to day — a blue-zone student is
+ * excluded until their settling period ends. So over a long span this is an
+ * approximation; per-day exactness would cost one request per day. For the
+ * default single-month view it behaves exactly as it did before.
  */
 export function useExpectedRoster(
   tab: TabKey,
-  month: string,
+  range: MonthRange,
   refreshKey: number,
   courseId?: string
 ) {
   const [expected, setExpected] = useState(0);
   const [loading, setLoading] = useState(false);
+  const { from } = normalizeRange(range);
 
   useEffect(() => {
-    if (!/^\d{4}-\d{2}$/.test(month)) {
+    if (!isValidMonth(from)) {
       setExpected(0);
       return;
     }
     let cancelled = false;
     setLoading(true);
-    fetchAbsent(tab, `${month}-01`, courseId)
+    fetchAbsent(tab, `${from}-01`, courseId)
       .then((res) => !cancelled && setExpected(res.expected))
       .catch((err) => {
         if (cancelled) return;
@@ -1130,7 +1257,7 @@ export function useExpectedRoster(
     return () => {
       cancelled = true;
     };
-  }, [tab, month, refreshKey, courseId]);
+  }, [tab, from, refreshKey, courseId]);
 
   return { expected, loading };
 }
