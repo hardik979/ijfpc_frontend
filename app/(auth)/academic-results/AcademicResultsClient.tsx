@@ -100,27 +100,18 @@ export default function AcademicResultsClient() {
           />
         )}
         {tab === "mock" && (
-<<<<<<< Updated upstream
-          <MockInterviewTab range={activeRange} refreshKey={refreshKey} />
-        )}
-        {tab === "ai" && (
-          <AiHrCallingTab range={activeRange} refreshKey={refreshKey} />
-=======
           <MockInterviewTab
-            month={month}
+            range={activeRange}
             courseId={courseId}
             refreshKey={refreshKey}
-            onMonthChange={setMonth}
           />
         )}
         {tab === "ai" && (
           <AiHrCallingTab
-            month={month}
+            range={activeRange}
             courseId={courseId}
             refreshKey={refreshKey}
-            onMonthChange={setMonth}
           />
->>>>>>> Stashed changes
         )}
         {tab === "realhr" && (
           <RealHrCallingTab range={activeRange} refreshKey={refreshKey} />
