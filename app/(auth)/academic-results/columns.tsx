@@ -826,3 +826,28 @@ export const absentColumns: Column<WithMeta<AbsentRow>>[] = [
     render: (r) => zonePill(r.zone),
   },
 ];
+
+/**
+ * Absent list with a per-student WHY column — used when the rows carry a
+ * `reason` (today only AI HR: "Did not pick — N calls (DNP)" for students who
+ * answered none of their calls, "Not called" for students never dialed).
+ */
+export const absentColumnsWithReason: Column<WithMeta<AbsentRow>>[] = [
+  ...absentColumns,
+  {
+    key: "reason",
+    header: "Reason",
+    accessor: (r) => r.reason ?? "",
+    sortable: true,
+    align: "center",
+    render: (r) =>
+      r.reason
+        ? badge(
+            r.reason,
+            r.reason.startsWith("Did not pick")
+              ? "bg-red-50 text-red-700"
+              : "bg-gray-100 text-gray-700"
+          )
+        : dash,
+  },
+];
