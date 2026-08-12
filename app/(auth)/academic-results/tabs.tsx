@@ -486,20 +486,12 @@ export function MockCompletedButton({ refreshKey }: { refreshKey: number }) {
 
 /* ═════════════════════════ Mock Interview ══════════════════════ */
 export function MockInterviewTab({
-<<<<<<< Updated upstream
   range,
-=======
-  month,
   courseId,
->>>>>>> Stashed changes
   refreshKey,
 }: {
-<<<<<<< Updated upstream
   range: MonthRange;
-=======
-  month: string;
   courseId: string;
->>>>>>> Stashed changes
   refreshKey: number;
 }) {
   // "All courses" means the Mock roster's courses (Bootcamp + Data Analyst,
@@ -519,14 +511,9 @@ export function MockInterviewTab({
   const [student, setStudent] = useState<MockStudentRow | null>(null);
   const [selected, setSelected] = useState<MockAttemptRow | null>(null);
 
-<<<<<<< Updated upstream
-  // Roster the monthly chart's percentages are taken against.
-  const { expected } = useExpectedRoster("mock", range, refreshKey);
-=======
   // Roster the monthly chart's percentages are taken against. Narrowed by the
   // course filter so the rate compares like with like.
-  const { expected } = useExpectedRoster("mock", month, refreshKey, courseId || undefined);
->>>>>>> Stashed changes
+  const { expected } = useExpectedRoster("mock", range, refreshKey, courseId || undefined);
   const hasRoster = expected > 0;
   const rateByDate = useMemo(
     () =>
@@ -768,20 +755,12 @@ export function MockInterviewTab({
 
 /* ═══════════════════════════ AI HR Calling ═════════════════════ */
 export function AiHrCallingTab({
-<<<<<<< Updated upstream
   range,
-=======
-  month,
   courseId,
->>>>>>> Stashed changes
   refreshKey,
 }: {
-<<<<<<< Updated upstream
   range: MonthRange;
-=======
-  month: string;
   courseId: string;
->>>>>>> Stashed changes
   refreshKey: number;
 }) {
   // "All courses" means the AI HR roster's courses (Bootcamp + Data Analyst,
@@ -801,14 +780,9 @@ export function AiHrCallingTab({
   const [student, setStudent] = useState<AiStudentRow | null>(null);
   const [selected, setSelected] = useState<AiCallingRow | null>(null);
 
-<<<<<<< Updated upstream
-  // Roster the monthly chart's percentages are taken against.
-  const { expected } = useExpectedRoster("ai", range, refreshKey);
-=======
   // Roster the monthly chart's percentages are taken against. Narrowed by the
   // course filter so the rate compares like with like.
-  const { expected } = useExpectedRoster("ai", month, refreshKey, courseId || undefined);
->>>>>>> Stashed changes
+  const { expected } = useExpectedRoster("ai", range, refreshKey, courseId || undefined);
   const hasRoster = expected > 0;
   const rateByDate = useMemo(
     () =>
