@@ -225,6 +225,13 @@ export type AbsentRow = {
   studentName: string;
   email: string | null;
   zone: string | null;
+  /**
+   * WHY the student is absent, when the tab can tell. AI HR sends
+   * "Did not pick — N calls (DNP)" for students who answered none of their
+   * calls, and "Not called" for students the dialer never reached that day.
+   * Other tabs omit it.
+   */
+  reason?: string | null;
 };
 
 export type AbsentResult = {
@@ -242,9 +249,9 @@ export type Course = {
 
 /**
  * Fixed course scoping for the Academic Results dashboard (mirrors the ids in
- * lms-backend config/Quizcourseconfig.js and routes/academicAbsent.routes.js).
- * Daily Quiz is filterable between the two; Mock Interview, AI HR Calling, and
- * Real HR Calling are always restricted to the Bootcamp only (not selectable).
+ * lms-backend config/Quizcourseconfig.js and lib/academicRoster.js).
+ * Daily Quiz is filterable between the two; Mock Interview and AI HR Calling
+ * admit both courses (fixed, not selectable); Real HR Calling is Bootcamp-only.
  */
 export const JOB_READY_BOOTCAMP_COURSE_ID = "68fc62edc1dd02f23abdbcf9";
 export const DATA_ANALYST_COURSE_ID = "69b2a39602fee72dcc6a2121";
@@ -919,10 +926,10 @@ export async function fetchMockInterviewCompleted(): Promise<MockCompletedRow[]>
 }
 
 /* -------------------------- Absent students --------------------------- */
-// The absent roster is zone-based (mirrors the daily report). Course scoping is
-// fixed per tab, so `courseId` is only meaningful for Daily Quiz — the one tab
-// with a user-selectable course — where it narrows the roster to that course's
-// purchasers. Every other tab ignores it.
+// The absent roster is zone-based (mirrors the daily report). `courseId`
+// narrows the roster to one course's purchasers on the tabs with a
+// user-selectable course filter (Daily Quiz, Mock, AI HR); Real HR's course
+// scoping is fixed and ignores it.
 export async function fetchAbsent(
   tab: TabKey,
   date: string,

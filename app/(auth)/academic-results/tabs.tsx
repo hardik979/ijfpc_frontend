@@ -36,6 +36,7 @@ import {
   fetchRealHrDay,
   fetchMockInterviewCompleted,
   JOB_READY_BOOTCAMP_COURSE_ID,
+  DATA_ANALYST_COURSE_ID,
   type QuizByDateRow,
   type QuizAttemptRow,
   type QuizStudentRow,
@@ -485,28 +486,47 @@ export function MockCompletedButton({ refreshKey }: { refreshKey: number }) {
 
 /* ═════════════════════════ Mock Interview ══════════════════════ */
 export function MockInterviewTab({
+<<<<<<< Updated upstream
   range,
+=======
+  month,
+  courseId,
+>>>>>>> Stashed changes
   refreshKey,
 }: {
+<<<<<<< Updated upstream
   range: MonthRange;
+=======
+  month: string;
+  courseId: string;
+>>>>>>> Stashed changes
   refreshKey: number;
 }) {
-  // Fixed to the 100% Job-Ready Bootcamp only — not a user-selectable filter.
-  const course = JOB_READY_BOOTCAMP_COURSE_ID;
+  // "All courses" means the Mock roster's courses (Bootcamp + Data Analyst,
+  // mirroring lms-backend lib/academicRoster.js); a selected course narrows
+  // both the data and the expected roster, same as the Daily Quiz tab.
+  const course =
+    courseId || `${JOB_READY_BOOTCAMP_COURSE_ID},${DATA_ANALYST_COURSE_ID}`;
   const { byDate, loadingMonth, selectedDate, dayRows, loadingDay, loadDay } =
     useMonthDay<MockByDateRow, MockAttemptRow>(
       range,
       (r) => fetchMockMonth(r, course),
       (d) => fetchMockDay(d, course),
-      [refreshKey]
+      [courseId, refreshKey]
     );
 
   // Drill-down state: a student (level 2) and, within them, one interview (level 3).
   const [student, setStudent] = useState<MockStudentRow | null>(null);
   const [selected, setSelected] = useState<MockAttemptRow | null>(null);
 
+<<<<<<< Updated upstream
   // Roster the monthly chart's percentages are taken against.
   const { expected } = useExpectedRoster("mock", range, refreshKey);
+=======
+  // Roster the monthly chart's percentages are taken against. Narrowed by the
+  // course filter so the rate compares like with like.
+  const { expected } = useExpectedRoster("mock", month, refreshKey, courseId || undefined);
+>>>>>>> Stashed changes
   const hasRoster = expected > 0;
   const rateByDate = useMemo(
     () =>
@@ -636,6 +656,7 @@ export function MockInterviewTab({
         tab="mock"
         selectedDate={selectedDate}
         refreshKey={refreshKey}
+        rosterCourseId={courseId || undefined}
         title={selectedDate ? `Students on ${selectedDate}` : "Mock interviews"}
         attendedSubtitle={
           selectedDate
@@ -747,28 +768,47 @@ export function MockInterviewTab({
 
 /* ═══════════════════════════ AI HR Calling ═════════════════════ */
 export function AiHrCallingTab({
+<<<<<<< Updated upstream
   range,
+=======
+  month,
+  courseId,
+>>>>>>> Stashed changes
   refreshKey,
 }: {
+<<<<<<< Updated upstream
   range: MonthRange;
+=======
+  month: string;
+  courseId: string;
+>>>>>>> Stashed changes
   refreshKey: number;
 }) {
-  // Fixed to the 100% Job-Ready Bootcamp only — not a user-selectable filter.
-  const course = JOB_READY_BOOTCAMP_COURSE_ID;
+  // "All courses" means the AI HR roster's courses (Bootcamp + Data Analyst,
+  // mirroring lms-backend lib/academicRoster.js); a selected course narrows
+  // both the data and the expected roster, same as the Daily Quiz tab.
+  const course =
+    courseId || `${JOB_READY_BOOTCAMP_COURSE_ID},${DATA_ANALYST_COURSE_ID}`;
   const { byDate, loadingMonth, selectedDate, dayRows, loadingDay, loadDay } =
     useMonthDay<AiCallingByDateRow, AiCallingRow>(
       range,
       (r) => fetchAiMonth(r, course),
       (d) => fetchAiDay(d, course),
-      [refreshKey]
+      [courseId, refreshKey]
     );
 
   // Drill-down state: a candidate (level 2) and, within them, one call (level 3).
   const [student, setStudent] = useState<AiStudentRow | null>(null);
   const [selected, setSelected] = useState<AiCallingRow | null>(null);
 
+<<<<<<< Updated upstream
   // Roster the monthly chart's percentages are taken against.
   const { expected } = useExpectedRoster("ai", range, refreshKey);
+=======
+  // Roster the monthly chart's percentages are taken against. Narrowed by the
+  // course filter so the rate compares like with like.
+  const { expected } = useExpectedRoster("ai", month, refreshKey, courseId || undefined);
+>>>>>>> Stashed changes
   const hasRoster = expected > 0;
   const rateByDate = useMemo(
     () =>
@@ -792,13 +832,22 @@ export function AiHrCallingTab({
     [dayRows, lookupMeta]
   );
 
+  // ATTENDED = picked up at least one call. A student whose every call went
+  // unanswered (all DNP) is not an attendee — they appear in the Absent list
+  // instead, with the reason ("Did not pick — 3 calls"). Same rule as the
+  // daily report and the /absent/ai endpoint.
+  const attendedStudents = useMemo(
+    () => allStudents.filter((g) => g.total > g.notAnswered),
+    [allStudents]
+  );
+
   // Table-level course filter — narrows the rows shown, not the day's totals.
   const [tableCourse, setTableCourse] = useState("");
   const students = useMemo(
-    () => filterByCourse(allStudents, tableCourse),
-    [allStudents, tableCourse]
+    () => filterByCourse(attendedStudents, tableCourse),
+    [attendedStudents, tableCourse]
   );
-  const courseOptions = useMemo(() => courseOptionsOf(allStudents), [allStudents]);
+  const courseOptions = useMemo(() => courseOptionsOf(attendedStudents), [attendedStudents]);
   const shownCalls = useMemo(
     () => students.reduce((n, g) => n + g.total, 0),
     [students]
@@ -842,7 +891,8 @@ export function AiHrCallingTab({
       {selectedDate ? (
         <StatCards
           items={[
-            { label: "Total Candidates", value: allStudents.length, accent: "blue" },
+            // Attended = picked up ≥1 call; DNP-only students sit in Absent.
+            { label: "Attended", value: attendedStudents.length, accent: "blue" },
             { label: "Total Calls", value: dayRows.length, accent: "violet" },
             { label: "Analyzed", value: dayStats.analyzed, accent: "emerald" },
             { label: "Not Answered", value: dayStats.notAnswered, accent: "slate" },
@@ -902,6 +952,7 @@ export function AiHrCallingTab({
         tab="ai"
         selectedDate={selectedDate}
         refreshKey={refreshKey}
+        rosterCourseId={courseId || undefined}
         title={selectedDate ? `Candidates on ${selectedDate}` : "AI HR calls"}
         attendedSubtitle={
           selectedDate

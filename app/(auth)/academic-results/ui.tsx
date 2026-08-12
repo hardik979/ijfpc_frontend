@@ -46,7 +46,7 @@ import {
   type AbsentRow,
   type WithMeta,
 } from "./data";
-import { absentColumns } from "./columns";
+import { absentColumns, absentColumnsWithReason } from "./columns";
 
 /* ═══════════════════════════ CourseFilter ══════════════════════ */
 export function CourseFilter({
@@ -767,7 +767,13 @@ export function AttendancePanel({
       {view === "absent" ? (
         <DataPresentationTable<WithMeta<AbsentRow>>
           data={absentFiltered}
-          columns={absentColumns}
+          // The Reason column appears only when the tab sends one (AI HR:
+          // "Did not pick — N calls" / "Not called").
+          columns={
+            absentFiltered.some((r) => r.reason)
+              ? absentColumnsWithReason
+              : absentColumns
+          }
           loading={absentLoading}
           searchable
           paginated
