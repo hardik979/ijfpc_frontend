@@ -135,6 +135,7 @@ export type AiCallingRow = {
   analysisStatus: string | null;
   analyzed: boolean;
   analysis: unknown | null;
+  recordingUrl: string | null;
   hasTranscript: boolean;
 };
 
