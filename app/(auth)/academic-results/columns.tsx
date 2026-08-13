@@ -584,6 +584,26 @@ export const aiColumns: Column<AiCallingRow>[] = [
         : dash,
   },
   {
+    key: "recording",
+    header: "Recording",
+    accessor: (r) => (r.recordingUrl ? 1 : 0),
+    align: "center",
+    render: (r) =>
+      r.recordingUrl ? (
+        <a
+          href={r.recordingUrl}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="text-blue-600 hover:underline text-xs font-medium"
+        >
+          Listen
+        </a>
+      ) : (
+        dash
+      ),
+  },
+  {
     key: "startedAt",
     header: "Called At",
     accessor: "startedAt",

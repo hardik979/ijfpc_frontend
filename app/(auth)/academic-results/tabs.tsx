@@ -1021,6 +1021,23 @@ export function AiHrCallingTab({
                   }
                 />
                 <DetailRow label="Transcript" value={selected.hasTranscript ? "Available" : "—"} />
+                <DetailRow
+                  label="Recording"
+                  value={
+                    selected.recordingUrl ? (
+                      <a
+                        href={selected.recordingUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-blue-600 hover:underline"
+                      >
+                        Listen
+                      </a>
+                    ) : (
+                      "—"
+                    )
+                  }
+                />
                 <DetailRow label="Started" value={formatIST(selected.startedAt)} />
                 <DetailRow label="Ended" value={formatIST(selected.endedAt)} />
               </div>
