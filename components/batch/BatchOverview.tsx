@@ -40,6 +40,8 @@ type Batch = {
 const ZONES = ["blue", "yellow", "green"] as const;
 type ZoneFilter = "all" | (typeof ZONES)[number];
 
+type PlacementFilter = "active" | "placed" | "all";
+
 // Display order for zone rows: blue, then yellow, then green — anything else
 // (e.g. "newly_enrolled" or no zone) sorts last.
 const ZONE_RANK: Record<string, number> = { blue: 0, yellow: 1, green: 2 };
@@ -149,6 +151,9 @@ export default function BatchOverview() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [zone, setZone] = useState<ZoneFilter>("all");
+  // Placed students clutter the overview by default — only active (not yet
+  // placed) students should show unless the filter is switched.
+  const [placement, setPlacement] = useState<PlacementFilter>("active");
 
   const load = async () => {
     try {
@@ -176,7 +181,11 @@ export default function BatchOverview() {
     const out: Group[] = [];
 
     for (const b of batches) {
-      const allStudents = b.students || [];
+      const rawStudents = b.students || [];
+      const allStudents =
+        placement === "all"
+          ? rawStudents
+          : rawStudents.filter((s) => (placement === "placed" ? !!s.isPlaced : !s.isPlaced));
       const dzone = deriveZone(allStudents);
 
       if (zone !== "all" && dzone !== zone) continue;
@@ -252,7 +261,7 @@ export default function BatchOverview() {
     });
 
     return out;
-  }, [batches, search, zone]);
+  }, [batches, search, zone, placement]);
 
   const rowCount = useMemo(
     () => groups.reduce((n, g) => n + Math.max(g.students.length, 1), 0),
@@ -270,6 +279,18 @@ export default function BatchOverview() {
       else counts.other++;
     }
     return counts;
+  }, [batches]);
+
+  const placementCounts = useMemo(() => {
+    let active = 0;
+    let placed = 0;
+    for (const b of batches) {
+      for (const s of b.students || []) {
+        if (s.isPlaced) placed++;
+        else active++;
+      }
+    }
+    return { active, placed, total: active + placed };
   }, [batches]);
 
   const HEADERS = [
@@ -293,7 +314,9 @@ export default function BatchOverview() {
     }
     try {
       setExporting(true);
-      const zoneFilterLabel = zone === "all" ? "All zones" : `${zone[0].toUpperCase()}${zone.slice(1)} zone`;
+      const zoneFilterLabel = `${zone === "all" ? "All zones" : `${zone[0].toUpperCase()}${zone.slice(1)} zone`} · ${
+        placement === "all" ? "All students" : placement === "placed" ? "Placed students" : "Active students"
+      }`;
       const generatedAt = new Date().toLocaleString(undefined, {
         day: "2-digit",
         month: "short",
@@ -393,6 +416,31 @@ export default function BatchOverview() {
               placeholder="Search by student, batch, trainer, topic…"
               className="w-full rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] py-3 pl-10 pr-3 text-sm text-[var(--panel-text-primary)] placeholder:text-[var(--panel-text-faint)] outline-none focus:border-cyan-500/50"
             />
+          </div>
+
+          <div className="flex items-center gap-1.5 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] p-1">
+            {(["active", "placed", "all"] as PlacementFilter[]).map((p) => {
+              const isActive = placement === p;
+              const label =
+                p === "active"
+                  ? `Active (${placementCounts.active})`
+                  : p === "placed"
+                  ? `Placed (${placementCounts.placed})`
+                  : `All (${placementCounts.total})`;
+              return (
+                <button
+                  key={p}
+                  onClick={() => setPlacement(p)}
+                  className={`rounded-lg px-3 py-2 text-xs font-semibold capitalize transition ${
+                    isActive
+                      ? "bg-[var(--panel-card)] text-[var(--panel-text-primary)]"
+                      : "text-[var(--panel-text-muted)] hover:text-[var(--panel-text-secondary)]"
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
 
           <div className="flex items-center gap-1.5 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] p-1">
