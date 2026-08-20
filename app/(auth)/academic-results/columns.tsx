@@ -584,6 +584,26 @@ export const aiColumns: Column<AiCallingRow>[] = [
         : dash,
   },
   {
+    key: "recording",
+    header: "Recording",
+    accessor: (r) => (r.recordingUrl ? 1 : 0),
+    align: "center",
+    render: (r) =>
+      r.recordingUrl ? (
+        <a
+          href={r.recordingUrl}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="text-blue-600 hover:underline text-xs font-medium"
+        >
+          Listen
+        </a>
+      ) : (
+        dash
+      ),
+  },
+  {
     key: "startedAt",
     header: "Called At",
     accessor: "startedAt",
@@ -824,5 +844,30 @@ export const absentColumns: Column<WithMeta<AbsentRow>>[] = [
     sortable: true,
     align: "center",
     render: (r) => zonePill(r.zone),
+  },
+];
+
+/**
+ * Absent list with a per-student WHY column — used when the rows carry a
+ * `reason` (today only AI HR: "Did not pick — N calls (DNP)" for students who
+ * answered none of their calls, "Not called" for students never dialed).
+ */
+export const absentColumnsWithReason: Column<WithMeta<AbsentRow>>[] = [
+  ...absentColumns,
+  {
+    key: "reason",
+    header: "Reason",
+    accessor: (r) => r.reason ?? "",
+    sortable: true,
+    align: "center",
+    render: (r) =>
+      r.reason
+        ? badge(
+            r.reason,
+            r.reason.startsWith("Did not pick")
+              ? "bg-red-50 text-red-700"
+              : "bg-gray-100 text-gray-700"
+          )
+        : dash,
   },
 ];

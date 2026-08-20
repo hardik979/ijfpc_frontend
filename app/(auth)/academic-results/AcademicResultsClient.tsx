@@ -65,7 +65,10 @@ export default function AcademicResultsClient() {
 
           <div className="flex flex-wrap items-center justify-end gap-2">
             <ThemeToggle />
-            {tab === "quiz" && (
+            {/* Daily Quiz, Mock and AI HR all admit the same two courses
+                (lms-backend lib/academicRoster.js); Real HR is Bootcamp-only,
+                so it gets no filter. */}
+            {(tab === "quiz" || tab === "mock" || tab === "ai") && (
               <CourseFilter
                 value={courseId}
                 onChange={setCourseId}
@@ -97,10 +100,18 @@ export default function AcademicResultsClient() {
           />
         )}
         {tab === "mock" && (
-          <MockInterviewTab range={activeRange} refreshKey={refreshKey} />
+          <MockInterviewTab
+            range={activeRange}
+            courseId={courseId}
+            refreshKey={refreshKey}
+          />
         )}
         {tab === "ai" && (
-          <AiHrCallingTab range={activeRange} refreshKey={refreshKey} />
+          <AiHrCallingTab
+            range={activeRange}
+            courseId={courseId}
+            refreshKey={refreshKey}
+          />
         )}
         {tab === "realhr" && (
           <RealHrCallingTab range={activeRange} refreshKey={refreshKey} />
