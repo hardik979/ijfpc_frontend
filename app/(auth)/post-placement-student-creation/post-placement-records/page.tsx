@@ -23,6 +23,8 @@ import {
   UserRound,
 } from "lucide-react";
 import { API_LMS_URL } from "@/lib/api";
+import OfferLetterUpload from "@/components/post-placement/OfferLetterUpload";
+import { uploadPostPlacementOfferLetter } from "@/lib/postPlacementOfferLetter";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import recordsStyles from "./PostPlacementRecords.module.css";
@@ -97,6 +99,11 @@ interface PostPlacementOffer {
   createdAt: string;
   updatedAt?: string;
   companyExperience?: CompanyExperience;
+  offerLetterUrl?: string;
+  offerLetterOriginalName?: string;
+  offerLetterMimeType?: string;
+  offerLetterSize?: number;
+  offerLetterUploadedAt?: string;
 }
 
 interface LinkableStudent {
@@ -145,6 +152,10 @@ interface StudentDetailPanelProps {
   onEdit: () => void;
   onSave: (id: string, data: Partial<PostPlacementOffer>) => Promise<boolean>;
   onLinkUser: (offerId: string, studentUserId: string) => Promise<boolean>;
+  onUploadOfferLetter: (
+    offerId: string,
+    file: File,
+  ) => Promise<PostPlacementOffer>;
   onCancel: () => void;
   onDelete: (id: string) => void;
   onAddInstallment: (
@@ -302,6 +313,7 @@ const PostPlacementDashboard: React.FC = () => {
       "Source",
       "Created At",
       "Updated At",
+      "Offer Letter URL",
     ];
 
     const lines = rows.map((s) => {
@@ -347,6 +359,7 @@ const PostPlacementDashboard: React.FC = () => {
         s.source,
         toYMDCsv(s.createdAt),
         toYMDCsv(s.updatedAt),
+        s.offerLetterUrl,
       ]
         .map(csvField)
         .join(",");
@@ -435,6 +448,31 @@ const PostPlacementDashboard: React.FC = () => {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to link LMS user");
       return false;
+    }
+  };
+
+  const uploadOfferLetter = async (
+    offerId: string,
+    file: File,
+  ): Promise<PostPlacementOffer> => {
+    try {
+      const updatedStudent =
+        await uploadPostPlacementOfferLetter<PostPlacementOffer>(offerId, file);
+      setStudents((current) =>
+        current.map((student) =>
+          student._id === offerId ? updatedStudent : student,
+        ),
+      );
+      setSelectedStudent(updatedStudent);
+      setError(null);
+      return updatedStudent;
+    } catch (uploadError) {
+      const message =
+        uploadError instanceof Error
+          ? uploadError.message
+          : "Failed to upload offer letter";
+      setError(message);
+      throw uploadError;
     }
   };
 
@@ -721,6 +759,7 @@ const PostPlacementDashboard: React.FC = () => {
                 onEdit={() => setIsEditing(true)}
                 onSave={updateStudent}
                 onLinkUser={linkStudentToOffer}
+                onUploadOfferLetter={uploadOfferLetter}
                 onCancel={() => setIsEditing(false)}
                 onDelete={deleteStudent}
                 onAddInstallment={addInstallment}
@@ -758,6 +797,7 @@ const StudentDetailPanel: React.FC<StudentDetailPanelProps> = ({
   onEdit,
   onSave,
   onLinkUser,
+  onUploadOfferLetter,
   onCancel,
   onDelete,
   onAddInstallment,
@@ -767,6 +807,9 @@ const StudentDetailPanel: React.FC<StudentDetailPanelProps> = ({
   formatDate,
 }) => {
   const [formData, setFormData] = useState<PostPlacementOffer>(student);
+  const [offerLetterFile, setOfferLetterFile] = useState<File | null>(null);
+  const [uploadingOfferLetter, setUploadingOfferLetter] = useState(false);
+  const [offerLetterError, setOfferLetterError] = useState("");
   const [editingInstId, setEditingInstId] = useState<string | null>(null);
   const [editInst, setEditInst] = useState<{
     label: string;
@@ -793,7 +836,28 @@ const StudentDetailPanel: React.FC<StudentDetailPanelProps> = ({
 
   useEffect(() => {
     setFormData(student);
+    setOfferLetterFile(null);
+    setOfferLetterError("");
   }, [student]);
+
+  const handleOfferLetterUpload = async () => {
+    if (!offerLetterFile) return;
+    setUploadingOfferLetter(true);
+    setOfferLetterError("");
+    try {
+      const updated = await onUploadOfferLetter(student._id, offerLetterFile);
+      setFormData(updated);
+      setOfferLetterFile(null);
+    } catch (uploadError) {
+      setOfferLetterError(
+        uploadError instanceof Error
+          ? uploadError.message
+          : "Failed to upload offer letter",
+      );
+    } finally {
+      setUploadingOfferLetter(false);
+    }
+  };
 
   const handleSave = async (): Promise<void> => {
     const success = await onSave(student._id, formData);
@@ -892,6 +956,16 @@ const StudentDetailPanel: React.FC<StudentDetailPanelProps> = ({
               return linked;
             }}
           />
+          <OfferLetterUpload
+            file={offerLetterFile}
+            onFileChange={setOfferLetterFile}
+            existingUrl={formData.offerLetterUrl}
+            existingName={formData.offerLetterOriginalName}
+            uploadedAt={formData.offerLetterUploadedAt}
+            isUploading={uploadingOfferLetter}
+            uploadError={offerLetterError}
+            onUpload={handleOfferLetterUpload}
+          />
           <EditForm formData={formData} setFormData={setFormData} />
         </div>
       </div>
@@ -926,6 +1000,13 @@ const StudentDetailPanel: React.FC<StudentDetailPanelProps> = ({
       </div>
 
       <div className="p-6 space-y-6">
+        <OfferLetterUpload
+          file={null}
+          existingUrl={student.offerLetterUrl}
+          existingName={student.offerLetterOriginalName}
+          uploadedAt={student.offerLetterUploadedAt}
+          readOnly
+        />
         {/* Basic Details */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>

@@ -30,6 +30,8 @@ import {
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { API_LMS_URL } from "@/lib/api";
+import OfferLetterUpload from "@/components/post-placement/OfferLetterUpload";
+import { uploadPostPlacementOfferLetter } from "@/lib/postPlacementOfferLetter";
 import styles from "./StudentDataFill.module.css";
 
 gsap.registerPlugin(useGSAP);
@@ -120,6 +122,8 @@ export default function NewPostPlacementOfferPage() {
   const studentSearchInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
+  const [offerLetterFile, setOfferLetterFile] = useState<File | null>(null);
+  const [uploadingOfferLetter, setUploadingOfferLetter] = useState(false);
   const [studentQuery, setStudentQuery] = useState("");
   const [studentPickerOpen, setStudentPickerOpen] = useState(false);
   const [candidateStudents, setCandidateStudents] = useState<EligibleStudent[]>([]);
@@ -405,8 +409,37 @@ export default function NewPostPlacementOfferPage() {
         throw new Error(data.error || `HTTP ${res.status}`);
       }
 
-      await res.json();
-      toast.success("Post-placement record created");
+      const createdOffer: { _id?: string } = await res.json();
+      if (!createdOffer._id) {
+        throw new Error("Record was created without a valid offer ID");
+      }
+
+      if (offerLetterFile) {
+        try {
+          setUploadingOfferLetter(true);
+          await uploadPostPlacementOfferLetter(createdOffer._id, offerLetterFile);
+        } catch (uploadError) {
+          const uploadMessage =
+            uploadError instanceof Error
+              ? uploadError.message
+              : "Offer letter upload failed";
+          toast.error(
+            `Record created, but the offer letter was not uploaded: ${uploadMessage}`,
+          );
+          setTimeout(() => {
+            router.push("/post-placement-student-creation/post-placement-records");
+          }, 1800);
+          return;
+        } finally {
+          setUploadingOfferLetter(false);
+        }
+      }
+
+      toast.success(
+        offerLetterFile
+          ? "Record and offer letter saved successfully"
+          : "Post-placement record created",
+      );
 
       // Navigate to list (adjust if you have a detail page)
       setTimeout(() => {
@@ -846,6 +879,16 @@ export default function NewPostPlacementOfferPage() {
             </div>
           </section>
 
+          {/* Offer letter */}
+          <section className={`post-placement-entry ${styles.card} ${styles.documentCard} [will-change:transform,opacity]`}>
+            <OfferLetterUpload
+              file={offerLetterFile}
+              onFileChange={setOfferLetterFile}
+              isUploading={uploadingOfferLetter}
+              disabled={submitting}
+            />
+          </section>
+
           {/* Installments */}
           <section className={`post-placement-entry ${styles.card} ${styles.paymentsCard} [will-change:transform,opacity]`}>
             <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -988,7 +1031,12 @@ export default function NewPostPlacementOfferPage() {
               disabled={submitting || !selectedStudent}
               className={`${styles.primaryButton} inline-flex items-center gap-2 rounded-xl px-8 py-3 text-sm font-semibold`}
             >
-              <Save size={16} /> {submitting ? "Saving..." : "Create Record"}
+              <Save size={16} />
+              {uploadingOfferLetter
+                ? "Uploading offer letter..."
+                : submitting
+                  ? "Saving..."
+                  : "Create Record"}
             </button>
           </div>
         </form>

@@ -138,6 +138,10 @@
   --card-accent: var(--entry-amber);
 }
 
+.documentCard {
+  --card-accent: var(--entry-cobalt);
+}
+
 .paymentsCard {
   --card-accent: #5d4bb7;
 }
