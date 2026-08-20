@@ -1,0 +1,515 @@
+.page {
+  --s360-bg: #e9f0f6;
+  --s360-text-primary: #102238;
+  --s360-text-secondary: #425a71;
+  --s360-text-muted: #667b8f;
+  --s360-accent: #2f779d;
+  --s360-accent-strong: #205f82;
+  --s360-accent-soft: rgb(47 119 157 / 0.11);
+  --s360-teal: #2d8275;
+  --s360-teal-soft: rgb(45 130 117 / 0.11);
+  --s360-amber: #9a6b2f;
+  --s360-amber-soft: rgb(154 107 47 / 0.11);
+  --s360-glass: rgb(255 255 255 / 0.84);
+  --s360-glass-hover: rgb(255 255 255 / 0.94);
+  --s360-surface-secondary: rgb(241 246 250 / 0.9);
+  --s360-border: rgb(51 75 99 / 0.18);
+  --s360-highlight: rgb(255 255 255 / 0.92);
+  --s360-track: rgb(63 83 105 / 0.13);
+  position: relative;
+  isolation: isolate;
+  overflow-x: hidden;
+  color: var(--s360-text-primary);
+  line-height: 1.5;
+  background:
+    radial-gradient(circle at 8% 4%, rgb(64 137 172 / 0.16), transparent 30rem),
+    radial-gradient(circle at 92% 8%, rgb(54 139 124 / 0.12), transparent 28rem),
+    linear-gradient(145deg, #f4f8fb 0%, var(--s360-bg) 55%, #e4edf5 100%);
+}
+
+.page::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background-image:
+    linear-gradient(rgb(45 83 112 / 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(45 83 112 / 0.035) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: linear-gradient(to bottom, black, transparent 78%);
+  pointer-events: none;
+}
+
+:global([data-theme="dark"]) .page {
+  --s360-bg: #0b1522;
+  --s360-text-primary: #f3f7fb;
+  --s360-text-secondary: #b9c7d6;
+  --s360-text-muted: #8799ad;
+  --s360-accent: #63b2d2;
+  --s360-accent-strong: #8bcbe3;
+  --s360-accent-soft: rgb(99 178 210 / 0.14);
+  --s360-teal: #60c3ae;
+  --s360-teal-soft: rgb(96 195 174 / 0.13);
+  --s360-amber: #ddb36d;
+  --s360-amber-soft: rgb(221 179 109 / 0.13);
+  --s360-glass: rgb(18 32 48 / 0.87);
+  --s360-glass-hover: rgb(24 42 61 / 0.95);
+  --s360-surface-secondary: rgb(14 27 42 / 0.92);
+  --s360-border: rgb(151 177 201 / 0.2);
+  --s360-highlight: rgb(255 255 255 / 0.075);
+  --s360-track: rgb(151 177 201 / 0.16);
+  background:
+    radial-gradient(circle at 8% 4%, rgb(50 123 158 / 0.23), transparent 31rem),
+    radial-gradient(circle at 92% 8%, rgb(37 117 103 / 0.18), transparent 29rem),
+    linear-gradient(145deg, #101d2c 0%, var(--s360-bg) 55%, #0d1927 100%);
+}
+
+.glassCard,
+.heroPanel,
+.searchStage,
+.workspaceBadge,
+.glassControl,
+.errorGlass,
+.searchShell,
+.suggestionList {
+  border: 1px solid var(--s360-border);
+  background: linear-gradient(145deg, var(--s360-glass), var(--s360-surface-secondary));
+  box-shadow:
+    inset 0 1px 0 var(--s360-highlight),
+    0 22px 55px rgb(35 57 78 / 0.1);
+  -webkit-backdrop-filter: blur(22px) saturate(125%);
+  backdrop-filter: blur(22px) saturate(125%);
+}
+
+:global([data-theme="dark"]) .glassCard,
+:global([data-theme="dark"]) .heroPanel,
+:global([data-theme="dark"]) .searchStage,
+:global([data-theme="dark"]) .workspaceBadge,
+:global([data-theme="dark"]) .glassControl,
+:global([data-theme="dark"]) .errorGlass,
+:global([data-theme="dark"]) .searchShell,
+:global([data-theme="dark"]) .suggestionList {
+  background: linear-gradient(145deg, var(--s360-glass), var(--s360-surface-secondary));
+  box-shadow:
+    inset 0 1px 0 var(--s360-highlight),
+    0 24px 65px rgb(2 8 15 / 0.3);
+}
+
+.ambientOrbOne,
+.ambientOrbTwo {
+  position: absolute;
+  z-index: -1;
+  width: 22rem;
+  height: 22rem;
+  pointer-events: none;
+  filter: blur(2px);
+  border-radius: 999px;
+}
+
+.ambientOrbOne {
+  top: -10rem;
+  left: -8rem;
+  border: 1px solid rgb(62 140 177 / 0.2);
+  box-shadow: inset 0 0 80px rgb(62 140 177 / 0.08);
+}
+
+.ambientOrbTwo {
+  top: 17rem;
+  right: -12rem;
+  border: 1px solid rgb(52 143 126 / 0.18);
+  box-shadow: inset 0 0 90px rgb(52 143 126 / 0.07);
+}
+
+.heroPanel {
+  position: relative;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--s360-accent) 30%, var(--s360-border));
+  background:
+    radial-gradient(circle at 10% 20%, var(--s360-accent-soft), transparent 22rem),
+    radial-gradient(circle at 88% 10%, var(--s360-teal-soft), transparent 19rem),
+    linear-gradient(135deg, var(--s360-glass), var(--s360-surface-secondary));
+}
+
+.heroPanel::after {
+  position: absolute;
+  right: -3rem;
+  bottom: -6rem;
+  width: 20rem;
+  height: 12rem;
+  content: "";
+  pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--s360-accent) 20%, transparent);
+  border-radius: 50%;
+  transform: rotate(-12deg);
+}
+
+.heroTitle {
+  color: var(--s360-text-primary);
+  text-wrap: balance;
+}
+
+.heroActions {
+  position: relative;
+  z-index: 1;
+  padding: 0.35rem;
+  border: 1px solid var(--s360-border);
+  border-radius: 0.95rem;
+  background: color-mix(in srgb, var(--s360-surface-secondary) 74%, transparent);
+}
+
+.dashboardFlow {
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboardFlow .searchStage {
+  order: 1;
+  margin-top: 0;
+}
+
+.statusSection {
+  order: 2;
+  margin-top: 2.5rem;
+}
+
+.glassCard {
+  transition:
+    border-color 200ms ease,
+    background-color 200ms ease,
+    box-shadow 200ms ease;
+}
+
+.kpiCard {
+  --kpi-color: var(--s360-accent);
+  --kpi-soft: var(--s360-accent-soft);
+  position: relative;
+  min-height: 11.25rem;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 92% 14%, var(--kpi-soft), transparent 9rem),
+    linear-gradient(145deg, var(--s360-glass), var(--s360-surface-secondary));
+  transition:
+    border-color 200ms ease,
+    box-shadow 200ms ease,
+    transform 200ms ease;
+}
+
+.kpiCard:nth-child(2) {
+  --kpi-color: var(--s360-teal);
+  --kpi-soft: var(--s360-teal-soft);
+}
+
+.kpiCard:nth-child(3) {
+  --kpi-color: var(--s360-amber);
+  --kpi-soft: var(--s360-amber-soft);
+}
+
+.kpiCard:hover {
+  border-color: color-mix(in srgb, var(--kpi-color) 40%, transparent);
+  box-shadow:
+    inset 0 1px 0 var(--s360-highlight),
+    0 24px 55px rgb(35 57 78 / 0.13);
+  transform: translateY(-2px);
+}
+
+.kpiAccent {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: linear-gradient(to bottom, var(--kpi-color), transparent 88%);
+}
+
+.kpiCard .iconWell {
+  color: var(--kpi-color);
+  border-color: color-mix(in srgb, var(--kpi-color) 24%, transparent);
+  background: var(--kpi-soft);
+}
+
+.workspaceBadge {
+  color: var(--s360-text-secondary);
+  box-shadow: inset 0 1px 0 var(--s360-highlight);
+}
+
+.statusDot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 9999px;
+  background: var(--s360-accent);
+  box-shadow: 0 0 0 3px var(--s360-accent-soft);
+}
+
+.glassControl {
+  color: var(--s360-text-secondary);
+}
+
+.glassControl:hover {
+  color: var(--s360-text-primary);
+  border-color: color-mix(in srgb, var(--s360-accent) 38%, transparent);
+  background: var(--s360-glass-hover);
+}
+
+.glassControl:focus-visible {
+  box-shadow:
+    0 0 0 3px var(--s360-accent-soft),
+    inset 0 1px 0 var(--s360-highlight);
+}
+
+.eyebrow {
+  color: var(--s360-accent-strong);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.iconWell {
+  color: var(--s360-accent-strong);
+  border: 1px solid rgb(65 107 154 / 0.12);
+  background: var(--s360-accent-soft);
+}
+
+.skeletonBar {
+  background: var(--s360-track);
+}
+
+.errorGlass {
+  border-color: rgb(190 18 60 / 0.28);
+  background: linear-gradient(145deg, rgb(190 18 60 / 0.08), var(--s360-glass));
+}
+
+.searchStage {
+  position: relative;
+  overflow: visible;
+  border-color: color-mix(in srgb, var(--s360-accent) 28%, var(--s360-border));
+  background:
+    linear-gradient(115deg, var(--s360-accent-soft), transparent 42%),
+    linear-gradient(145deg, var(--s360-glass), var(--s360-surface-secondary));
+}
+
+.searchStage::before {
+  position: absolute;
+  top: 0;
+  right: 1.5rem;
+  left: 1.5rem;
+  height: 3px;
+  content: "";
+  border-radius: 0 0 999px 999px;
+  background: linear-gradient(
+    90deg,
+    var(--s360-accent),
+    var(--s360-teal) 48%,
+    var(--s360-amber) 78%,
+    transparent 96%
+  );
+}
+
+.searchCopy {
+  position: relative;
+}
+
+.searchSignals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 1.15rem;
+}
+
+.searchSignals span {
+  display: inline-flex;
+  min-height: 1.8rem;
+  align-items: center;
+  padding: 0.25rem 0.6rem;
+  color: var(--s360-text-secondary);
+  font-size: 0.7rem;
+  font-weight: 700;
+  border: 1px solid var(--s360-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--s360-glass-hover) 72%, transparent);
+}
+
+.searchShell {
+  color: var(--s360-text-primary);
+  min-height: 4.5rem;
+  border-color: color-mix(in srgb, var(--s360-accent) 32%, var(--s360-border));
+  background: var(--s360-glass-hover);
+  transition:
+    border-color 200ms ease,
+    box-shadow 200ms ease,
+    background-color 200ms ease;
+}
+
+.searchShellFocused {
+  border-color: rgb(65 107 154 / 0.48);
+  box-shadow:
+    inset 0 1px 0 var(--s360-highlight),
+    0 0 0 4px var(--s360-accent-soft),
+    0 24px 60px rgb(30 41 59 / 0.12);
+}
+
+:global([data-theme="dark"]) .searchShellFocused {
+  border-color: rgb(125 159 196 / 0.48);
+  box-shadow:
+    inset 0 1px 0 var(--s360-highlight),
+    0 0 0 4px var(--s360-accent-soft),
+    0 26px 70px rgb(0 0 0 / 0.32);
+}
+
+.searchIcon {
+  color: var(--s360-accent-strong);
+}
+
+.searchInput {
+  color: var(--s360-text-primary);
+  caret-color: var(--s360-accent-strong);
+}
+
+.searchInput::placeholder {
+  color: var(--s360-text-muted);
+  opacity: 0.9;
+}
+
+.searchInput::-webkit-search-cancel-button {
+  display: none;
+}
+
+.clearButton {
+  color: var(--s360-text-muted);
+}
+
+.clearButton:hover,
+.clearButton:focus-visible {
+  color: var(--s360-text-primary);
+  background: var(--s360-accent-soft);
+  box-shadow: 0 0 0 3px var(--s360-accent-soft);
+}
+
+.suggestionList {
+  border-color: color-mix(in srgb, var(--s360-accent) 34%, var(--s360-border));
+  background: var(--s360-glass-hover);
+  box-shadow:
+    inset 0 1px 0 var(--s360-highlight),
+    0 28px 70px rgb(20 39 57 / 0.2);
+  scrollbar-width: thin;
+  scrollbar-color: var(--s360-border) transparent;
+}
+
+.suggestionItem {
+  color: var(--s360-text-primary);
+  transition:
+    color 160ms ease,
+    background-color 160ms ease;
+}
+
+.suggestionItemActive,
+.suggestionItem:focus-visible {
+  background:
+    linear-gradient(90deg, var(--s360-accent-soft), transparent),
+    var(--s360-surface-secondary);
+}
+
+.studentAvatar {
+  color: var(--s360-accent-strong);
+  border: 1px solid rgb(65 107 154 / 0.14);
+  background: linear-gradient(145deg, var(--s360-accent-soft), rgb(65 107 154 / 0.055));
+}
+
+.statusBadge {
+  color: var(--s360-accent-strong);
+  border: 1px solid rgb(65 107 154 / 0.16);
+  background: var(--s360-accent-soft);
+}
+
+.statusActive {
+  color: var(--s360-accent-strong);
+  border-color: color-mix(in srgb, var(--s360-accent) 26%, transparent);
+  background: var(--s360-accent-soft);
+}
+
+.statusPlaced {
+  color: var(--s360-teal);
+  border-color: color-mix(in srgb, var(--s360-teal) 28%, transparent);
+  background: var(--s360-teal-soft);
+}
+
+.statusPaused {
+  color: var(--s360-amber);
+  border-color: color-mix(in srgb, var(--s360-amber) 28%, transparent);
+  background: var(--s360-amber-soft);
+}
+
+.selectedIndicator {
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-right: 0.5rem;
+  border-radius: 9999px;
+  background: var(--s360-accent);
+  box-shadow: 0 0 0 3px var(--s360-accent-soft);
+  vertical-align: 0.08rem;
+}
+
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .glassCard,
+  .heroPanel,
+  .searchStage,
+  .workspaceBadge,
+  .glassControl,
+  .errorGlass,
+  .searchShell,
+  .suggestionList {
+    background: #f8fafc;
+  }
+
+  :global([data-theme="dark"]) .glassCard,
+  :global([data-theme="dark"]) .heroPanel,
+  :global([data-theme="dark"]) .searchStage,
+  :global([data-theme="dark"]) .workspaceBadge,
+  :global([data-theme="dark"]) .glassControl,
+  :global([data-theme="dark"]) .errorGlass,
+  :global([data-theme="dark"]) .searchShell,
+  :global([data-theme="dark"]) .suggestionList {
+    background: #132235;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glassCard,
+  .heroPanel,
+  .searchStage,
+  .workspaceBadge,
+  .glassControl,
+  .errorGlass,
+  .searchShell,
+  .suggestionList {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .heroPanel,
+  .searchStage {
+    border-radius: 1.25rem;
+  }
+
+  .heroActions {
+    width: 100%;
+  }
+
+  .heroActions > button {
+    flex: 1 1 0;
+    justify-content: center;
+  }
+
+  .kpiCard {
+    min-height: 10rem;
+  }
+
+  .searchSignals {
+    gap: 0.35rem;
+  }
+
+  .searchSignals span {
+    font-size: 0.67rem;
+  }
+}

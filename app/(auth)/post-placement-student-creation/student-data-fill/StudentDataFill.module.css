@@ -1,0 +1,408 @@
+.page {
+  --entry-bg: #eef3f8;
+  --entry-surface: rgba(255, 255, 255, 0.86);
+  --entry-surface-strong: #ffffff;
+  --entry-border: rgba(148, 163, 184, 0.28);
+  --entry-text: #0f172a;
+  --entry-muted: #526076;
+  --entry-cobalt: #2557d6;
+  --entry-cobalt-soft: #e9efff;
+  --entry-teal: #0f8f83;
+  --entry-teal-soft: #e5f7f3;
+  --entry-amber: #b86f0f;
+  --entry-amber-soft: #fff4df;
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  overflow-x: clip;
+  color: var(--entry-text);
+  background:
+    radial-gradient(circle at 7% 7%, rgba(37, 87, 214, 0.14), transparent 30rem),
+    radial-gradient(circle at 92% 16%, rgba(15, 143, 131, 0.12), transparent 28rem),
+    radial-gradient(circle at 72% 92%, rgba(184, 111, 15, 0.1), transparent 28rem),
+    var(--entry-bg);
+}
+
+.page::before {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  content: "";
+  opacity: 0.32;
+  background-image:
+    linear-gradient(rgba(100, 116, 139, 0.09) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(100, 116, 139, 0.09) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: linear-gradient(to bottom, black, transparent 78%);
+}
+
+.shell {
+  position: relative;
+  width: min(100%, 74rem);
+  margin-inline: auto;
+  padding: 2rem 1rem 3.5rem;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.backButton,
+.secondaryButton {
+  min-height: 44px;
+  cursor: pointer;
+  border: 1px solid var(--entry-border);
+  color: #334155;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.backButton:hover,
+.secondaryButton:hover {
+  border-color: rgba(37, 87, 214, 0.4);
+  color: var(--entry-cobalt);
+  background: #ffffff;
+  box-shadow: 0 10px 26px rgba(37, 87, 214, 0.1);
+}
+
+.backButton:focus-visible,
+.secondaryButton:focus-visible,
+.primaryButton:focus-visible,
+.addButton:focus-visible,
+.removeButton:focus-visible {
+  outline: 3px solid rgba(37, 87, 214, 0.24);
+  outline-offset: 2px;
+}
+
+.title {
+  color: var(--entry-text);
+  letter-spacing: -0.035em;
+}
+
+.titleAccent {
+  color: var(--entry-cobalt);
+}
+
+.subtitle {
+  max-width: 62ch;
+  color: var(--entry-muted);
+}
+
+.form {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.card {
+  position: relative;
+  overflow: visible;
+  border: 1px solid var(--entry-border);
+  border-radius: 1.25rem;
+  padding: 1.25rem;
+  background: var(--entry-surface);
+  box-shadow:
+    0 22px 48px rgba(15, 23, 42, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.84);
+  backdrop-filter: blur(18px) saturate(120%);
+}
+
+.card::before {
+  position: absolute;
+  top: 0;
+  left: 1.25rem;
+  width: 4.5rem;
+  height: 3px;
+  border-radius: 0 0 999px 999px;
+  content: "";
+  background: var(--card-accent, var(--entry-cobalt));
+}
+
+.studentCard {
+  --card-accent: var(--entry-cobalt);
+}
+
+.companyCard {
+  --card-accent: var(--entry-teal);
+}
+
+.financeCard {
+  --card-accent: var(--entry-amber);
+}
+
+.paymentsCard {
+  --card-accent: #5d4bb7;
+}
+
+.sectionHeading {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  color: var(--entry-text);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+.sectionIcon {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.65rem;
+  color: var(--card-accent, var(--entry-cobalt));
+  background: color-mix(in srgb, var(--card-accent, var(--entry-cobalt)) 12%, white);
+}
+
+.page label {
+  color: #334155;
+}
+
+.page input,
+.page select {
+  min-height: 46px;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.75rem;
+  color: var(--entry-text);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.025);
+  color-scheme: light;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease;
+}
+
+.page input::placeholder {
+  color: #718096;
+}
+
+.page input:hover,
+.page select:hover {
+  border-color: #94a3b8;
+}
+
+.page input:focus,
+.page select:focus {
+  border-color: var(--entry-cobalt);
+  outline: none;
+  background: #ffffff;
+  box-shadow: 0 0 0 4px rgba(37, 87, 214, 0.12);
+}
+
+.selectedStudent {
+  border: 1px solid rgba(15, 143, 131, 0.32);
+  background: linear-gradient(135deg, rgba(229, 247, 243, 0.94), rgba(255, 255, 255, 0.92));
+  box-shadow: inset 3px 0 0 var(--entry-teal);
+}
+
+.changeButton {
+  min-height: 44px;
+  cursor: pointer;
+  border: 1px solid rgba(15, 143, 131, 0.34);
+  color: #08746b;
+  background: rgba(255, 255, 255, 0.86);
+  transition:
+    color 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease;
+}
+
+.changeButton:hover {
+  border-color: var(--entry-teal);
+  color: #075e57;
+  background: var(--entry-teal-soft);
+}
+
+.candidateMenu {
+  border: 1px solid var(--entry-border);
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 24px 50px rgba(15, 23, 42, 0.16);
+  backdrop-filter: blur(18px);
+}
+
+.candidateOption:hover,
+.candidateOptionActive {
+  background: var(--entry-cobalt-soft);
+}
+
+.financeSummary {
+  border: 1px solid rgba(184, 111, 15, 0.22);
+  color: #713f12;
+  background: linear-gradient(135deg, var(--entry-amber-soft), rgba(255, 255, 255, 0.86));
+}
+
+.installmentCard {
+  border: 1px solid rgba(93, 75, 183, 0.2);
+  background: linear-gradient(135deg, rgba(245, 243, 255, 0.88), rgba(255, 255, 255, 0.92));
+  box-shadow: 0 10px 28px rgba(93, 75, 183, 0.06);
+}
+
+.addButton {
+  min-height: 44px;
+  cursor: pointer;
+  border: 1px solid rgba(93, 75, 183, 0.25);
+  color: #4c3ca4;
+  background: #f2f0ff;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    color 180ms ease;
+}
+
+.addButton:hover {
+  border-color: #7562d6;
+  color: #3f308e;
+  background: #e9e5ff;
+}
+
+.removeButton {
+  min-height: 44px;
+  cursor: pointer;
+  border: 1px solid rgba(190, 24, 93, 0.22);
+  color: #a3154e;
+  background: #fff1f5;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease;
+}
+
+.removeButton:hover {
+  border-color: rgba(190, 24, 93, 0.45);
+  background: #ffe4ec;
+}
+
+.primaryButton {
+  min-height: 46px;
+  cursor: pointer;
+  border: 1px solid rgba(15, 143, 131, 0.7);
+  color: #ffffff;
+  background: linear-gradient(135deg, #0f8f83, #08746b);
+  box-shadow: 0 12px 28px rgba(15, 143, 131, 0.22);
+  transition:
+    background-color 180ms ease,
+    box-shadow 180ms ease,
+    opacity 180ms ease;
+}
+
+.primaryButton:hover:not(:disabled) {
+  box-shadow: 0 14px 32px rgba(15, 143, 131, 0.3);
+}
+
+.primaryButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+  box-shadow: none;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding-top: 0.25rem;
+}
+
+:global(.dark) .page {
+  --entry-bg: #07111f;
+  --entry-surface: rgba(15, 27, 45, 0.86);
+  --entry-surface-strong: #101d30;
+  --entry-border: rgba(148, 163, 184, 0.18);
+  --entry-text: #e7eef8;
+  --entry-muted: #a8b5c8;
+  background:
+    radial-gradient(circle at 7% 7%, rgba(55, 102, 220, 0.2), transparent 30rem),
+    radial-gradient(circle at 92% 16%, rgba(25, 166, 151, 0.16), transparent 28rem),
+    radial-gradient(circle at 72% 92%, rgba(209, 139, 41, 0.12), transparent 28rem),
+    var(--entry-bg);
+}
+
+:global(.dark) .page label,
+:global(.dark) .backButton,
+:global(.dark) .secondaryButton {
+  color: #c6d1e1;
+}
+
+:global(.dark) .backButton,
+:global(.dark) .secondaryButton,
+:global(.dark) .changeButton {
+  background: rgba(15, 27, 45, 0.9);
+}
+
+:global(.dark) .page input,
+:global(.dark) .page select {
+  border-color: #35445a;
+  color: #e7eef8;
+  background: #101d30;
+  color-scheme: dark;
+}
+
+:global(.dark) .page input::placeholder {
+  color: #8290a5;
+}
+
+:global(.dark) .candidateMenu {
+  background: rgba(15, 27, 45, 0.98);
+}
+
+:global(.dark) .selectedStudent {
+  border-color: rgba(45, 212, 191, 0.3);
+  background: linear-gradient(135deg, rgba(12, 79, 72, 0.46), rgba(15, 27, 45, 0.94));
+}
+
+:global(.dark) .selectedStudent p,
+:global(.dark) .paymentsCard p {
+  color: #d9e3f0;
+}
+
+:global(.dark) .financeSummary {
+  border-color: rgba(245, 158, 11, 0.25);
+  color: #f8d28c;
+  background: linear-gradient(135deg, rgba(120, 68, 10, 0.42), rgba(15, 27, 45, 0.9));
+}
+
+@media (min-width: 640px) {
+  .shell {
+    padding-inline: 1.5rem;
+  }
+
+  .card {
+    padding: 1.5rem;
+  }
+}
+
+@media (max-width: 639px) {
+  .header {
+    align-items: flex-start;
+  }
+
+  .actions > * {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .card,
+  .candidateMenu {
+    background: var(--entry-surface-strong);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .card,
+  .candidateMenu {
+    background: var(--entry-surface-strong);
+    backdrop-filter: none;
+  }
+}

@@ -1,5 +1,7 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useGSAP } from "@gsap/react";
+import gsap from "gsap";
 import {
   Search,
   Plus,
@@ -8,17 +10,24 @@ import {
   Building,
   User,
   DollarSign,
-  Clock,
   X,
   Save,
   Trash2,
   CreditCard,
   Download,
   ArrowLeft,
+  CheckCircle2,
+  Link2,
+  LoaderCircle,
+  Mail,
+  UserRound,
 } from "lucide-react";
-import { API_BASE_URL } from "@/lib/api";
+import { API_LMS_URL } from "@/lib/api";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import recordsStyles from "./PostPlacementRecords.module.css";
+
+gsap.registerPlugin(useGSAP);
 
 const PAYMENT_MODES = [
   "CASH",
@@ -28,6 +37,18 @@ const PAYMENT_MODES = [
   "CHEQUE",
   "OTHER",
 ] as const;
+
+const LMS_API_KEY = process.env.NEXT_PUBLIC_STUDENT_INFO_API_KEY || "";
+const offersApiUrl = (path: string) => {
+  if (!API_LMS_URL) {
+    throw new Error("NEXT_PUBLIC_LMS_URL is not configured");
+  }
+  return `${API_LMS_URL.replace(/\/$/, "")}/api/offers${path}`;
+};
+const lmsHeaders = (includeJson = false): HeadersInit => ({
+  ...(includeJson ? { "Content-Type": "application/json" } : {}),
+  "x-api-key": LMS_API_KEY,
+});
 
 type PaymentMode = (typeof PAYMENT_MODES)[number];
 
@@ -57,6 +78,8 @@ interface Installment {
 interface PostPlacementOffer {
   _id: string;
   studentName: string;
+  email?: string;
+  clerkId?: string;
   offerDate?: string;
   joiningDate?: string;
   companyName?: string;
@@ -74,6 +97,16 @@ interface PostPlacementOffer {
   createdAt: string;
   updatedAt?: string;
   companyExperience?: CompanyExperience;
+}
+
+interface LinkableStudent {
+  _id: string;
+  clerkId: string;
+  fullName: string;
+  email: string;
+  enrollmentId?: string;
+  zone?: string;
+  courseNames: string[];
 }
 
 interface NewInstallment {
@@ -111,17 +144,18 @@ interface StudentDetailPanelProps {
   isEditing: boolean;
   onEdit: () => void;
   onSave: (id: string, data: Partial<PostPlacementOffer>) => Promise<boolean>;
+  onLinkUser: (offerId: string, studentUserId: string) => Promise<boolean>;
   onCancel: () => void;
   onDelete: (id: string) => void;
   onAddInstallment: (
     studentId: string,
-    data: Omit<Installment, "_id">
+    data: Omit<Installment, "_id">,
   ) => Promise<boolean>;
   onDeleteInstallment: (studentId: string, installmentId: string) => void;
   onUpdateInstallment: (
     studentId: string,
     installmentId: string,
-    data: Partial<Omit<Installment, "_id">>
+    data: Partial<Omit<Installment, "_id">>,
   ) => Promise<boolean>;
   formatCurrency: (amount: number) => string;
   formatDate: (date: string) => string;
@@ -154,7 +188,7 @@ const PostPlacementDashboard: React.FC = () => {
   >([]);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [feesFilter, setFeesFilter] = useState<"all" | "remaining" | "paid">(
-    "all"
+    "all",
   );
   const [selectedStudent, setSelectedStudent] =
     useState<PostPlacementOffer | null>(null);
@@ -171,7 +205,10 @@ const PostPlacementDashboard: React.FC = () => {
   const fetchStudents = async (): Promise<void> => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/api/offers/list`);
+      const response = await fetch(offersApiUrl("/list"), {
+        headers: lmsHeaders(),
+        cache: "no-store",
+      });
       if (!response.ok) throw new Error("Failed to fetch students");
       const data: PostPlacementOffer[] = await response.json();
       setStudents(data);
@@ -228,8 +265,7 @@ const PostPlacementDashboard: React.FC = () => {
 
   // Wrap a value as a safe CSV field (handles commas, quotes, newlines)
   const csvField = (value: unknown): string => {
-    const s =
-      value === null || value === undefined ? "" : String(value);
+    const s = value === null || value === undefined ? "" : String(value);
     return `"${s.replace(/"/g, '""')}"`;
   };
 
@@ -274,14 +310,14 @@ const PostPlacementDashboard: React.FC = () => {
         ce.pf === true ? "Yes" : ce.pf === false ? "No" : "Unknown";
       const totalPaid = (s.installments || []).reduce(
         (sum, it) => sum + (Number(it.amount) || 0),
-        0
+        0,
       );
       const installmentsText = (s.installments || [])
         .map(
           (it) =>
             `${it.label} | ${it.amount} | ${it.mode} | ${toYMDCsv(
-              it.date
-            )}${it.note ? ` | ${it.note}` : ""}`
+              it.date,
+            )}${it.note ? ` | ${it.note}` : ""}`,
         )
         .join(" ;; ");
 
@@ -331,14 +367,12 @@ const PostPlacementDashboard: React.FC = () => {
   };
 
   const createStudent = async (
-    studentData: Partial<PostPlacementOffer>
+    studentData: Partial<PostPlacementOffer>,
   ): Promise<boolean> => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/offers/create`, {
+      const response = await fetch(offersApiUrl("/create"), {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: lmsHeaders(true),
         body: JSON.stringify(studentData),
       });
       if (!response.ok) throw new Error("Failed to create student");
@@ -354,14 +388,12 @@ const PostPlacementDashboard: React.FC = () => {
 
   const updateStudent = async (
     id: string,
-    updateData: Partial<PostPlacementOffer>
+    updateData: Partial<PostPlacementOffer>,
   ): Promise<boolean> => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/offers/${id}`, {
+      const response = await fetch(offersApiUrl(`/${id}`), {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: lmsHeaders(true),
         body: JSON.stringify(updateData),
       });
       if (!response.ok) throw new Error("Failed to update student");
@@ -376,13 +408,44 @@ const PostPlacementDashboard: React.FC = () => {
     }
   };
 
+  const linkStudentToOffer = async (
+    offerId: string,
+    studentUserId: string,
+  ): Promise<boolean> => {
+    try {
+      const response = await fetch(offersApiUrl(`/${offerId}/link-user`), {
+        method: "PATCH",
+        headers: lmsHeaders(true),
+        body: JSON.stringify({ studentUserId }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to link LMS user");
+      }
+
+      const updatedStudent = payload as PostPlacementOffer;
+      setStudents((current) =>
+        current.map((student) =>
+          student._id === offerId ? updatedStudent : student,
+        ),
+      );
+      setSelectedStudent(updatedStudent);
+      setError(null);
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to link LMS user");
+      return false;
+    }
+  };
+
   const deleteStudent = async (id: string): Promise<void> => {
     if (!window.confirm("Are you sure you want to delete this student record?"))
       return;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/offers/${id}`, {
+      const response = await fetch(offersApiUrl(`/${id}`), {
         method: "DELETE",
+        headers: lmsHeaders(),
       });
       if (!response.ok) throw new Error("Failed to delete student");
       setStudents(students.filter((s) => s._id !== id));
@@ -394,21 +457,21 @@ const PostPlacementDashboard: React.FC = () => {
   const updateInstallment = async (
     studentId: string,
     installmentId: string,
-    updateData: Partial<Omit<Installment, "_id">>
+    updateData: Partial<Omit<Installment, "_id">>,
   ): Promise<boolean> => {
     try {
       const res = await fetch(
-        `${API_BASE_URL}/api/offers/${studentId}/installments/${installmentId}`,
+        offersApiUrl(`/${studentId}/installments/${installmentId}`),
         {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
+          headers: lmsHeaders(true),
           body: JSON.stringify(updateData),
-        }
+        },
       );
       if (!res.ok) throw new Error("Failed to update installment");
       const updated: PostPlacementOffer = await res.json();
       setStudents((prev) =>
-        prev.map((s) => (s._id === studentId ? updated : s))
+        prev.map((s) => (s._id === studentId ? updated : s)),
       );
       setSelectedStudent(updated);
       return true;
@@ -420,23 +483,18 @@ const PostPlacementDashboard: React.FC = () => {
 
   const addInstallment = async (
     studentId: string,
-    installmentData: Omit<Installment, "_id">
+    installmentData: Omit<Installment, "_id">,
   ): Promise<boolean> => {
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/offers/${studentId}/installments`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(installmentData),
-        }
-      );
+      const response = await fetch(offersApiUrl(`/${studentId}/installments`), {
+        method: "POST",
+        headers: lmsHeaders(true),
+        body: JSON.stringify(installmentData),
+      });
       if (!response.ok) throw new Error("Failed to add installment");
       const updatedStudent: PostPlacementOffer = await response.json();
       setStudents(
-        students.map((s) => (s._id === studentId ? updatedStudent : s))
+        students.map((s) => (s._id === studentId ? updatedStudent : s)),
       );
       setSelectedStudent(updatedStudent);
       return true;
@@ -448,22 +506,23 @@ const PostPlacementDashboard: React.FC = () => {
 
   const deleteInstallment = async (
     studentId: string,
-    installmentId: string
+    installmentId: string,
   ): Promise<void> => {
     if (!window.confirm("Are you sure you want to delete this installment?"))
       return;
 
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/offers/${studentId}/installments/${installmentId}`,
+        offersApiUrl(`/${studentId}/installments/${installmentId}`),
         {
           method: "DELETE",
-        }
+          headers: lmsHeaders(),
+        },
       );
       if (!response.ok) throw new Error("Failed to delete installment");
       const updatedStudent: PostPlacementOffer = await response.json();
       setStudents(
-        students.map((s) => (s._id === studentId ? updatedStudent : s))
+        students.map((s) => (s._id === studentId ? updatedStudent : s)),
       );
       setSelectedStudent(updatedStudent);
     } catch (err) {
@@ -661,6 +720,7 @@ const PostPlacementDashboard: React.FC = () => {
                 isEditing={isEditing}
                 onEdit={() => setIsEditing(true)}
                 onSave={updateStudent}
+                onLinkUser={linkStudentToOffer}
                 onCancel={() => setIsEditing(false)}
                 onDelete={deleteStudent}
                 onAddInstallment={addInstallment}
@@ -697,6 +757,7 @@ const StudentDetailPanel: React.FC<StudentDetailPanelProps> = ({
   isEditing,
   onEdit,
   onSave,
+  onLinkUser,
   onCancel,
   onDelete,
   onAddInstallment,
@@ -817,6 +878,20 @@ const StudentDetailPanel: React.FC<StudentDetailPanelProps> = ({
         </div>
 
         <div className="p-6 space-y-6">
+          <OfferUserLinker
+            offer={formData}
+            onLink={async (candidate) => {
+              const linked = await onLinkUser(student._id, candidate._id);
+              if (linked) {
+                setFormData((current) => ({
+                  ...current,
+                  email: candidate.email,
+                  clerkId: candidate.clerkId,
+                }));
+              }
+              return linked;
+            }}
+          />
           <EditForm formData={formData} setFormData={setFormData} />
         </div>
       </div>
@@ -1370,6 +1445,319 @@ const StudentDetailPanel: React.FC<StudentDetailPanelProps> = ({
   );
 };
 
+interface OfferUserLinkerProps {
+  offer: PostPlacementOffer;
+  onLink: (candidate: LinkableStudent) => Promise<boolean>;
+}
+
+const OfferUserLinker: React.FC<OfferUserLinkerProps> = ({ offer, onLink }) => {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [candidates, setCandidates] = useState<LinkableStudent[]>([]);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [isSearching, setIsSearching] = useState(false);
+  const [linkingId, setLinkingId] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
+  const [localError, setLocalError] = useState("");
+
+  const loadCandidates = useCallback(
+    async (search: string, signal: AbortSignal) => {
+      setIsSearching(true);
+      setLocalError("");
+      try {
+        const params = new URLSearchParams();
+        if (search.trim()) params.set("search", search.trim());
+        const response = await fetch(
+          offersApiUrl(
+            `/link-candidates${params.size ? `?${params.toString()}` : ""}`,
+          ),
+          { headers: lmsHeaders(), cache: "no-store", signal },
+        );
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload?.error || "Could not search LMS users");
+        }
+        setCandidates(
+          Array.isArray(payload?.students) ? payload.students : [],
+        );
+        setActiveIndex(0);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setCandidates([]);
+        setLocalError(
+          error instanceof Error ? error.message : "Could not search LMS users",
+        );
+      } finally {
+        if (!signal.aborted) setIsSearching(false);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(
+      () => loadCandidates(query, controller.signal),
+      220,
+    );
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [isOpen, loadCandidates, query]);
+
+  useEffect(() => {
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
+  }, []);
+
+  useGSAP(
+    () => {
+      if (!isOpen) return;
+      const media = gsap.matchMedia();
+      media.add("(prefers-reduced-motion: no-preference)", () => {
+        gsap.fromTo(
+          ".offer-user-linker-panel",
+          { autoAlpha: 0, y: -8 },
+          {
+            autoAlpha: 1,
+            y: 0,
+            duration: 0.22,
+            ease: "power2.out",
+            clearProps: "transform,opacity,visibility",
+          },
+        );
+      });
+      return () => media.revert();
+    },
+    { scope: rootRef, dependencies: [isOpen], revertOnUpdate: true },
+  );
+
+  const openSearch = () => {
+    setIsOpen((open) => !open);
+    setMessage("");
+    setLocalError("");
+    if (!isOpen) {
+      window.requestAnimationFrame(() => searchInputRef.current?.focus());
+    }
+  };
+
+  const linkCandidate = async (candidate: LinkableStudent) => {
+    if (linkingId || candidate.clerkId === offer.clerkId) return;
+    setLinkingId(candidate._id);
+    setMessage("");
+    setLocalError("");
+    const linked = await onLink(candidate);
+    setLinkingId(null);
+    if (linked) {
+      setMessage(`${candidate.fullName} is now linked to this record.`);
+      setQuery("");
+      setIsOpen(false);
+    } else {
+      setLocalError("The user could not be linked. Please try again.");
+    }
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Escape") {
+      setIsOpen(false);
+      return;
+    }
+    if (!candidates.length) return;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveIndex((index) => Math.min(index + 1, candidates.length - 1));
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveIndex((index) => Math.max(index - 1, 0));
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      void linkCandidate(candidates[activeIndex]);
+    }
+  };
+
+  const isLinked = Boolean(offer.email && offer.clerkId);
+
+  return (
+    <div
+      ref={rootRef}
+      className={`${recordsStyles.linker} rounded-2xl border p-4 shadow-sm`}
+    >
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-950 text-indigo-100 shadow-sm">
+            <Link2 className="h-4 w-4" aria-hidden="true" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className={`${recordsStyles.title} font-semibold`}>LMS user link</h3>
+              {isLinked && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800">
+                  <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  Linked
+                </span>
+              )}
+            </div>
+            {isLinked ? (
+              <div className={`${recordsStyles.muted} mt-1 flex min-w-0 items-center gap-1.5 text-sm`}>
+                <Mail className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span className="truncate">{offer.email}</span>
+                <span className="text-slate-300" aria-hidden="true">·</span>
+                <span title={offer.clerkId}>Clerk identity attached</span>
+              </div>
+            ) : (
+              <p className={`${recordsStyles.muted} mt-1 text-sm`}>
+                Attach the email and Clerk ID from an enrolled LMS user.
+              </p>
+            )}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={openSearch}
+          aria-expanded={isOpen}
+          aria-controls="offer-user-linker-panel"
+          className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-indigo-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        >
+          {isOpen ? <X className="h-4 w-4" /> : <UserRound className="h-4 w-4" />}
+          {isOpen ? "Close search" : isLinked ? "Change linked user" : "Link user"}
+        </button>
+      </div>
+
+      {message && (
+        <p className={`${recordsStyles.success} mt-3 text-sm font-medium`} role="status">
+          {message}
+        </p>
+      )}
+
+      {isOpen && (
+        <div
+          id="offer-user-linker-panel"
+          className={`${recordsStyles.divider} offer-user-linker-panel mt-4 border-t pt-4`}
+        >
+          <label
+            htmlFor="offer-user-search"
+            className={`${recordsStyles.label} mb-2 block text-sm font-semibold`}
+          >
+            Search enrolled LMS users
+          </label>
+          <div className="relative">
+            <Search
+              className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+              aria-hidden="true"
+            />
+            <input
+              ref={searchInputRef}
+              id="offer-user-search"
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={handleKeyDown}
+              role="combobox"
+              aria-autocomplete="list"
+              aria-controls="offer-user-results"
+              aria-expanded="true"
+              aria-activedescendant={
+                candidates[activeIndex]
+                  ? `offer-user-${candidates[activeIndex]._id}`
+                  : undefined
+              }
+              placeholder="Search by name, email, or enrollment ID"
+              className={`${recordsStyles.searchInput} min-h-11 w-full rounded-xl border py-2.5 pl-10 pr-10 text-sm shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-300`}
+            />
+            {isSearching && (
+              <LoaderCircle
+                className="motion-safe:animate-spin absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-indigo-600"
+                aria-label="Searching"
+              />
+            )}
+          </div>
+
+          <div
+            id="offer-user-results"
+            role="listbox"
+            aria-label="LMS students"
+            className={`${recordsStyles.results} mt-2 max-h-72 overflow-y-auto rounded-xl border p-1.5 shadow-lg`}
+          >
+            {!isSearching && candidates.length === 0 && !localError && (
+              <p className={`${recordsStyles.emptyState} px-3 py-6 text-center text-sm`}>
+                No matching LMS students found.
+              </p>
+            )}
+            {candidates.map((candidate, index) => {
+              const alreadyLinked = candidate.clerkId === offer.clerkId;
+              return (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={index === activeIndex}
+                  id={`offer-user-${candidate._id}`}
+                  key={candidate._id}
+                  onMouseEnter={() => setActiveIndex(index)}
+                  onClick={() => void linkCandidate(candidate)}
+                  disabled={Boolean(linkingId) || alreadyLinked}
+                  className={`${recordsStyles.result} flex min-h-14 w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-60 ${
+                    index === activeIndex ? recordsStyles.resultActive : ""
+                  }`}
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white">
+                    {getInitials(candidate.fullName)}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className={`${recordsStyles.studentName} truncate text-sm font-semibold`}>
+                        {candidate.fullName}
+                      </span>
+                      {candidate.zone && (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold capitalize text-amber-800">
+                          {candidate.zone} zone
+                        </span>
+                      )}
+                    </span>
+                    <span className={`${recordsStyles.studentMeta} mt-0.5 block truncate text-xs`}>
+                      {candidate.email}
+                      {candidate.enrollmentId ? ` · ${candidate.enrollmentId}` : ""}
+                    </span>
+                    <span className={`${recordsStyles.course} mt-0.5 block truncate text-xs font-semibold`}>
+                      {candidate.courseNames.length
+                        ? candidate.courseNames.join(", ")
+                        : "No purchased course linked"}
+                    </span>
+                  </span>
+                  {linkingId === candidate._id ? (
+                    <LoaderCircle className={`${recordsStyles.linkAction} motion-safe:animate-spin h-4 w-4 shrink-0`} />
+                  ) : alreadyLinked ? (
+                    <span className={`${recordsStyles.success} text-xs font-semibold`}>Current</span>
+                  ) : (
+                    <span className={`${recordsStyles.linkAction} text-xs font-semibold`}>Link</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          {localError && (
+            <p className={`${recordsStyles.error} mt-2 text-sm font-medium`} role="alert">
+              {localError}
+            </p>
+          )}
+          <p className={`${recordsStyles.helper} mt-2 text-xs`}>
+            All LMS student accounts with an email and Clerk ID are available.
+            Linking updates this offer&apos;s email and Clerk ID only.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const EditForm: React.FC<EditFormProps> = ({ formData, setFormData }) => {
   const updateField = (field: string, value: any): void => {
     if (field.includes(".")) {
@@ -1556,7 +1944,7 @@ const EditForm: React.FC<EditFormProps> = ({ formData, setFormData }) => {
               onChange={(e) =>
                 updateField(
                   "companyExperience.yearsOfExperience",
-                  e.target.value === "" ? null : Number(e.target.value)
+                  e.target.value === "" ? null : Number(e.target.value),
                 )
               }
               className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
@@ -1572,13 +1960,13 @@ const EditForm: React.FC<EditFormProps> = ({ formData, setFormData }) => {
                 formData.companyExperience?.pf === true
                   ? "true"
                   : formData.companyExperience?.pf === false
-                  ? "false"
-                  : ""
+                    ? "false"
+                    : ""
               }
               onChange={(e) =>
                 updateField(
                   "companyExperience.pf",
-                  e.target.value === "" ? null : e.target.value === "true"
+                  e.target.value === "" ? null : e.target.value === "true",
                 )
               }
               className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
@@ -1636,7 +2024,7 @@ const EditForm: React.FC<EditFormProps> = ({ formData, setFormData }) => {
               onChange={(e) =>
                 updateField(
                   "totalPostPlacementFee",
-                  parseFloat(e.target.value) || 0
+                  parseFloat(e.target.value) || 0,
                 )
               }
               className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
@@ -1653,7 +2041,7 @@ const EditForm: React.FC<EditFormProps> = ({ formData, setFormData }) => {
               onChange={(e) =>
                 updateField(
                   "remainingPrePlacementFee",
-                  parseFloat(e.target.value) || 0
+                  parseFloat(e.target.value) || 0,
                 )
               }
               className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
@@ -1684,7 +2072,7 @@ const EditForm: React.FC<EditFormProps> = ({ formData, setFormData }) => {
               onChange={(e) =>
                 updateField(
                   "remainingFee",
-                  e.target.value === "" ? 0 : parseFloat(e.target.value) || 0
+                  e.target.value === "" ? 0 : parseFloat(e.target.value) || 0,
                 )
               }
               className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
@@ -1916,7 +2304,7 @@ const CreateStudentForm: React.FC<CreateStudentFormProps> = ({
                   onChange={(e) =>
                     updateField(
                       "companyExperience.yearsOfExperience",
-                      e.target.value === "" ? null : Number(e.target.value)
+                      e.target.value === "" ? null : Number(e.target.value),
                     )
                   }
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
@@ -1932,13 +2320,13 @@ const CreateStudentForm: React.FC<CreateStudentFormProps> = ({
                     formData.companyExperience?.pf === true
                       ? "true"
                       : formData.companyExperience?.pf === false
-                      ? "false"
-                      : ""
+                        ? "false"
+                        : ""
                   }
                   onChange={(e) =>
                     updateField(
                       "companyExperience.pf",
-                      e.target.value === "" ? null : e.target.value === "true"
+                      e.target.value === "" ? null : e.target.value === "true",
                     )
                   }
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"

@@ -10,6 +10,7 @@ import {
   DollarSign,
   AlertCircle,
 } from "lucide-react";
+import { API_LMS_URL } from "@/lib/api";
 
 // =====================
 // Types
@@ -55,7 +56,17 @@ type ListResponse = {
   range?: { from: string; to: string } | null;
 };
 
-const API_BASE_URL = "https://lms-backend-tgrh.onrender.com";
+const LMS_API_KEY = process.env.NEXT_PUBLIC_STUDENT_INFO_API_KEY || "";
+const preplacementApiUrl = (path: string) => {
+  if (!API_LMS_URL) {
+    throw new Error("NEXT_PUBLIC_LMS_URL is not configured");
+  }
+  return `${API_LMS_URL.replace(/\/$/, "")}/api/preplacement${path}`;
+};
+const lmsHeaders = (includeJson = false): HeadersInit => ({
+  ...(includeJson ? { "Content-Type": "application/json" } : {}),
+  ...(LMS_API_KEY ? { "x-api-key": LMS_API_KEY } : {}),
+});
 
 type SummaryResponse = {
   totalStudents: number;
@@ -172,18 +183,21 @@ export default function PrePlacementStudentManagerPage() {
 
         const [listRes, summaryRes, activeRes] = await Promise.all([
           fetch(
-            `${API_BASE_URL}/api/preplacement/students?${params.toString()}`
+            preplacementApiUrl(`/students?${params.toString()}`),
+            { headers: lmsHeaders(), cache: "no-store" },
           ),
           fetch(
-            `${API_BASE_URL}/api/preplacement/summary?${(() => {
+            preplacementApiUrl(`/summary?${(() => {
               const p = new URLSearchParams();
               if (month) p.set("month", month);
               if (status !== "ALL") p.set("status", status);
               return p.toString();
-            })()}`
+            })()}`),
+            { headers: lmsHeaders(), cache: "no-store" },
           ),
           fetch(
-            `${API_BASE_URL}/api/preplacement/students?${activeParams.toString()}`
+            preplacementApiUrl(`/students?${activeParams.toString()}`),
+            { headers: lmsHeaders(), cache: "no-store" },
           ),
         ]);
 
@@ -211,7 +225,8 @@ export default function PrePlacementStudentManagerPage() {
     setEditingId(id);
     try {
       const res = await fetch(
-        `${API_BASE_URL}/api/preplacement/students/${id}`
+        preplacementApiUrl(`/students/${id}`),
+        { headers: lmsHeaders(), cache: "no-store" },
       );
       const data: StudentDetail = await res.json();
       setEditData(data);
@@ -246,10 +261,10 @@ export default function PrePlacementStudentManagerPage() {
       } as any;
 
       const res = await fetch(
-        `${API_BASE_URL}/api/preplacement/students/${editingId}`,
+        preplacementApiUrl(`/students/${editingId}`),
         {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: lmsHeaders(true),
           body: JSON.stringify(body),
         }
       );
@@ -264,7 +279,8 @@ export default function PrePlacementStudentManagerPage() {
       if (month) params.set("month", month);
       if (status !== "ALL") params.set("status", status);
       const listRes = await fetch(
-        `${API_BASE_URL}/api/preplacement/students?${params.toString()}`
+        preplacementApiUrl(`/students?${params.toString()}`),
+        { headers: lmsHeaders(), cache: "no-store" },
       );
       const listJson: ListResponse = await listRes.json();
       setList(listJson);
@@ -675,10 +691,10 @@ export default function PrePlacementStudentManagerPage() {
                         setEditData({ ...editData, status: next });
                         try {
                           const r = await fetch(
-                            `${API_BASE_URL}/api/preplacement/students/${editingId}/status`,
+                            preplacementApiUrl(`/students/${editingId}/status`),
                             {
                               method: "PATCH",
-                              headers: { "Content-Type": "application/json" },
+                              headers: lmsHeaders(true),
                               body: JSON.stringify({ status: next }),
                             }
                           );
@@ -695,7 +711,8 @@ export default function PrePlacementStudentManagerPage() {
                           if (status !== "ALL") params.set("status", status);
 
                           const listRes = await fetch(
-                            `${API_BASE_URL}/api/preplacement/students?${params.toString()}`
+                            preplacementApiUrl(`/students?${params.toString()}`),
+                            { headers: lmsHeaders(), cache: "no-store" },
                           );
                           const listJson: ListResponse = await listRes.json();
                           setList(listJson);
@@ -728,10 +745,10 @@ export default function PrePlacementStudentManagerPage() {
 
                         try {
                           const r = await fetch(
-                            `${API_BASE_URL}/api/preplacement/students/${editingId}/zone`,
+                            preplacementApiUrl(`/students/${editingId}/zone`),
                             {
                               method: "PATCH",
-                              headers: { "Content-Type": "application/json" },
+                              headers: lmsHeaders(true),
                               body: JSON.stringify({ zone: next }),
                             }
                           );
@@ -750,7 +767,8 @@ export default function PrePlacementStudentManagerPage() {
                             params.set("zone", zoneFilter);
 
                           const listRes = await fetch(
-                            `${API_BASE_URL}/api/preplacement/students?${params.toString()}`
+                            preplacementApiUrl(`/students?${params.toString()}`),
+                            { headers: lmsHeaders(), cache: "no-store" },
                           );
                           const listJson: ListResponse = await listRes.json();
                           setList(listJson);
