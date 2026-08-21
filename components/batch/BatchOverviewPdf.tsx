@@ -12,6 +12,10 @@ export type BatchOverviewPdfGroup = {
   zone?: string;
   count: number;
   students: string[];
+  // Present when this row folds together multiple batches sharing one class
+  // (e.g. DS + DA both attending one Excel session) — batchNo is already the
+  // joined "DS-3 + DA-5" string; this lists those same names for the label.
+  combinedWith?: string[];
 };
 
 export type BatchOverviewPdfProps = {
@@ -126,6 +130,7 @@ const styles = StyleSheet.create({
   cellText: { fontSize: 7.8, textAlign: "center", color: COLORS.titleText },
   cellTextLeft: { fontSize: 7.8, textAlign: "left", color: COLORS.titleText },
   cellTextBold: { fontSize: 7.8, textAlign: "center", fontFamily: "Helvetica-Bold", color: COLORS.titleText },
+  combinedTag: { fontSize: 6, textAlign: "center", color: "#A21CAF", marginTop: 1.5 },
   zoneBadge: { borderRadius: 6, paddingVertical: 2, paddingHorizontal: 5, alignSelf: "center" },
   zoneBadgeText: { fontSize: 6.3, fontFamily: "Helvetica-Bold", textTransform: "uppercase" },
   studentsCol: { justifyContent: "center" },
@@ -220,6 +225,9 @@ export function BatchOverviewDocument({
                 </View>
                 <View style={[styles.cell, { width: COL_W.topic }]}>
                   <Text style={styles.cellText}>{g.topic}</Text>
+                  {g.combinedWith && g.combinedWith.length > 1 ? (
+                    <Text style={styles.combinedTag}>Combined class</Text>
+                  ) : null}
                 </View>
                 <View style={[styles.cell, { width: COL_W.classRoom }]}>
                   <Text style={styles.cellText}>{g.classRoom}</Text>
