@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { toast } from "react-toastify";
 import { API_LMS_URL } from "@/lib/api";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import {
-  ArrowLeft,
+  Reply,
+  FilePlus,
   Plus,
   Search,
   Users,
@@ -19,6 +20,8 @@ import {
   Table as TableIcon,
   UserX,
   UserCheck,
+  MapPin,
+  ChevronDown,
   X,
 } from "lucide-react";
 
@@ -70,6 +73,67 @@ const courseTitle = (course: Batch["course"]) => {
   if (typeof course === "string") return "";
   return course.title || "";
 };
+
+/** Toolbar action: shows an icon + label from `lg` up; below that, icon-only with a
+ * hover tooltip (native `title` everywhere, plus a styled one while the label is
+ * hidden) so the action stays reachable and discoverable at narrow widths. */
+function HeaderAction({
+  icon: Icon,
+  label,
+  href,
+  onClick,
+  primary,
+  spinning,
+  showLabelFrom = "lg",
+  iconOnly = false,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+  href?: string;
+  onClick?: () => void;
+  primary?: boolean;
+  spinning?: boolean;
+  showLabelFrom?: "sm" | "lg";
+  iconOnly?: boolean;
+}) {
+  const labelClass = showLabelFrom === "sm" ? "hidden sm:inline" : "hidden lg:inline";
+  const tooltipHiddenClass = showLabelFrom === "sm" ? "sm:hidden" : "lg:hidden";
+  const className = `group/tip relative inline-flex shrink-0 items-center gap-2 rounded-xl px-2.5 py-2.5 text-sm font-semibold transition ${
+    iconOnly ? "" : showLabelFrom === "sm" ? "sm:px-4" : "lg:px-4"
+  } ${
+    primary
+      ? "border border-white/20 bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/25 hover:shadow-xl hover:shadow-cyan-500/40 active:scale-[0.98]"
+      : "border border-[var(--panel-border)] bg-[var(--panel-card)] text-[var(--panel-text-secondary)] hover:text-[var(--panel-text-primary)]"
+  }`;
+
+  const content = (
+    <>
+      <Icon className={`h-4 w-4 shrink-0 ${spinning ? "animate-spin" : ""}`} />
+      {!iconOnly && <span className={labelClass}>{label}</span>}
+      <span
+        role="tooltip"
+        className={`pointer-events-none absolute left-1/2 top-full z-20 mt-2 -translate-x-1/2 whitespace-nowrap rounded-lg border border-[var(--panel-border)] bg-[var(--panel-bg-950)] px-2.5 py-1.5 text-xs font-medium text-[var(--panel-text-primary)] opacity-0 shadow-xl transition-opacity duration-150 group-hover/tip:opacity-100 ${
+          iconOnly ? "" : tooltipHiddenClass
+        }`}
+      >
+        {label}
+      </span>
+    </>
+  );
+
+  if (href) {
+    return (
+      <Link href={href} title={label} className={className}>
+        {content}
+      </Link>
+    );
+  }
+  return (
+    <button type="button" onClick={onClick} title={label} className={className}>
+      {content}
+    </button>
+  );
+}
 
 export default function BatchSectionPage() {
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -193,132 +257,94 @@ export default function BatchSectionPage() {
       </div>
 
       <div className="relative z-10 mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
-        {/* Back */}
-        <Link
-          href="/studentOverview"
-          className="group mb-8 inline-flex items-center gap-2.5 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-4 py-2.5 text-sm font-medium text-[var(--panel-text-secondary)] backdrop-blur-sm transition-all hover:border-[var(--panel-border)] hover:bg-[var(--panel-card)] hover:text-[var(--panel-text-primary)]"
-        >
-          <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
-          <span>Back to Students Overview</span>
-        </Link>
+        {/* Header: one compact bar — back, title, and actions collapse to icon+tooltip as the screen narrows */}
+        <div className="mb-8 flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] px-3 py-2.5 backdrop-blur-sm sm:gap-3 sm:px-4">
+          <HeaderAction icon={Reply} label="Back to Students Overview" href="/studentOverview" iconOnly />
 
-        {/* Header */}
-        <div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-          <div className="flex items-start gap-4">
-            <div className="relative">
-              <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 blur-xl" />
-              <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl border border-[var(--panel-border)] bg-gradient-to-br from-cyan-500/10 to-blue-500/10 backdrop-blur-sm">
-                <LayoutGrid className="h-7 w-7 text-cyan-400" />
-              </div>
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight text-[var(--panel-text-primary)] sm:text-4xl">Batches</h1>
-              <p className="mt-1 text-sm text-[var(--panel-text-muted)]">
-                {loading
-                  ? "Loading batches…"
-                  : `${batches.length} batch${batches.length === 1 ? "" : "es"} · ${totalStudents} student${
-                      totalStudents === 1 ? "" : "s"
-                    } assigned`}
-              </p>
-            </div>
+          <div className="h-6 w-px shrink-0 bg-[var(--panel-border)]" />
+
+          <div className="flex min-w-0 items-center gap-2">
+            <LayoutGrid className="hidden h-5 w-5 shrink-0 text-cyan-400 md:block" />
+            <h1 className="truncate text-xl font-bold leading-tight tracking-tight text-[var(--panel-text-primary)] sm:text-2xl">
+              Batches
+            </h1>
+            <span className="hidden truncate text-xs text-[var(--panel-text-muted)] md:inline">
+              {loading
+                ? "· Loading…"
+                : `· ${batches.length} batch${batches.length === 1 ? "" : "es"} · ${totalStudents} student${
+                    totalStudents === 1 ? "" : "s"
+                  } assigned`}
+            </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
             <ThemeToggle />
-            <button
+            <HeaderAction
+              icon={RefreshCw}
+              label="Refresh"
               onClick={() => {
                 loadBatches();
                 loadActiveStudents();
               }}
-              title="Refresh"
-              className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] text-[var(--panel-text-secondary)] transition hover:bg-[var(--panel-card)] hover:text-[var(--panel-text-primary)]"
-            >
-              <RefreshCw className={`h-4.5 w-4.5 ${loading ? "animate-spin" : ""}`} />
-            </button>
-            <Link
-              href="/batch-section/overview"
-              className="inline-flex items-center gap-2 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-4 py-2.5 text-sm font-semibold text-[var(--panel-text-secondary)] transition hover:text-[var(--panel-text-primary)]"
-            >
-              <TableIcon className="h-4 w-4" />
-              Overview
-            </Link>
-            <Link
-              href="/batch-section/create-batch"
-              className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-gradient-to-r from-cyan-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-cyan-500/25 transition hover:shadow-xl hover:shadow-cyan-500/40 active:scale-[0.98]"
-            >
-              <Plus className="h-4 w-4" />
-              Create Batch
-            </Link>
+              spinning={loading}
+              iconOnly
+            />
+            <div className="mx-0.5 hidden h-6 w-px bg-[var(--panel-border)] md:block" />
+            <HeaderAction icon={MapPin} label="Zone Update" href="/batch-section/students-zone-update" />
+            <HeaderAction icon={TableIcon} label="Overview" href="/batch-section/overview" />
+            <div className="mx-0.5 h-6 w-px bg-[var(--panel-border)]" />
+            <HeaderAction icon={FilePlus} label="Create Batch" href="/batch-section/create-batch" iconOnly primary />
           </div>
         </div>
 
-        {/* Unassigned students KPI */}
-        <button
-          onClick={() => unassigned.count > 0 && setShowUnassigned(true)}
-          disabled={loadingUnassigned || loading || unassigned.count === 0}
-          className={`group mb-6 flex w-full items-center gap-4 rounded-2xl border px-5 py-4 text-left transition ${
-            unassigned.count > 0
-              ? "border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/15"
-              : "cursor-default border-emerald-500/30 bg-emerald-500/10"
-          }`}
-        >
-          <div
-            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${
-              unassigned.count > 0
-                ? "bg-amber-500/15 text-amber-600"
-                : "bg-emerald-500/15 text-emerald-600"
-            }`}
-          >
-            {unassigned.count > 0 ? <UserX className="h-6 w-6" /> : <UserCheck className="h-6 w-6" />}
-          </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-baseline gap-x-2">
-              <span className="text-2xl font-bold text-[var(--panel-text-primary)]">
-                {loadingUnassigned || loading ? "…" : unassigned.count}
-              </span>
-              <span className="text-sm font-medium text-[var(--panel-text-secondary)]">
-                {unassigned.count === 1 ? "student not in any batch" : "students not in any batch"}
-              </span>
-            </div>
-            <p className="text-xs text-[var(--panel-text-muted)]">
-              {loadingUnassigned || loading
-                ? "Loading…"
-                : `of ${unassigned.total} active student${unassigned.total === 1 ? "" : "s"} · ${unassigned.assigned} already in a batch`}
-            </p>
-          </div>
-          {unassigned.count > 0 && (
-            <span className="ml-auto hidden shrink-0 items-center gap-1 text-sm font-semibold text-amber-600 transition group-hover:gap-2 sm:flex">
-              View list <ChevronRight className="h-4 w-4" />
-            </span>
-          )}
-        </button>
-
-        {/* Filters */}
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="relative flex-1">
+        {/* Search + status filter + unassigned-students indicator, all in one row */}
+        <div className="mb-6 flex flex-wrap items-center gap-3">
+          <div className="relative w-full sm:w-64">
             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--panel-text-faint)]" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search batches by name or course…"
-              className="w-full rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] py-3 pl-10 pr-3 text-sm text-[var(--panel-text-primary)] placeholder:text-[var(--panel-text-faint)] outline-none focus:border-cyan-500/50"
+              placeholder="Search batches…"
+              className="w-full rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] py-2.5 pl-10 pr-3 text-sm text-[var(--panel-text-primary)] placeholder:text-[var(--panel-text-faint)] outline-none focus:border-cyan-500/50"
             />
           </div>
-          <div className="flex items-center gap-1.5 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] p-1">
-            {STATUS_FILTERS.map((s) => (
-              <button
-                key={s}
-                onClick={() => setStatus(s)}
-                className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
-                  status === s
-                    ? "bg-[var(--panel-card)] text-[var(--panel-text-primary)]"
-                    : "text-[var(--panel-text-muted)] hover:text-[var(--panel-text-secondary)]"
-                }`}
-              >
-                {s}
-              </button>
-            ))}
+
+          <div className="relative shrink-0">
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value as StatusFilter)}
+              className="appearance-none rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] py-2.5 pl-3.5 pr-9 text-sm font-semibold text-[var(--panel-text-primary)] outline-none focus:border-cyan-500/50"
+            >
+              {STATUS_FILTERS.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--panel-text-faint)]" />
           </div>
+
+          <button
+            onClick={() => unassigned.count > 0 && setShowUnassigned(true)}
+            disabled={loadingUnassigned || loading || unassigned.count === 0}
+            title={
+              loadingUnassigned || loading
+                ? "Loading…"
+                : `${unassigned.count} of ${unassigned.total} active students not in any batch · ${unassigned.assigned} already in a batch`
+            }
+            className={`group/tip inline-flex shrink-0 items-center gap-2 rounded-xl border px-3.5 py-2.5 text-sm font-semibold transition sm:ml-auto ${
+              unassigned.count > 0
+                ? "border-amber-500/30 bg-amber-500/10 text-amber-600 hover:bg-amber-500/15"
+                : "cursor-default border-emerald-500/30 bg-emerald-500/10 text-emerald-600"
+            }`}
+          >
+            {unassigned.count > 0 ? <UserX className="h-4 w-4 shrink-0" /> : <UserCheck className="h-4 w-4 shrink-0" />}
+            <span>{loadingUnassigned || loading ? "…" : unassigned.count}</span>
+            <span className="hidden sm:inline">
+              {unassigned.count === 1 ? "student not in a batch" : "students not in any batch"}
+            </span>
+            {unassigned.count > 0 && <ChevronRight className="h-4 w-4 shrink-0 transition group-hover/tip:translate-x-0.5" />}
+          </button>
         </div>
 
         {/* Content */}
