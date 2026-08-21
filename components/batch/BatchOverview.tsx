@@ -6,7 +6,7 @@ import { toast } from "react-toastify";
 import { pdf } from "@react-pdf/renderer";
 import { API_LMS_URL } from "@/lib/api";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { ArrowLeft, RefreshCw, Search, Table as TableIcon, Download } from "lucide-react";
+import { ArrowLeft, RefreshCw, Search, Table as TableIcon, Download, Link2 } from "lucide-react";
 import { BatchOverviewDocument } from "@/components/batch/BatchOverviewPdf";
 
 type Course = { _id: string; title?: string };
@@ -19,8 +19,20 @@ type Student = {
   isPlaced?: boolean;
 };
 
-// trainerName is per-class — blank means "use the batch-level trainer"
-type Session = { _id?: string; topic?: string; time?: string; trainerName?: string };
+type LinkedBatchRef = { _id: string; batch?: string };
+
+// trainerName and classRoom are per-class — blank means "use the batch-level value"
+// linkedBatchIds marks this exact class as shared with other batches (e.g.
+// DS + DA both attending one Excel session together), picked from existing
+// batches on the timetable editor.
+type Session = {
+  _id?: string;
+  topic?: string;
+  time?: string;
+  trainerName?: string;
+  classRoom?: string;
+  linkedBatchIds?: LinkedBatchRef[];
+};
 
 type Batch = {
   _id: string;
@@ -106,6 +118,15 @@ const zoneBadge = (zone?: string) => {
   return "bg-slate-500/15 text-slate-700 ring-1 ring-slate-500/30";
 };
 
+// Deterministic color per commonClassId tag, so every row belonging to the
+// same combined class gets a matching left-border accent.
+const hashHue = (s: string) => {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h % 360;
+};
+const combinedBorderColor = (tag?: string) => (tag ? `hsl(${hashHue(tag)}, 70%, 55%)` : undefined);
+
 const courseTitle = (course: Batch["course"]) => {
   if (!course || typeof course === "string") return "";
   return course.title || "";
@@ -142,6 +163,12 @@ type Group = {
   zone?: string;
   count: number;
   students: string[];
+  // Present pre-merge only: other batch ids this exact session is shared
+  // with, used to fold matching rows together into one combined row below.
+  linkedBatchIds?: string[];
+  // Present post-merge only: batch numbers folded into this row (besides
+  // its own), so the UI can flag it as a combined class.
+  combinedWith?: string[];
 };
 
 export default function BatchOverview() {
@@ -237,8 +264,10 @@ export default function BatchOverview() {
             key: `${b._id}-s${si}`,
             time: s.time?.trim() ? s.time : b.classTime?.trim() ? b.classTime : fmtTime(b.createdAt),
             topic: topicLabel(s.topic),
-            // Each class can have its own trainer; fall back to the batch trainer
+            // Each class can have its own trainer/venue; fall back to the batch-level value
             trainer: s.trainerName?.trim() ? s.trainerName.trim() : shared.trainer,
+            classRoom: s.classRoom?.trim() ? s.classRoom.trim() : shared.classRoom,
+            linkedBatchIds: s.linkedBatchIds?.length ? s.linkedBatchIds.map((lb) => lb._id) : undefined,
           });
         });
       } else {
@@ -252,15 +281,68 @@ export default function BatchOverview() {
       }
     }
 
+    // Fold combined-class rows together: if batch A's session links to batch
+    // B (and they're the same topic), show them as ONE row with both batch
+    // numbers and both rosters, instead of two separate rows a viewer has to
+    // notice are related. Union-find over row indices, connected by that link.
+    const parent = out.map((_, i) => i);
+    const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+    const union = (a: number, b: number) => {
+      const ra = find(a);
+      const rb = find(b);
+      if (ra !== rb) parent[rb] = ra;
+    };
+    out.forEach((g, i) => {
+      if (!g.linkedBatchIds?.length) return;
+      out.forEach((h, j) => {
+        if (i === j || g.topic !== h.topic) return;
+        if (g.linkedBatchIds!.includes(h.batchId)) union(i, j);
+      });
+    });
+
+    const components = new Map<number, number[]>();
+    out.forEach((_, i) => {
+      const root = find(i);
+      if (!components.has(root)) components.set(root, []);
+      components.get(root)!.push(i);
+    });
+
+    const merged: Group[] = [];
+    for (const idxs of components.values()) {
+      if (idxs.length === 1) {
+        merged.push(out[idxs[0]]);
+        continue;
+      }
+      const members = idxs.map((i) => out[i]).sort((a, b) => a.batchNo.localeCompare(b.batchNo));
+      const zones = new Set(members.map((m) => m.zone).filter(Boolean));
+      const multiBatch = members.length > 1;
+      merged.push({
+        key: members.map((m) => m.key).join("+"),
+        batchId: members[0].batchId,
+        time: members[0].time,
+        date: members[0].date,
+        trainer: Array.from(new Set(members.map((m) => m.trainer))).join(" / "),
+        batchNo: members.map((m) => m.batchNo).join(" + "),
+        topic: members[0].topic,
+        classRoom: Array.from(new Set(members.map((m) => m.classRoom))).join(" / "),
+        zone: zones.size === 1 ? members[0].zone : undefined,
+        count: members.reduce((n, m) => n + m.count, 0),
+        students: members.flatMap((m) =>
+          m.students.map((name) => (multiBatch ? `${name} (${m.batchNo})` : name))
+        ),
+        combinedWith: members.map((m) => m.batchNo),
+      });
+    }
+
     // Blue batches first, then yellow, then green; within each zone, earliest
     // starting class first.
-    out.sort((a, b) => {
+    merged.sort((a, b) => {
       const byZone = zoneRank(a.zone) - zoneRank(b.zone);
       if (byZone !== 0) return byZone;
       return parseTimeMinutes(a.time) - parseTimeMinutes(b.time);
     });
 
-    return out;
+    return merged;
   }, [batches, search, zone, placement]);
 
   const rowCount = useMemo(
@@ -522,7 +604,15 @@ export default function BatchOverview() {
                       <tr key={`${g.key}-${idx}`} className={tint}>
                         {idx === 0 && (
                           <>
-                            <td rowSpan={span} className={`${cell} whitespace-nowrap text-center font-medium text-[var(--panel-text-secondary)]`}>
+                            <td
+                              rowSpan={span}
+                              style={
+                                g.combinedWith && g.combinedWith.length > 1
+                                  ? { borderLeft: `4px solid ${combinedBorderColor(g.key)}` }
+                                  : undefined
+                              }
+                              className={`${cell} whitespace-nowrap text-center font-medium text-[var(--panel-text-secondary)]`}
+                            >
                               {g.time}
                             </td>
                             <td rowSpan={span} className={`${cell} whitespace-nowrap text-center text-[var(--panel-text-secondary)]`}>
@@ -535,7 +625,18 @@ export default function BatchOverview() {
                               {g.batchNo}
                             </td>
                             <td rowSpan={span} className={`${cell} text-center text-[var(--panel-text-secondary)]`}>
-                              {g.topic}
+                              <div className="flex flex-col items-center gap-1">
+                                <span>{g.topic}</span>
+                                {g.combinedWith && g.combinedWith.length > 1 && (
+                                  <span
+                                    title={`Combined class — one session shared by batches ${g.combinedWith.join(", ")}`}
+                                    className="inline-flex items-center gap-1 rounded-full bg-fuchsia-500/15 px-2 py-0.5 text-[10px] font-semibold text-fuchsia-700 ring-1 ring-fuchsia-500/30"
+                                  >
+                                    <Link2 className="h-3 w-3" />
+                                    Combined class
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td rowSpan={span} className={`${cell} text-center text-[var(--panel-text-secondary)]`}>
                               {g.classRoom}

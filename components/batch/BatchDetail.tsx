@@ -24,6 +24,8 @@ import {
   Calendar,
   Clock,
   Plus,
+  Link2,
+  Sparkles,
 } from "lucide-react";
 
 type Course = { _id: string; title?: string };
@@ -50,8 +52,19 @@ type Batch = {
   students?: Student[];
 };
 
-// trainerName is per-class — blank means "use the batch-level trainer"
-type Session = { _id?: string; topic?: string; time?: string; trainerName?: string };
+// A batch this class session is shared with (e.g. DS + DA both attending one
+// Excel session together) — picked from existing batches, not typed in.
+type LinkedBatchRef = { _id: string; batch?: string };
+
+// trainerName and classRoom are per-class — blank means "use the batch-level value"
+type Session = {
+  _id?: string;
+  topic?: string;
+  time?: string;
+  trainerName?: string;
+  classRoom?: string;
+  linkedBatchIds?: LinkedBatchRef[];
+};
 
 const ALLOWED_STATUS = ["Upcoming", "Active", "Completed"] as const;
 // Keep in sync with the `topic` enum in lms-backend/models/Batches.js
@@ -304,6 +317,15 @@ export default function BatchDetail({ batchId }: { batchId: string }) {
                             {s.trainerName || batch.trainerName ? (
                               <span className="text-teal-700/70">· {s.trainerName || batch.trainerName}</span>
                             ) : null}
+                            {s.classRoom || batch.classRoom ? (
+                              <span className="text-teal-700/70">· {s.classRoom || batch.classRoom}</span>
+                            ) : null}
+                            {s.linkedBatchIds && s.linkedBatchIds.length > 0 ? (
+                              <span className="ml-0.5 inline-flex items-center gap-1 rounded-full bg-fuchsia-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-fuchsia-700 ring-1 ring-fuchsia-500/30">
+                                <Link2 className="h-3 w-3" />
+                                Combined with {s.linkedBatchIds.map((b) => b.batch || "batch").join(", ")}
+                              </span>
+                            ) : null}
                           </span>
                         ))}
                       </div>
@@ -548,6 +570,7 @@ export default function BatchDetail({ batchId }: { batchId: string }) {
       {modal === "sessions" && batch && (
         <SessionsModal
           batchId={batchId}
+          classRoom={batch.classRoom}
           current={batch.sessions || []}
           onClose={() => setModal(null)}
           onDone={(sessions) => {
@@ -1238,30 +1261,244 @@ function DetailsModal({
   );
 }
 
+/* ---------------- Combine-with-batch picker ---------------- */
+
+function CombineBatchPicker({
+  ownBatchId,
+  value,
+  onChange,
+}: {
+  ownBatchId: string;
+  value: LinkedBatchRef[];
+  onChange: (next: LinkedBatchRef[]) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<LinkedBatchRef[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) {
+      setResults([]);
+      return;
+    }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        setSearching(true);
+        const res = await fetch(
+          `${API_LMS_URL}/api/batches/get-batches?search=${encodeURIComponent(q)}&limit=8`,
+          { headers: { "Content-Type": "application/json" } }
+        );
+        const json = await res.json();
+        if (cancelled) return;
+        const list: LinkedBatchRef[] = Array.isArray(json?.data)
+          ? json.data
+              .filter((b: any) => b._id !== ownBatchId && !value.some((v) => v._id === b._id))
+              .map((b: any) => ({ _id: b._id, batch: b.batch }))
+          : [];
+        setResults(list);
+      } catch {
+        if (!cancelled) setResults([]);
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [query, ownBatchId, value]);
+
+  const add = (b: LinkedBatchRef) => {
+    onChange([...value, b]);
+    setQuery("");
+    setResults([]);
+    setOpen(false);
+  };
+  const remove = (id: string) => onChange(value.filter((v) => v._id !== id));
+
+  return (
+    <div className="flex-1">
+      <div className="flex flex-wrap items-center gap-1.5">
+        {value.map((b) => (
+          <span
+            key={b._id}
+            className="inline-flex items-center gap-1 rounded-full bg-fuchsia-500/15 px-2 py-1 text-xs font-medium text-fuchsia-700 ring-1 ring-fuchsia-500/30"
+          >
+            {b.batch || "Batch"}
+            <button
+              onClick={() => remove(b._id)}
+              title="Remove from combined class"
+              className="text-fuchsia-700/70 hover:text-fuchsia-900"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
+        <div className="relative min-w-[180px] flex-1">
+          <input
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setOpen(true);
+            }}
+            onFocus={() => setOpen(true)}
+            onBlur={() => setTimeout(() => setOpen(false), 150)}
+            placeholder="+ Combine with another batch…"
+            className="w-full rounded-lg border border-[var(--panel-border)] bg-[var(--panel-card)] px-2.5 py-1.5 text-xs text-[var(--panel-text-primary)] outline-none focus:border-fuchsia-500/50"
+          />
+          {open && query.trim() && (
+            <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-40 overflow-y-auto rounded-xl border border-[var(--panel-border)] bg-[var(--panel-bg-900)] shadow-xl">
+              {searching ? (
+                <div className="px-3 py-2 text-xs text-[var(--panel-text-muted)]">Searching…</div>
+              ) : results.length === 0 ? (
+                <div className="px-3 py-2 text-xs text-[var(--panel-text-faint)]">No matching batches</div>
+              ) : (
+                results.map((b) => (
+                  <button
+                    key={b._id}
+                    onClick={() => add(b)}
+                    className="block w-full px-3 py-2 text-left text-xs text-[var(--panel-text-primary)] hover:bg-[var(--panel-card)]"
+                  >
+                    {b.batch || "Untitled batch"}
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Auto-suggested combined classes ---------------- */
+
+type SuggestedMatch = {
+  _id: string;
+  batch?: string;
+  course?: { title?: string } | null;
+  matchedOn: string[];
+};
+
+function CombinedClassSuggestions({
+  ownBatchId,
+  classRoom,
+  topic,
+  time,
+  trainerName,
+  linked,
+  onAdd,
+}: {
+  ownBatchId: string;
+  classRoom?: string;
+  topic?: string;
+  time?: string;
+  trainerName?: string;
+  linked: LinkedBatchRef[];
+  onAdd: (b: LinkedBatchRef) => void;
+}) {
+  const [suggestions, setSuggestions] = useState<SuggestedMatch[]>([]);
+
+  useEffect(() => {
+    const t = (time || "").trim();
+    if (!t) {
+      setSuggestions([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({
+          excludeBatchId: ownBatchId,
+          time: t,
+          topic: topic || "",
+          trainerName: trainerName || "",
+          classRoom: classRoom || "",
+        });
+        const res = await fetch(`${API_LMS_URL}/api/batches/suggest-links?${params.toString()}`, {
+          headers: { "Content-Type": "application/json" },
+        });
+        const json = await res.json();
+        if (cancelled) return;
+        const linkedIds = new Set(linked.map((l) => l._id));
+        setSuggestions(Array.isArray(json?.data) ? json.data.filter((s: SuggestedMatch) => !linkedIds.has(s._id)) : []);
+      } catch {
+        if (!cancelled) setSuggestions([]);
+      }
+    }, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [ownBatchId, classRoom, topic, time, trainerName, linked]);
+
+  if (suggestions.length === 0) return null;
+
+  return (
+    <div className="space-y-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5">
+      <p className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-700">
+        <Sparkles className="h-3.5 w-3.5" />
+        Same time — this might be the same class as:
+      </p>
+      {suggestions.map((s) => (
+        <div
+          key={s._id}
+          className="flex items-center justify-between gap-2 rounded-lg bg-[var(--panel-card)] px-2.5 py-1.5 text-xs"
+        >
+          <span className="text-[var(--panel-text-secondary)]">
+            <span className="font-semibold text-[var(--panel-text-primary)]">{s.batch || "Batch"}</span>
+            {s.course?.title ? ` · ${s.course.title}` : ""} · matches on {s.matchedOn.join(", ")}
+          </span>
+          <button
+            onClick={() => onAdd({ _id: s._id, batch: s.batch })}
+            className="shrink-0 rounded-lg border border-amber-500/40 bg-amber-500/15 px-2 py-1 text-[10px] font-semibold text-amber-700 transition hover:bg-amber-500/25"
+          >
+            + Combine
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ---------------- Sessions modal (daily timetable) ---------------- */
 
 function SessionsModal({
   batchId,
+  classRoom,
   current,
   onClose,
   onDone,
 }: {
   batchId: string;
+  classRoom?: string;
   current: Session[];
   onClose: () => void;
   onDone: (sessions: Session[]) => void;
 }) {
   const [rows, setRows] = useState<Session[]>(
     current.length
-      ? current.map((s) => ({ topic: s.topic || "", time: s.time || "", trainerName: s.trainerName || "" }))
-      : [{ topic: "", time: "", trainerName: "" }]
+      ? current.map((s) => ({
+          topic: s.topic || "",
+          time: s.time || "",
+          trainerName: s.trainerName || "",
+          classRoom: s.classRoom || "",
+          linkedBatchIds: s.linkedBatchIds || [],
+        }))
+      : [{ topic: "", time: "", trainerName: "", classRoom: "", linkedBatchIds: [] }]
   );
   const [saving, setSaving] = useState(false);
 
-  const addRow = () => setRows((prev) => [...prev, { topic: "", time: "", trainerName: "" }]);
+  const addRow = () =>
+    setRows((prev) => [...prev, { topic: "", time: "", trainerName: "", classRoom: "", linkedBatchIds: [] }]);
   const removeRow = (i: number) => setRows((prev) => prev.filter((_, idx) => idx !== i));
-  const updateRow = (i: number, field: "topic" | "time" | "trainerName", value: string) =>
+  const updateRow = (i: number, field: "topic" | "time" | "trainerName" | "classRoom", value: string) =>
     setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, [field]: value } : r)));
+  const updateLinked = (i: number, next: LinkedBatchRef[]) =>
+    setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, linkedBatchIds: next } : r)));
 
   const save = async () => {
     try {
@@ -1271,6 +1508,8 @@ function SessionsModal({
           topic: (r.topic || "").trim(),
           time: (r.time || "").trim(),
           trainerName: (r.trainerName || "").trim(),
+          classRoom: (r.classRoom || "").trim(),
+          linkedBatchIds: (r.linkedBatchIds || []).map((b) => b._id),
         }))
         .filter((r) => r.topic || r.time || r.trainerName);
       const res = await fetch(
@@ -1284,7 +1523,10 @@ function SessionsModal({
       const json = await res.json();
       if (!res.ok) throw new Error(json?.message || "Failed to update timetable");
       toast.success("Timetable updated");
-      onDone(Array.isArray(json?.data?.sessions) ? json.data.sessions : sessions);
+      const fallback = rows.filter(
+        (r) => (r.topic || "").trim() || (r.time || "").trim() || (r.trainerName || "").trim()
+      );
+      onDone(Array.isArray(json?.data?.sessions) ? json.data.sessions : fallback);
     } catch (e: any) {
       toast.error(e?.message || "Failed to update timetable");
     } finally {
@@ -1303,43 +1545,74 @@ function SessionsModal({
         {rows.map((r, i) => (
           <div
             key={i}
-            className="flex flex-col gap-2 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] p-3 sm:flex-row sm:items-center"
+            className="flex flex-col gap-2 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] p-3"
           >
-            <select
-              value={r.topic}
-              onChange={(e) => updateRow(i, "topic", e.target.value)}
-              className="flex-1 appearance-none rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-3 py-2.5 text-sm text-[var(--panel-text-primary)] outline-none focus:border-teal-500/50"
-            >
-              <option value="">Select topic</option>
-              {TOPIC_OPTIONS.map((t) => (
-                <option key={t} value={t}>
-                  {topicLabel(t)}
-                </option>
-              ))}
-            </select>
-            <input
-              value={r.time}
-              onChange={(e) => updateRow(i, "time", e.target.value)}
-              placeholder="e.g. 10:30 AM - 12:00 PM"
-              className="flex-1 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-3 py-2.5 text-sm text-[var(--panel-text-primary)] outline-none focus:border-teal-500/50"
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <select
+                value={r.topic}
+                onChange={(e) => updateRow(i, "topic", e.target.value)}
+                className="flex-1 appearance-none rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-3 py-2.5 text-sm text-[var(--panel-text-primary)] outline-none focus:border-teal-500/50"
+              >
+                <option value="">Select topic</option>
+                {TOPIC_OPTIONS.map((t) => (
+                  <option key={t} value={t}>
+                    {topicLabel(t)}
+                  </option>
+                ))}
+              </select>
+              <input
+                value={r.time}
+                onChange={(e) => updateRow(i, "time", e.target.value)}
+                placeholder="e.g. 10:30 AM - 12:00 PM"
+                className="flex-1 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-3 py-2.5 text-sm text-[var(--panel-text-primary)] outline-none focus:border-teal-500/50"
+              />
+              <input
+                value={r.trainerName}
+                onChange={(e) => updateRow(i, "trainerName", e.target.value)}
+                placeholder="Trainer for this class"
+                className="flex-1 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-3 py-2.5 text-sm text-[var(--panel-text-primary)] outline-none focus:border-teal-500/50"
+              />
+              <button
+                onClick={() => removeRow(i)}
+                title="Remove class"
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center self-end rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-700 transition hover:bg-rose-500/20 sm:self-auto"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <MapPin className="h-3.5 w-3.5 shrink-0 text-rose-400" />
+              <input
+                value={r.classRoom}
+                onChange={(e) => updateRow(i, "classRoom", e.target.value)}
+                placeholder={`Venue for this class (optional) — defaults to ${classRoom || "the batch venue"}`}
+                className="w-full rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-3 py-2 text-xs text-[var(--panel-text-primary)] outline-none focus:border-rose-500/50"
+              />
+            </div>
+            <div className="flex items-start gap-2">
+              <Link2 className="mt-2 h-3.5 w-3.5 shrink-0 text-fuchsia-400" />
+              <CombineBatchPicker
+                ownBatchId={batchId}
+                value={r.linkedBatchIds || []}
+                onChange={(next) => updateLinked(i, next)}
+              />
+            </div>
+            <CombinedClassSuggestions
+              ownBatchId={batchId}
+              classRoom={r.classRoom || classRoom}
+              topic={r.topic}
+              time={r.time}
+              trainerName={r.trainerName}
+              linked={r.linkedBatchIds || []}
+              onAdd={(b) => updateLinked(i, [...(r.linkedBatchIds || []), b])}
             />
-            <input
-              value={r.trainerName}
-              onChange={(e) => updateRow(i, "trainerName", e.target.value)}
-              placeholder="Trainer for this class"
-              className="flex-1 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-3 py-2.5 text-sm text-[var(--panel-text-primary)] outline-none focus:border-teal-500/50"
-            />
-            <button
-              onClick={() => removeRow(i)}
-              title="Remove class"
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center self-end rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-700 transition hover:bg-rose-500/20 sm:self-auto"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
           </div>
         ))}
         <p className="text-xs text-[var(--panel-text-faint)]">
-          Leave the trainer blank to use the batch trainer.
+          Leave the trainer blank to use the batch trainer. If this class runs together with another
+          batch (e.g. one Excel session both DS and DA attend), pick that batch under "Combine with" —
+          or fill in the time and we'll suggest it automatically if another batch has a class at the
+          same time with a matching topic, trainer, or venue.
         </p>
 
         <button
