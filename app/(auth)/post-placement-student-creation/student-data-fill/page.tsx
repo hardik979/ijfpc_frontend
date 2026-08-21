@@ -345,7 +345,7 @@ export default function NewPostPlacementOfferPage() {
 
     // Basic client-side checks to avoid empty requireds
     if (!selectedStudent) {
-      toast.error("Select an eligible Green-zone student");
+      toast.error("Select a student with a valid purchased course");
       return;
     }
     if (!form.totalPostPlacementFee && !form.packageLPA) {
@@ -462,6 +462,7 @@ export default function NewPostPlacementOfferPage() {
   return (
     <div
       ref={pageRef}
+      data-theme="dark"
       className={styles.page}
     >
       <div className={styles.shell}>
@@ -474,6 +475,7 @@ export default function NewPostPlacementOfferPage() {
             <ArrowLeft size={16} /> Back
           </button>
           <div>
+            <p className={styles.eyebrow}>Placement operations / New record</p>
             <h1 className={`${styles.title} text-2xl font-bold sm:text-3xl`}>
               New <span className={styles.titleAccent}>Post-Placement</span> Record
             </h1>
@@ -518,7 +520,7 @@ export default function NewPostPlacementOfferPage() {
                             : ""}
                         </p>
                         <p className="mt-1 text-xs font-medium text-emerald-700">
-                          Green zone · {selectedStudent.courseNames.join(", ")}
+                          {selectedStudent.zone ? `${selectedStudent.zone} zone \u00b7 ` : ""}{selectedStudent.courseNames.join(", ")}
                         </p>
                       </div>
                     </div>
@@ -535,7 +537,7 @@ export default function NewPostPlacementOfferPage() {
                   <>
                     <div className="relative">
                       <Search
-                        className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-purple-500"
+                        className={styles.searchIcon}
                         size={18}
                         aria-hidden="true"
                       />
@@ -558,7 +560,7 @@ export default function NewPostPlacementOfferPage() {
                           setStudentPickerOpen(true);
                         }}
                         onKeyDown={handleStudentSearchKeyDown}
-                        className="min-h-12 w-full rounded-xl border-2 border-purple-200 bg-white/80 py-3 pl-11 pr-4 text-base text-slate-900 placeholder-slate-500 transition-colors duration-200 focus:border-purple-500 focus:outline-none focus:ring-4 focus:ring-purple-100"
+                        className={styles.searchInput}
                         placeholder="Search by student name, email, or enrollment ID"
                         autoComplete="off"
                       />
@@ -568,7 +570,7 @@ export default function NewPostPlacementOfferPage() {
                       <div
                         id="eligible-student-options"
                         role="listbox"
-                        aria-label="Eligible Green-zone students"
+                        aria-label="Students with a valid purchased course"
                         className={`eligible-student-menu ${styles.candidateMenu} absolute z-30 mt-2 max-h-80 w-full overflow-y-auto rounded-2xl p-2 [will-change:transform,opacity]`}
                       >
                         {candidateLoading ? (
@@ -591,7 +593,7 @@ export default function NewPostPlacementOfferPage() {
                               No eligible students found
                             </p>
                             <p className="mt-1 text-xs text-slate-500">
-                              Only Green-zone users with a valid purchased course appear here.
+                              Only students with a valid purchased course appear here.
                             </p>
                           </div>
                         ) : (
@@ -610,17 +612,17 @@ export default function NewPostPlacementOfferPage() {
                                   : ""
                               }`}
                             >
-                              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+                              <span className={styles.candidateAvatar}>
                                 <UserRound size={18} aria-hidden="true" />
                               </span>
                               <span className="min-w-0 flex-1">
-                                <span className="block truncate text-sm font-semibold text-slate-900">
+                                <span className={styles.candidateName}>
                                   {student.fullName || "Unnamed student"}
                                 </span>
-                                <span className="mt-0.5 block truncate text-xs text-slate-500">
+                                <span className={styles.candidateEmail}>
                                   {student.email || "Email unavailable"}
                                 </span>
-                                <span className="mt-1 block truncate text-xs font-medium text-emerald-700">
+                                <span className={styles.candidateCourse}>
                                   {student.courseNames.join(", ")}
                                 </span>
                               </span>
@@ -629,8 +631,8 @@ export default function NewPostPlacementOfferPage() {
                         )}
                       </div>
                     ) : null}
-                    <p className="mt-2 text-xs leading-5 text-slate-500">
-                      Results are restricted to students in the Green zone with at least one valid purchased course.
+                    <p className={styles.helperText}>
+                      Results are restricted to students with at least one valid purchased course.
                     </p>
                   </>
                 )}
