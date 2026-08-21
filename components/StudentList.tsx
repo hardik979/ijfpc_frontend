@@ -46,6 +46,7 @@ interface Student {
   fullName: string;
   email: string;
   batchHistory?: BatchHistoryItem[];
+  batchCode?: { _id: string; batch?: string } | string | null;
   feePlan?: string;
   joinedMonth?: string;
   avatar?: string;
@@ -89,6 +90,11 @@ const zoneBadge = (zone?: string) => {
   if (z === "green")
     return "bg-emerald-500/15 text-emerald-700 ring-1 ring-emerald-500/30";
   return "bg-gray-500/15 text-gray-700 ring-1 ring-gray-500/30";
+};
+
+const studentBatchLabel = (batchCode?: Student["batchCode"]) => {
+  if (batchCode && typeof batchCode === "object") return batchCode.batch || "—";
+  return "—";
 };
 
 const shortCourseName = (title?: string) => {
@@ -1430,9 +1436,9 @@ const StudentsListPage = () => {
                         <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[var(--so-text-muted)]">
                           Student
                         </th>
-                        {/* <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[var(--so-text-muted)]">
+                        <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[var(--so-text-muted)]">
                           Batch
-                        </th> */}
+                        </th>
                         {/* <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[var(--so-text-muted)]">
                           Fee Plan
                         </th> */}
@@ -1460,7 +1466,7 @@ const StudentsListPage = () => {
                       {displayStudents.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={showPauseColumn ? 7 : 6}
+                            colSpan={showPauseColumn ? 8 : 7}
                             className="px-6 py-14 text-center text-[var(--so-text-secondary)]"
                           >
                             No students found
@@ -1468,11 +1474,7 @@ const StudentsListPage = () => {
                         </tr>
                       ) : (
                         displayStudents.map((student) => {
-                          const batchCode = student.batchHistory?.length
-                            ? student.batchHistory[
-                              student.batchHistory.length - 1
-                            ]?.to
-                            : "—";
+                          const batchLabel = studentBatchLabel(student.batchCode);
                           return (
                             <tr
                               key={student._id}
@@ -1506,9 +1508,9 @@ const StudentsListPage = () => {
                                 </div>
                               </td>
 
-                              {/* <td className="px-6 py-5 text-white">
-                                {batchCode || "—"}
-                              </td> */}
+                              <td className="px-6 py-5 text-[var(--so-text-primary)]">
+                                {batchLabel}
+                              </td>
 
                               {/* <td className="px-6 py-5">
                                 <span

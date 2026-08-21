@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
+import { pdf } from "@react-pdf/renderer";
 import { API_LMS_URL } from "@/lib/api";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ArrowLeft, RefreshCw, Search, Table as TableIcon, Download } from "lucide-react";
+import { BatchOverviewDocument } from "@/components/batch/BatchOverviewPdf";
 
 type Course = { _id: string; title?: string };
 
@@ -38,12 +40,29 @@ type Batch = {
 const ZONES = ["blue", "yellow", "green"] as const;
 type ZoneFilter = "all" | (typeof ZONES)[number];
 
+type PlacementFilter = "active" | "placed" | "all";
+
 // Display order for zone rows: blue, then yellow, then green — anything else
 // (e.g. "newly_enrolled" or no zone) sorts last.
 const ZONE_RANK: Record<string, number> = { blue: 0, yellow: 1, green: 2 };
 const zoneRank = (zone?: string) => ZONE_RANK[(zone || "").toLowerCase()] ?? 99;
 
 const topicLabel = (t?: string) => (t ? t.replace(/_/g, " ") : "—");
+
+// Class time is free text (e.g. "10:00 AM - 12:00 PM"); pull the start time
+// before any range dash and convert to minutes since midnight so blocks can
+// be sorted chronologically. Unparseable/blank times sort to the end.
+const parseTimeMinutes = (time?: string): number => {
+  const start = (time || "").trim().split(/[-–—]/)[0].trim();
+  const m = /^(\d{1,2}):(\d{2})\s*(am|pm)?/i.exec(start);
+  if (!m) return Number.POSITIVE_INFINITY;
+  let hour = parseInt(m[1], 10);
+  const minute = parseInt(m[2], 10);
+  const meridiem = m[3]?.toLowerCase();
+  if (meridiem === "pm" && hour !== 12) hour += 12;
+  if (meridiem === "am" && hour === 12) hour = 0;
+  return hour * 60 + minute;
+};
 
 const fmtDate = (iso?: string) => {
   if (!iso) return "—";
@@ -132,6 +151,9 @@ export default function BatchOverview() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [zone, setZone] = useState<ZoneFilter>("all");
+  // Placed students clutter the overview by default — only active (not yet
+  // placed) students should show unless the filter is switched.
+  const [placement, setPlacement] = useState<PlacementFilter>("active");
 
   const load = async () => {
     try {
@@ -159,7 +181,11 @@ export default function BatchOverview() {
     const out: Group[] = [];
 
     for (const b of batches) {
-      const allStudents = b.students || [];
+      const rawStudents = b.students || [];
+      const allStudents =
+        placement === "all"
+          ? rawStudents
+          : rawStudents.filter((s) => (placement === "placed" ? !!s.isPlaced : !s.isPlaced));
       const dzone = deriveZone(allStudents);
 
       if (zone !== "all" && dzone !== zone) continue;
@@ -226,12 +252,16 @@ export default function BatchOverview() {
       }
     }
 
-    // Blue batches first, then yellow, then green (stable within each zone,
-    // so batches keep their existing relative order — newest-first per zone).
-    out.sort((a, b) => zoneRank(a.zone) - zoneRank(b.zone));
+    // Blue batches first, then yellow, then green; within each zone, earliest
+    // starting class first.
+    out.sort((a, b) => {
+      const byZone = zoneRank(a.zone) - zoneRank(b.zone);
+      if (byZone !== 0) return byZone;
+      return parseTimeMinutes(a.time) - parseTimeMinutes(b.time);
+    });
 
     return out;
-  }, [batches, search, zone]);
+  }, [batches, search, zone, placement]);
 
   const rowCount = useMemo(
     () => groups.reduce((n, g) => n + Math.max(g.students.length, 1), 0),
@@ -251,6 +281,18 @@ export default function BatchOverview() {
     return counts;
   }, [batches]);
 
+  const placementCounts = useMemo(() => {
+    let active = 0;
+    let placed = 0;
+    for (const b of batches) {
+      for (const s of b.students || []) {
+        if (s.isPlaced) placed++;
+        else active++;
+      }
+    }
+    return { active, placed, total: active + placed };
+  }, [batches]);
+
   const HEADERS = [
     "Time",
     "Batch Date",
@@ -263,30 +305,47 @@ export default function BatchOverview() {
     "Student Name",
   ];
 
-  const exportCsv = () => {
-    const dataRows: (string | number)[][] = [];
-    for (const g of groups) {
-      const names = g.students.length ? g.students : ["—"];
-      for (const name of names) {
-        dataRows.push([g.time, g.date, g.trainer, g.batchNo, g.topic, g.classRoom, g.zone || "", g.count, name]);
-      }
-    }
-    if (dataRows.length === 0) {
+  const [exporting, setExporting] = useState(false);
+
+  const exportPdf = async () => {
+    if (groups.length === 0) {
       toast.info("Nothing to export for the current filter.");
       return;
     }
-    const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const lines = [HEADERS.map(esc).join(","), ...dataRows.map((r) => r.map(esc).join(","))];
-    // Prepend BOM so Excel reads UTF-8 correctly
-    const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `batch-overview-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    try {
+      setExporting(true);
+      const zoneFilterLabel = `${zone === "all" ? "All zones" : `${zone[0].toUpperCase()}${zone.slice(1)} zone`} · ${
+        placement === "all" ? "All students" : placement === "placed" ? "Placed students" : "Active students"
+      }`;
+      const generatedAt = new Date().toLocaleString(undefined, {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      const blob = await pdf(
+        <BatchOverviewDocument
+          groups={groups}
+          generatedAt={generatedAt}
+          zoneFilterLabel={zoneFilterLabel}
+          searchTerm={search.trim() || undefined}
+          zoneCounts={zoneCounts}
+        />
+      ).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `batch-overview-${new Date().toISOString().slice(0, 10)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to generate PDF");
+    } finally {
+      setExporting(false);
+    }
   };
 
   // Shared cell border for the gridline look
@@ -329,12 +388,12 @@ export default function BatchOverview() {
           </div>
           <div className="flex items-center gap-2 self-start sm:self-auto">
             <button
-              onClick={exportCsv}
-              disabled={loading || groups.length === 0}
+              onClick={exportPdf}
+              disabled={loading || exporting || groups.length === 0}
               className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Download className="h-4 w-4" />
-              Export CSV
+              {exporting ? "Generating…" : "Export PDF"}
             </button>
             <button
               onClick={load}
@@ -357,6 +416,31 @@ export default function BatchOverview() {
               placeholder="Search by student, batch, trainer, topic…"
               className="w-full rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] py-3 pl-10 pr-3 text-sm text-[var(--panel-text-primary)] placeholder:text-[var(--panel-text-faint)] outline-none focus:border-cyan-500/50"
             />
+          </div>
+
+          <div className="flex items-center gap-1.5 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] p-1">
+            {(["active", "placed", "all"] as PlacementFilter[]).map((p) => {
+              const isActive = placement === p;
+              const label =
+                p === "active"
+                  ? `Active (${placementCounts.active})`
+                  : p === "placed"
+                  ? `Placed (${placementCounts.placed})`
+                  : `All (${placementCounts.total})`;
+              return (
+                <button
+                  key={p}
+                  onClick={() => setPlacement(p)}
+                  className={`rounded-lg px-3 py-2 text-xs font-semibold capitalize transition ${
+                    isActive
+                      ? "bg-[var(--panel-card)] text-[var(--panel-text-primary)]"
+                      : "text-[var(--panel-text-muted)] hover:text-[var(--panel-text-secondary)]"
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
 
           <div className="flex items-center gap-1.5 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] p-1">

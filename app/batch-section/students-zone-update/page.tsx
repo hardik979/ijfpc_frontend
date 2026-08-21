@@ -182,6 +182,21 @@ const StudentsZoneUpdatePage: React.FC = () => {
     fetchStudents();
   }, []);
 
+  // Live filtering: search debounces slightly so fast typing doesn't
+  // re-filter on every keystroke; the zone dropdown applies instantly.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setAppliedSearch(searchDraft);
+      setPage(1);
+    }, 250);
+    return () => clearTimeout(t);
+  }, [searchDraft]);
+
+  useEffect(() => {
+    setAppliedZone(zoneDraft);
+    setPage(1);
+  }, [zoneDraft]);
+
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 3500);
@@ -308,14 +323,6 @@ const StudentsZoneUpdatePage: React.FC = () => {
                   placeholder="Search by name or email..."
                   value={searchDraft}
                   onChange={(e) => setSearchDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      setAppliedSearch(searchDraft);
-                      setAppliedZone(zoneDraft);
-                      setPage(1);
-                    }
-                  }}
                   className="w-full px-4 py-3 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] text-[var(--panel-text-primary)] placeholder:text-[var(--panel-text-muted)] outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-transparent"
                 />
               </div>
@@ -343,17 +350,6 @@ const StudentsZoneUpdatePage: React.FC = () => {
                   Newly Enrolled
                 </option>
               </select>
-
-              <button
-                onClick={() => {
-                  setAppliedSearch(searchDraft);
-                  setAppliedZone(zoneDraft);
-                  setPage(1);
-                }}
-                className="px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 text-white font-semibold shadow-lg shadow-indigo-500/20 hover:opacity-95 transition whitespace-nowrap"
-              >
-                Filter
-              </button>
 
               <button
                 onClick={() => {
