@@ -86,16 +86,6 @@ interface PaymentDetail {
   courseName?: string;
 }
 
-interface AttendanceRecord {
-  _id: string;
-  name?: string;
-  email?: string;
-  date: string;
-  status?: string;
-  login_time?: string;
-  logout_time?: string;
-};
-
 /** The AI's rubric for one call. Only `scoreOutOf10` is read here. */
 interface AiCallAnalysis {
   scoreOutOf10?: number;
@@ -132,15 +122,6 @@ function isAiCallNotAnswered(endReason?: string | null): boolean {
   );
 }
 
-interface AttendanceStats {
-  totalDays: number;
-  presentDays: number;
-  absentDays: number;
-  attendanceRate: number;
-  firstRecord?: string;
-  lastRecord?: string;
-}
-
 interface ApiResponse {
   message: string;
   filterType?: "overall" | "monthly";
@@ -172,36 +153,10 @@ interface Grade {
   bg: string;
 }
 
-type ModalType = "attendance-total" | "attendance-present" | "attendance-absent" |
-  "mock-attempts" | "mock-pass" | "mock-fail" |
+type ModalType = "mock-attempts" | "mock-pass" | "mock-fail" |
   "calls-total" | "calls-positive" | "calls-negative" | "calls-neutral" |
   "quiz-attempts" | "quiz-days" | null;
 
-
-function formatTimeValue(value?: string | null): string {
-  if (!value) return "—";
-
-  // for plain time like "12:32:09"
-  if (/^\d{2}:\d{2}:\d{2}$/.test(value)) {
-    const [hourStr, minuteStr] = value.split(":");
-    let hour = Number(hourStr);
-    const minute = minuteStr;
-    const ampm = hour >= 12 ? "PM" : "AM";
-
-    hour = hour % 12 || 12;
-    return `${String(hour).padStart(2, "0")}:${minute} ${ampm}`;
-  }
-
-  // fallback for full ISO datetime
-  const d = new Date(value);
-  if (isNaN(d.getTime())) return "—";
-
-  return d.toLocaleTimeString("en-IN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
-}
 
 function formatDate(iso?: string | null): string {
   if (!iso) return "—";
@@ -393,11 +348,8 @@ export default function StudentDashboard() {
   const [month, setMonth] = useState<number | null>(null);
   const [year, setYear] = useState<number | null>(null);
   const [data, setData] = useState<ApiResponse | null>(null);
-  const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(false);
-  const [attendanceLoading, setAttendanceLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [attendanceError, setAttendanceError] = useState<string | null>(null);
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [feedbackPopup, setFeedbackPopup] = useState<string | null>(null);
   const [isPlaced, setIsPlaced] = useState<boolean>(false);
@@ -510,73 +462,6 @@ export default function StudentDashboard() {
     };
   }, [data]);
 
-  const presentDateSet = useMemo(() => {
-    const set = new Set<string>();
-    attendanceData.forEach((r) => {
-      if (r.status?.toLowerCase() === "present") {
-        set.add(r.date.split("T")[0]);
-      }
-    });
-    return set;
-  }, [attendanceData]);
-
-  const computedAbsentDates = useMemo<string[]>(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    let start: Date | null = null;
-    let end: Date | null = null;
-
-    if (month && year) {
-      start = new Date(year, month - 1, 1);
-      const monthEnd = new Date(year, month, 0);
-      end = monthEnd.getTime() < today.getTime() ? monthEnd : today;
-    } else {
-      const sortedPresent = [...presentDateSet].sort();
-      if (!sortedPresent.length) return [];
-      start = new Date(sortedPresent[0] + "T00:00:00");
-      end = today;
-    }
-
-    if (!start || !end || start.getTime() > end.getTime()) return [];
-
-    const absents: string[] = [];
-    const cursor = new Date(start);
-    while (cursor.getTime() <= end.getTime()) {
-      const day = cursor.getDay();
-      if (day !== 0) {
-        const yyyy = cursor.getFullYear();
-        const mm = String(cursor.getMonth() + 1).padStart(2, "0");
-        const dd = String(cursor.getDate()).padStart(2, "0");
-        const key = `${yyyy}-${mm}-${dd}`;
-        if (!presentDateSet.has(key)) absents.push(key);
-      }
-      cursor.setDate(cursor.getDate() + 1);
-    }
-    return absents;
-  }, [presentDateSet, month, year]);
-
-  const attendanceStats = useMemo((): AttendanceStats => {
-    const presentDays = presentDateSet.size;
-    const absentDays = computedAbsentDates.length;
-    const totalDays = presentDays + absentDays;
-    const attendanceRate =
-      totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0;
-
-    const sortedRecords = [...attendanceData].sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-    );
-
-    return {
-      totalDays,
-      presentDays,
-      absentDays,
-      attendanceRate,
-      firstRecord: sortedRecords[0]?.date,
-      lastRecord: sortedRecords[sortedRecords.length - 1]?.date,
-    };
-  }, [attendanceData, presentDateSet, computedAbsentDates]);
-
   const paymentDetails = useMemo(() => {
     return Array.isArray(data?.paymentDetails) ? data.paymentDetails : [];
   }, [data]);
@@ -594,55 +479,6 @@ export default function StudentDashboard() {
       0
     );
   }, [attempts]);
-
-  const fetchAttendanceData = async (filter?: {
-    month?: number | null;
-    year?: number | null;
-  }) => {
-    if (!data?.student?.email) return;
-
-    try {
-      setAttendanceLoading(true);
-      setAttendanceError(null);
-
-      const params = new URLSearchParams();
-      params.append("email", data.student.email);
-
-      if (filter?.month && filter?.year) {
-        params.append("month", String(filter.month));
-        params.append("year", String(filter.year));
-      }
-
-      const res = await fetch(
-        `${API_LMS_URL}/api/present/all-reports?${params.toString()}`,
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          cache: "no-store",
-        }
-      );
-
-      const json = await res.json();
-
-      if (!res.ok) {
-        throw new Error(json?.message || "Failed to fetch attendance data");
-      }
-
-      if (json.message === "No record found") {
-        setAttendanceData([]);
-      } else {
-        setAttendanceData(json.dailypresent || []);
-      }
-    } catch (err: any) {
-      console.error("fetchAttendanceData error:", err);
-      setAttendanceError(err.message || "Failed to load attendance data");
-      setAttendanceData([]);
-    } finally {
-      setAttendanceLoading(false);
-    }
-  };
 
   const fetchStudentDetails = async (filter?: {
     month?: number | null;
@@ -699,75 +535,20 @@ export default function StudentDashboard() {
     }
 
     fetchStudentDetails({ month, year });
-    fetchAttendanceData({ month, year });
   };
 
   const handleReset = () => {
     setMonth(null);
     setYear(null);
     fetchStudentDetails();
-    fetchAttendanceData();
   };
 
   useEffect(() => {
     fetchStudentDetails();
   }, [clerkId]);
 
-  useEffect(() => {
-    if (data?.student?.email) {
-      fetchAttendanceData(month && year ? { month, year } : undefined);
-    }
-  }, [data?.student?.email]);
-
-  const presentRecords = useMemo(() =>
-    attendanceData.filter(r => r.status?.toLowerCase() === "present"),
-    [attendanceData]
-  );
-
-  const absentRecords = useMemo<AttendanceRecord[]>(() =>
-    computedAbsentDates.map((d) => ({
-      _id: `absent-${d}`,
-      date: d,
-      status: "absent",
-    })),
-    [computedAbsentDates]
-  );
-
   const renderModalContent = () => {
     switch (activeModal) {
-      case "attendance-total":
-      case "attendance-present":
-      case "attendance-absent":
-        const records = activeModal === "attendance-present" ? presentRecords :
-          activeModal === "attendance-absent" ? absentRecords :
-            attendanceData;
-
-        return (
-          <div className="space-y-3">
-            {records.length === 0 ? (
-              <p className="text-center text-slate-400 py-8">No records found</p>
-            ) : (
-              records.map((record, i) => (
-                <div key={record._id} className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
-                  <div className="flex items-center justify-between">
-                    
-                      <p className="font-semibold text-white">{formatDate(record.date)}</p>
-                      <p className="text-sm text-slate-400">Login: {formatTimeValue(record.login_time)}</p>
-                      <p className="text-sm text-slate-400">Logout: {formatTimeValue(record.logout_time)}</p>
-                    
-                    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${record.status?.toLowerCase() === "present"
-                        ? "bg-emerald-500/20 text-emerald-300"
-                        : "bg-rose-500/20 text-rose-300"
-                      }`}>
-                      {record.status}
-                    </span>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        );
-
       case "quiz-attempts":
       case "quiz-days":
         return (
@@ -1373,10 +1154,7 @@ export default function StudentDashboard() {
         isOpen={activeModal !== null}
         onClose={() => setActiveModal(null)}
         title={
-          activeModal === "attendance-total" ? "All Attendance Records" :
-            activeModal === "attendance-present" ? "Present Days" :
-              activeModal === "attendance-absent" ? "Absent Days" :
-                activeModal === "quiz-attempts" ? "All Quiz Attempts" :
+          activeModal === "quiz-attempts" ? "All Quiz Attempts" :
                   activeModal === "quiz-days" ? "Quiz Activity Days" :
                     activeModal === "mock-attempts" ? "All Mock Interview Attempts" :
                       activeModal === "mock-pass" ? "Passed Mock Interviews" :
