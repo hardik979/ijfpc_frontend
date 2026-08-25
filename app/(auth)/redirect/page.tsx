@@ -45,6 +45,9 @@ export default function RedirectAfterLogin() {
       case ROLES.MANAGERS:
           router.replace("/student_360")
           break;
+      case ROLES.TRAINER:
+          router.replace("/trainer-dashboard")
+          break;
       case ROLES.ADMIN:
           router.replace("/admin-access")
           break;
