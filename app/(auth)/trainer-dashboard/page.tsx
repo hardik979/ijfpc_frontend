@@ -13,6 +13,8 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  Clock3,
+  Download,
   ListChecks,
   GraduationCap,
   LoaderCircle,
@@ -20,9 +22,12 @@ import {
   Plus,
   Search,
   Sparkles,
+  UserCheck,
+  UserCog,
   Users,
   X,
 } from "lucide-react";
+import { buildManualMockReportImage } from "./reportImage";
 import styles from "./TrainerDashboard.module.css";
 
 gsap.registerPlugin(useGSAP);
@@ -58,6 +63,9 @@ interface ManualMockSchedule {
   course: string;
   courseTitle: string;
   assignedTeacher?: string;
+  conductedBy?: string;
+  durationMinutes?: number;
+  attendance?: AttendanceValue;
   trainerName: string;
   status: "scheduled" | "completed" | "cancelled";
   feedback?: string;
@@ -69,6 +77,9 @@ interface ManualMockSchedule {
 interface ScheduleUpdateInput {
   status: "completed" | "cancelled";
   feedback?: string;
+  conductedBy?: string;
+  durationMinutes?: number;
+  attendance?: AttendanceValue;
   cancellationReason?: string;
 }
 
@@ -89,6 +100,21 @@ const MANUAL_MOCK_TEACHERS = [
   "Harsha Wadekar",
   "Simran Soumya",
 ] as const;
+
+type AttendanceValue = "present" | "absent" | "unscheduled_attended";
+
+const ATTENDANCE_OPTIONS: { value: AttendanceValue; label: string }[] = [
+  { value: "present", label: "Present" },
+  { value: "absent", label: "Absent" },
+  { value: "unscheduled_attended", label: "Unscheduled - interview conducted" },
+];
+
+const MIN_DURATION_MINUTES = 5;
+const MAX_DURATION_MINUTES = 240;
+const DURATION_PRESETS = [15, 30, 45, 60];
+
+const attendanceLabel = (value?: AttendanceValue) =>
+  ATTENDANCE_OPTIONS.find((option) => option.value === value)?.label || "";
 
 const apiUrl = (path = "") => "/api/trainer/manual-mocks" + path;
 
@@ -192,19 +218,47 @@ function ScheduleAgendaItem({
   const [open, setOpen] = useState(false);
   const [action, setAction] = useState<"complete" | "cancel">("complete");
   const [feedback, setFeedback] = useState(schedule.feedback || "");
+  const [conductedBy, setConductedBy] = useState(
+    schedule.conductedBy || schedule.assignedTeacher || "",
+  );
+  const [durationMinutes, setDurationMinutes] = useState(
+    schedule.durationMinutes ? String(schedule.durationMinutes) : "",
+  );
+  const [attendance, setAttendance] = useState<AttendanceValue>(
+    schedule.attendance || "present",
+  );
   const [cancellationReason, setCancellationReason] = useState(
     schedule.cancellationReason || "",
   );
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState("");
   const feedbackWordCount = countWords(feedback);
+  const parsedDuration = Number(durationMinutes);
+  const durationIsValid =
+    Number.isInteger(parsedDuration) &&
+    parsedDuration >= MIN_DURATION_MINUTES &&
+    parsedDuration <= MAX_DURATION_MINUTES;
+  const completionReady =
+    feedbackWordCount >= 30 && Boolean(conductedBy) && durationIsValid;
   const isScheduled = schedule.status === "scheduled";
   const panelId = "manual-mock-actions-" + schedule._id;
 
   useEffect(() => {
     setFeedback(schedule.feedback || "");
     setCancellationReason(schedule.cancellationReason || "");
-  }, [schedule.cancellationReason, schedule.feedback]);
+    setConductedBy(schedule.conductedBy || schedule.assignedTeacher || "");
+    setDurationMinutes(
+      schedule.durationMinutes ? String(schedule.durationMinutes) : "",
+    );
+    setAttendance(schedule.attendance || "present");
+  }, [
+    schedule.assignedTeacher,
+    schedule.attendance,
+    schedule.cancellationReason,
+    schedule.conductedBy,
+    schedule.durationMinutes,
+    schedule.feedback,
+  ]);
 
   useGSAP(
     () => {
@@ -234,6 +288,18 @@ function ScheduleAgendaItem({
 
   const saveAction = async () => {
     setActionError("");
+    if (action === "complete" && !conductedBy) {
+      setActionError(
+        "Select the trainer who conducted this mock interview.",
+      );
+      return;
+    }
+    if (action === "complete" && !durationIsValid) {
+      setActionError(
+        `Enter the interview duration in minutes (${MIN_DURATION_MINUTES}-${MAX_DURATION_MINUTES}).`,
+      );
+      return;
+    }
     if (action === "complete" && feedbackWordCount < 30) {
       setActionError(
         "Write at least 30 words of feedback before marking this mock as done.",
@@ -252,7 +318,13 @@ function ScheduleAgendaItem({
       await onUpdate(
         schedule._id,
         action === "complete"
-          ? { status: "completed", feedback: feedback.trim() }
+          ? {
+              status: "completed",
+              feedback: feedback.trim(),
+              conductedBy,
+              durationMinutes: parsedDuration,
+              attendance,
+            }
           : {
               status: "cancelled",
               cancellationReason: cancellationReason.trim(),
@@ -303,7 +375,12 @@ function ScheduleAgendaItem({
           <strong>{schedule.studentName}</strong>
           <small>
             {schedule.courseTitle}{" / "}
-            {schedule.assignedTeacher || "Teacher not assigned"}
+            {schedule.conductedBy ||
+              schedule.assignedTeacher ||
+              "Teacher not assigned"}
+            {schedule.durationMinutes
+              ? " / " + schedule.durationMinutes + " min"
+              : ""}
           </small>
         </span>
         <span className={[styles.statusBadge, statusClass].join(" ")}>
@@ -361,20 +438,119 @@ function ScheduleAgendaItem({
 
               <div className={styles.actionForm}>
                 {action === "complete" ? (
-                  <label htmlFor={"feedback-" + schedule._id}>
-                    <span>
-                      Interview feedback
-                      <small>Required - minimum 30 words</small>
-                    </span>
-                    <textarea
-                      id={"feedback-" + schedule._id}
-                      value={feedback}
-                      maxLength={5000}
-                      onChange={(event) => setFeedback(event.target.value)}
-                      placeholder="Cover preparation, communication, technical strengths, improvement areas, and next steps."
-                      rows={5}
-                    />
-                  </label>
+                  <>
+                    <div className={styles.outcomeGrid}>
+                      <label htmlFor={"conducted-by-" + schedule._id}>
+                        <span>
+                          Interview conducted by
+                          <small>Change if another trainer took it</small>
+                        </span>
+                        <div className={styles.outcomeControl}>
+                          <UserCog size={15} aria-hidden="true" />
+                          <select
+                            id={"conducted-by-" + schedule._id}
+                            value={conductedBy}
+                            onChange={(event) => {
+                              setConductedBy(event.target.value);
+                              setActionError("");
+                            }}
+                          >
+                            <option value="">Select trainer</option>
+                            {MANUAL_MOCK_TEACHERS.map((teacher) => (
+                              <option key={teacher} value={teacher}>
+                                {teacher}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </label>
+
+                      <label htmlFor={"duration-" + schedule._id}>
+                        <span>
+                          Duration
+                          <small>Minutes only</small>
+                        </span>
+                        <div className={styles.outcomeControl}>
+                          <Clock3 size={15} aria-hidden="true" />
+                          <input
+                            id={"duration-" + schedule._id}
+                            type="number"
+                            inputMode="numeric"
+                            min={MIN_DURATION_MINUTES}
+                            max={MAX_DURATION_MINUTES}
+                            step={1}
+                            value={durationMinutes}
+                            onChange={(event) => {
+                              setDurationMinutes(event.target.value);
+                              setActionError("");
+                            }}
+                            placeholder="e.g. 45"
+                          />
+                          <span className={styles.controlUnit}>min</span>
+                        </div>
+                        <div className={styles.durationPresets}>
+                          {DURATION_PRESETS.map((preset) => (
+                            <button
+                              key={preset}
+                              type="button"
+                              className={
+                                parsedDuration === preset
+                                  ? styles.durationPresetActive
+                                  : ""
+                              }
+                              onClick={() => {
+                                setDurationMinutes(String(preset));
+                                setActionError("");
+                              }}
+                            >
+                              {preset}
+                            </button>
+                          ))}
+                        </div>
+                      </label>
+
+                      <label htmlFor={"attendance-" + schedule._id}>
+                        <span>
+                          Student attendance
+                          <small>Required</small>
+                        </span>
+                        <div className={styles.outcomeControl}>
+                          <UserCheck size={15} aria-hidden="true" />
+                          <select
+                            id={"attendance-" + schedule._id}
+                            value={attendance}
+                            onChange={(event) => {
+                              setAttendance(
+                                event.target.value as AttendanceValue,
+                              );
+                              setActionError("");
+                            }}
+                          >
+                            {ATTENDANCE_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </label>
+                    </div>
+
+                    <label htmlFor={"feedback-" + schedule._id}>
+                      <span>
+                        Interview feedback
+                        <small>Required - minimum 30 words</small>
+                      </span>
+                      <textarea
+                        id={"feedback-" + schedule._id}
+                        value={feedback}
+                        maxLength={5000}
+                        onChange={(event) => setFeedback(event.target.value)}
+                        placeholder="Cover preparation, communication, technical strengths, improvement areas, and next steps."
+                        rows={5}
+                      />
+                    </label>
+                  </>
                 ) : (
                   <label htmlFor={"cancellation-" + schedule._id}>
                     <span>
@@ -395,13 +571,16 @@ function ScheduleAgendaItem({
                 <div className={styles.actionMeta}>
                   <span
                     className={
-                      action === "complete" && feedbackWordCount >= 30
+                      action === "complete" && completionReady
                         ? styles.wordCounterReady
                         : styles.wordCounter
                     }
                   >
                     {action === "complete"
-                      ? feedbackWordCount + " / 30 words"
+                      ? feedbackWordCount +
+                        " / 30 words" +
+                        (conductedBy ? "" : " - trainer required") +
+                        (durationIsValid ? "" : " - duration required")
                       : cancellationReason.trim()
                         ? "Reason ready"
                         : "Reason required"}
@@ -416,7 +595,7 @@ function ScheduleAgendaItem({
                     disabled={
                       saving ||
                       (action === "complete"
-                        ? feedbackWordCount < 30
+                        ? !completionReady
                         : !cancellationReason.trim())
                     }
                     onClick={saveAction}
@@ -454,6 +633,27 @@ function ScheduleAgendaItem({
                     ? "Feedback recorded"
                     : "Cancellation reason"}
                 </strong>
+                {schedule.status === "completed" ? (
+                  <ul className={styles.outcomeFacts}>
+                    <li>
+                      <UserCog size={13} aria-hidden="true" />
+                      {schedule.conductedBy ||
+                        schedule.assignedTeacher ||
+                        "Trainer not recorded"}
+                    </li>
+                    <li>
+                      <Clock3 size={13} aria-hidden="true" />
+                      {schedule.durationMinutes
+                        ? schedule.durationMinutes + " minutes"
+                        : "Duration not recorded"}
+                    </li>
+                    <li>
+                      <UserCheck size={13} aria-hidden="true" />
+                      {attendanceLabel(schedule.attendance) ||
+                        "Attendance not recorded"}
+                    </li>
+                  </ul>
+                ) : null}
                 <p>
                   {schedule.status === "completed"
                     ? schedule.feedback || "No feedback was stored."
@@ -509,6 +709,8 @@ export default function TrainerDashboardPage() {
   );
   const [formMessage, setFormMessage] = useState("");
   const [formError, setFormError] = useState("");
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState("");
 
   const monthKey = toMonthKey(monthCursor);
   const calendarDays = useMemo(
@@ -533,6 +735,33 @@ export default function TrainerDashboardPage() {
     (schedule) =>
       schedule.dateKey >= toDateKey(today) && schedule.status === "scheduled",
   ).length;
+
+  const downloadReport = useCallback(
+    async (month: string, records: ManualMockSchedule[]) => {
+      setDownloadError("");
+      setDownloading(true);
+      try {
+        const blob = await buildManualMockReportImage(records);
+        const objectUrl = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = objectUrl;
+        link.download = "manual-mock-report-" + month + ".png";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(objectUrl);
+      } catch (error) {
+        setDownloadError(
+          error instanceof Error
+            ? error.message
+            : "Could not prepare the manual mock report",
+        );
+      } finally {
+        setDownloading(false);
+      }
+    },
+    [],
+  );
 
   const loadSchedules = useCallback(async (month: string) => {
     setLoadingSchedules(true);
@@ -1090,10 +1319,43 @@ export default function TrainerDashboardPage() {
                   <span className={styles.kicker}>Selected date</span>
                   <h3>{formatLongDate(selectedDate)}</h3>
                 </div>
-                <span className={styles.sessionCount}>
-                  {selectedDaySchedules.length} interviews
-                </span>
+                <div className={styles.agendaActions}>
+                  <span className={styles.sessionCount}>
+                    {selectedDaySchedules.length} interviews
+                  </span>
+                  <button
+                    type="button"
+                    className={styles.downloadButton}
+                    onClick={() => downloadReport(monthKey, schedules)}
+                    disabled={downloading || loadingSchedules}
+                    title={
+                      "Download the " +
+                      monthCursor.toLocaleDateString("en-IN", {
+                        month: "long",
+                        year: "numeric",
+                      }) +
+                      " manual mock report as an image"
+                    }
+                  >
+                    {downloading ? (
+                      <LoaderCircle
+                        className={styles.actionSpinner}
+                        size={15}
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      <Download size={15} aria-hidden="true" />
+                    )}
+                    {downloading ? "Preparing..." : "Download report"}
+                  </button>
+                </div>
               </div>
+
+              {downloadError ? (
+                <p className={styles.actionError} role="alert">
+                  {downloadError}
+                </p>
+              ) : null}
 
               {selectedDaySchedules.length ? (
                 <div className={styles.agendaList}>
