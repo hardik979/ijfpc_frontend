@@ -897,7 +897,7 @@ const StudentsListPage = () => {
 
         {/* ── KPI tiles ── */}
         {!selectedCourseId && (
-          <div className="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-5">
+          <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             <button
               onClick={() => {
                 setSelectedCourseId("ALL");
@@ -1004,7 +1004,7 @@ const StudentsListPage = () => {
 
         {/* ── Course tiles ── */}
         {!selectedCourseId && (
-          <div className="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {courses.map((c, idx) => {
               const color = COURSE_COLORS[idx % COURSE_COLORS.length];
               const count = activeStudentsBase.filter(
