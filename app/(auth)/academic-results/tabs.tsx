@@ -10,12 +10,12 @@ import { ChevronLeft, ChevronRight, Download, Users } from "lucide-react";
 import DataPresentationTable from "@/healper/DataPresentationTable";
 import {
   useMonthDay,
-  useExpectedRoster,
+  useExpectedRosterByDate,
   useStudentMeta,
   attachStudentMeta,
   courseOptionsOf,
   filterByCourse,
-  pct,
+  participationRate,
   formatDuration,
   formatIST,
   downloadCsv,
@@ -37,6 +37,7 @@ import {
   fetchMockInterviewCompleted,
   JOB_READY_BOOTCAMP_COURSE_ID,
   DATA_ANALYST_COURSE_ID,
+  REAL_HR_ALLOWED_COURSE_IDS,
   type QuizByDateRow,
   type QuizAttemptRow,
   type QuizStudentRow,
@@ -179,17 +180,23 @@ export function DailyQuizTab({
     };
   }, [range.from, range.to, courseId, refreshKey]);
 
-  // Roster the monthly chart's percentages are taken against. Narrowed by the
-  // course filter so the rate compares like with like.
-  const { expected } = useExpectedRoster("quiz", range, refreshKey, course);
-  const hasRoster = expected > 0;
+  // Roster the monthly chart's percentages are taken against, per day.
+  // Narrowed by the course filter so the rate compares like with like.
+  const { expectedByDate } = useExpectedRosterByDate("quiz", range, refreshKey, course);
+  const hasRoster = useMemo(
+    () => Array.from(expectedByDate.values()).some((v) => v > 0),
+    [expectedByDate]
+  );
   const rateByDate = useMemo(
     () =>
-      byDate.map((r) => ({
-        ...r,
-        rate: pct(r.uniqueStudentCount, expected) ?? 0,
-      })),
-    [byDate, expected]
+      byDate.map((r) => {
+        const { expected, rate } = participationRate(
+          r.uniqueStudentCount,
+          expectedByDate.get(r.date) ?? 0
+        );
+        return { ...r, rate, expected };
+      }),
+    [byDate, expectedByDate]
   );
 
   // Unique students for the selected day, with per-status tallies, each carrying
@@ -289,7 +296,6 @@ export function DailyQuizTab({
           range={range}
           data={hasRoster ? rateByDate : byDate}
           percent={hasRoster}
-          percentBase={expected}
           series={[
             hasRoster
               ? {
@@ -511,14 +517,28 @@ export function MockInterviewTab({
   const [student, setStudent] = useState<MockStudentRow | null>(null);
   const [selected, setSelected] = useState<MockAttemptRow | null>(null);
 
-  // Roster the monthly chart's percentages are taken against. Narrowed by the
-  // course filter so the rate compares like with like.
-  const { expected } = useExpectedRoster("mock", range, refreshKey, courseId || undefined);
-  const hasRoster = expected > 0;
+  // Roster the monthly chart's percentages are taken against, per day.
+  // Narrowed by the course filter so the rate compares like with like.
+  const { expectedByDate } = useExpectedRosterByDate(
+    "mock",
+    range,
+    refreshKey,
+    courseId || undefined
+  );
+  const hasRoster = useMemo(
+    () => Array.from(expectedByDate.values()).some((v) => v > 0),
+    [expectedByDate]
+  );
   const rateByDate = useMemo(
     () =>
-      byDate.map((r) => ({ ...r, rate: pct(r.uniqueUserCount, expected) ?? 0 })),
-    [byDate, expected]
+      byDate.map((r) => {
+        const { expected, rate } = participationRate(
+          r.uniqueUserCount,
+          expectedByDate.get(r.date) ?? 0
+        );
+        return { ...r, rate, expected };
+      }),
+    [byDate, expectedByDate]
   );
 
   // Unique students for the selected day, with per-level tallies and their
@@ -615,7 +635,6 @@ export function MockInterviewTab({
           range={range}
           data={hasRoster ? rateByDate : byDate}
           percent={hasRoster}
-          percentBase={expected}
           series={[
             hasRoster
               ? {
@@ -780,17 +799,28 @@ export function AiHrCallingTab({
   const [student, setStudent] = useState<AiStudentRow | null>(null);
   const [selected, setSelected] = useState<AiCallingRow | null>(null);
 
-  // Roster the monthly chart's percentages are taken against. Narrowed by the
-  // course filter so the rate compares like with like.
-  const { expected } = useExpectedRoster("ai", range, refreshKey, courseId || undefined);
-  const hasRoster = expected > 0;
+  // Roster the monthly chart's percentages are taken against, per day.
+  // Narrowed by the course filter so the rate compares like with like.
+  const { expectedByDate } = useExpectedRosterByDate(
+    "ai",
+    range,
+    refreshKey,
+    courseId || undefined
+  );
+  const hasRoster = useMemo(
+    () => Array.from(expectedByDate.values()).some((v) => v > 0),
+    [expectedByDate]
+  );
   const rateByDate = useMemo(
     () =>
-      byDate.map((r) => ({
-        ...r,
-        rate: pct(r.uniqueCandidateCount, expected) ?? 0,
-      })),
-    [byDate, expected]
+      byDate.map((r) => {
+        const { expected, rate } = participationRate(
+          r.uniqueCandidateCount,
+          expectedByDate.get(r.date) ?? 0
+        );
+        return { ...r, rate, expected };
+      }),
+    [byDate, expectedByDate]
   );
 
   // Unique candidates for the selected day, with per-status tallies and their
@@ -893,7 +923,6 @@ export function AiHrCallingTab({
           range={range}
           data={hasRoster ? rateByDate : byDate}
           percent={hasRoster}
-          percentBase={expected}
           series={[
             hasRoster
               ? {
@@ -1052,32 +1081,51 @@ export function AiHrCallingTab({
 /* ════════════════════ Real HR Calling (recordings) ═════════════ */
 export function RealHrCallingTab({
   range,
+  courseId,
   refreshKey,
 }: {
   range: MonthRange;
+  courseId: string;
   refreshKey: number;
 }) {
-  // Fixed to the 100% Job-Ready Bootcamp only — not a user-selectable filter.
-  const course = JOB_READY_BOOTCAMP_COURSE_ID;
+  // "All courses" means the Real HR roster's courses (Bootcamp + Data
+  // Analyst, mirroring lms-backend lib/academicRoster.js); a selected course
+  // narrows both the data and the expected roster, same as the other tabs.
+  const course = courseId || REAL_HR_ALLOWED_COURSE_IDS.join(",");
   const { byDate, loadingMonth, selectedDate, dayRows, loadingDay, loadDay } =
     useMonthDay<RealHrByDateRow, RealHrRow>(
       range,
       (r) => fetchRealHrMonth(r, course),
       (d) => fetchRealHrDay(d, course),
-      [refreshKey]
+      [courseId, refreshKey]
     );
 
   // Drill-down state: a lead/student (level 2) and, within them, one call (level 3).
   const [student, setStudent] = useState<RealHrStudentRow | null>(null);
   const [selected, setSelected] = useState<RealHrRow | null>(null);
 
-  // Roster the monthly chart's percentages are taken against.
-  const { expected } = useExpectedRoster("realhr", range, refreshKey);
-  const hasRoster = expected > 0;
+  // Roster the monthly chart's percentages are taken against, per day.
+  // Narrowed by the course filter so the rate compares like with like.
+  const { expectedByDate } = useExpectedRosterByDate(
+    "realhr",
+    range,
+    refreshKey,
+    courseId || undefined
+  );
+  const hasRoster = useMemo(
+    () => Array.from(expectedByDate.values()).some((v) => v > 0),
+    [expectedByDate]
+  );
   const rateByDate = useMemo(
     () =>
-      byDate.map((r) => ({ ...r, rate: pct(r.uniqueLeadCount, expected) ?? 0 })),
-    [byDate, expected]
+      byDate.map((r) => {
+        const { expected, rate } = participationRate(
+          r.uniqueLeadCount,
+          expectedByDate.get(r.date) ?? 0
+        );
+        return { ...r, rate, expected };
+      }),
+    [byDate, expectedByDate]
   );
 
   // Unique leads/students for the selected day, with per-status tallies and
@@ -1172,7 +1220,6 @@ export function RealHrCallingTab({
           range={range}
           data={hasRoster ? rateByDate : byDate}
           percent={hasRoster}
-          percentBase={expected}
           series={[
             hasRoster
               ? {
@@ -1200,6 +1247,7 @@ export function RealHrCallingTab({
         tab="realhr"
         selectedDate={selectedDate}
         refreshKey={refreshKey}
+        rosterCourseId={courseId || undefined}
         title={selectedDate ? `Students on ${selectedDate}` : "HR calls"}
         attendedSubtitle={
           selectedDate

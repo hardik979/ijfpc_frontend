@@ -65,16 +65,14 @@ export default function AcademicResultsClient() {
 
           <div className="flex flex-wrap items-center justify-end gap-2">
             <ThemeToggle />
-            {/* Daily Quiz, Mock and AI HR all admit the same two courses
-                (lms-backend lib/academicRoster.js); Real HR is Bootcamp-only,
-                so it gets no filter. */}
-            {(tab === "quiz" || tab === "mock" || tab === "ai") && (
-              <CourseFilter
-                value={courseId}
-                onChange={setCourseId}
-                allowedIds={QUIZ_ALLOWED_COURSE_IDS}
-              />
-            )}
+            {/* Daily Quiz, Mock, AI HR and Real HR all admit the same two
+                courses (lms-backend lib/academicRoster.js), so every tab gets
+                the same user-selectable filter. */}
+            <CourseFilter
+              value={courseId}
+              onChange={setCourseId}
+              allowedIds={QUIZ_ALLOWED_COURSE_IDS}
+            />
             <MonthRangePicker value={range} onChange={setRange} theme={theme} />
             <button
               onClick={() => setRefreshKey((k) => k + 1)}
@@ -114,7 +112,11 @@ export default function AcademicResultsClient() {
           />
         )}
         {tab === "realhr" && (
-          <RealHrCallingTab range={activeRange} refreshKey={refreshKey} />
+          <RealHrCallingTab
+            range={activeRange}
+            courseId={courseId}
+            refreshKey={refreshKey}
+          />
         )}
       </div>
     </div>
