@@ -1,1147 +1,1451 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import {
-  Users,
-  X,
-  Loader2,
-  Wallet,
-  TrendingUp,
-  Calendar,
-  BarChart3,
-  Clock,
-} from "lucide-react";
-import { API_LMS_URL } from "@/lib/api";
-import { API_BASE_URL } from "@/lib/api";
 import Link from "next/link";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  BarChart3,
+  BookOpen,
+  Clock3,
+  Loader2,
+  Mail,
+  MapPin,
+  ReceiptIndianRupee,
+  RefreshCw,
+  Search,
+  TrendingUp,
+  UserRound,
+  Users,
+  Wallet,
+  X,
+} from "lucide-react";
 
-/* ----------------------------- Types ----------------------------- */
-
-type Status = "ACTIVE" | "PAUSED" | "PLACED" | "DROPPED";
+type Status = "ACTIVE" | "PAUSED" | "PLACED";
 type StatusFilter = Status | "ALL";
+type Zone = "blue" | "yellow" | "green" | "newly_enrolled";
+type ZoneFilter = Zone | "ALL";
 
-type PreplacementSummaryAPI = {
-  totalStudents: number;
-  countsByStatus?: Partial<Record<Status, number>>;
-  netCollected?: number;
-  collectedInRange?: number;
+type FeeSummary = {
+  id: string;
+  totalFee: number;
+  paid: number;
+  remaining: number;
+  refunded?: number;
+  discount?: number;
+  records?: number;
+  status?: string | null;
+};
+
+type DashboardSummary = {
+  students: {
+    total: number;
+    active: number;
+    paused: number;
+    placed: number;
+    zones: Record<Zone, number>;
+    courses: Array<{
+      courseId: string;
+      courseName: string;
+      total: number;
+      zones: Record<Zone, number>;
+    }>;
+  };
+  revenue: {
+    month: string | null;
+    totalCollected: number;
+    prePlacement: { collected: number; totalFee: number; remaining: number };
+    postPlacement: {
+      collected: number;
+      totalFee: number;
+      discount: number;
+      remaining: number;
+    };
+  };
 };
 
 type StudentRow = {
   _id: string;
+  clerkId?: string | null;
   name: string;
-  courseName?: string;
+  email?: string | null;
+  enrollmentId?: string | null;
+  zone: Zone;
   status: Status;
-};
-
-type StudentsListResponse = {
-  page: number;
-  limit: number;
-  total: number;
-  rows: Array<
-    StudentRow & {
-      totalFee?: number;
-      totalReceived?: number;
-      remainingFee?: number;
-    }
-  >;
+  joinedMonth?: string | null;
+  batch?: string | null;
+  courseNames: string[];
+  courseName?: string | null;
+  preplacementFee: FeeSummary | null;
+  postplacementFee: FeeSummary | null;
 };
 
 type Payment = {
+  _id?: string;
   amount: number;
-  date: string | null; // ISO
+  date?: string | null;
   mode?: string;
   receiptNos?: string[];
   note?: string;
 };
 
-type PreplacementDetail = {
-  _id: string;
-  name: string;
-  courseName?: string;
-  status: Status;
-  totalFee: number;
-  totalReceived: number;
-  remainingFee: number;
-  payments: Payment[];
-  refunds?: Array<{
-    amount: number;
-    date: string | null;
-    mode?: string;
-    note?: string;
+type StudentDetail = {
+  student: StudentRow;
+  preplacementFee:
+    | (FeeSummary & {
+        dueDate?: string | null;
+        payments: Payment[];
+        refunds: Payment[];
+      })
+    | null;
+  postplacementFees: Array<{
+    id: string;
+    studentName: string;
+    companyName?: string | null;
+    location?: string | null;
+    offerDate?: string | null;
+    joiningDate?: string | null;
+    packageLPA?: number | null;
+    totalFee: number;
+    carriedPreplacementFee: number;
+    discount: number;
+    paid: number;
+    remaining: number;
+    remainingFeeNote?: string | null;
+    installments: Payment[];
   }>;
 };
 
-type PostInstallment = {
-  _id?: string;
-  // RAW doc fields:
-  label?: string;
-  amount: number;
-  date?: string | null; // payment date (raw)
-  mode?: string;
-  note?: string;
-
-  // MAPPED row fields (from toRecordRow):
-  paidDate?: string | null;
-  dueDate?: string | null;
-  status?: string;
+type StudentsResponse = {
+  page: number;
+  limit: number;
+  total: number;
+  rows: StudentRow[];
 };
 
-type PostOffer = {
-  _id: string;
-  studentName: string;
-
-  // RAW doc fields (when you fetch /offers/:id or when `raw` is attached):
-  companyName?: string;
-  location?: string;
-  offerDate?: string;
-  joiningDate?: string;
-  totalPostPlacementFee?: number;
-  installments?: PostInstallment[]; // raw shape (label/date/mode/note)
-
-  // MAPPED fields from toRecordRow (/offers list):
-  company?: string;
-  totalPPFee?: number;
-  // mapped installments array uses amount + paidDate/dueDate/status
-  // (we reuse PostInstallment to cover both shapes)
-
-  // Original Mongo doc (if route attached it as `raw`)
-  raw?: {
-    companyName?: string;
-    location?: string;
-    offerDate?: string;
-    joiningDate?: string;
-    totalPostPlacementFee?: number;
-    installments?: PostInstallment[];
-  };
+const EMPTY_SUMMARY: DashboardSummary = {
+  students: {
+    total: 0,
+    active: 0,
+    paused: 0,
+    placed: 0,
+    zones: { blue: 0, yellow: 0, green: 0, newly_enrolled: 0 },
+    courses: [],
+  },
+  revenue: {
+    month: null,
+    totalCollected: 0,
+    prePlacement: { collected: 0, totalFee: 0, remaining: 0 },
+    postPlacement: { collected: 0, totalFee: 0, discount: 0, remaining: 0 },
+  },
 };
 
-/* ---------------------------- Helpers ---------------------------- */
+const STATUS_STYLES: Record<Status, string> = {
+  ACTIVE: "border-emerald-400/25 bg-emerald-400/10 text-emerald-200",
+  PAUSED: "border-amber-400/25 bg-amber-400/10 text-amber-100",
+  PLACED: "border-sky-400/25 bg-sky-400/10 text-sky-100",
+};
 
-const cn = (...cls: Array<string | false | null | undefined>) =>
-  cls.filter(Boolean).join(" ");
+const ZONES: Array<{ value: Zone; label: string; color: string }> = [
+  { value: "blue", label: "Blue zone", color: "bg-sky-400" },
+  { value: "yellow", label: "Yellow zone", color: "bg-amber-400" },
+  { value: "green", label: "Green zone", color: "bg-emerald-400" },
+  { value: "newly_enrolled", label: "Newly enrolled", color: "bg-violet-400" },
+];
 
-const formatINR = (n: number) =>
+const formatINR = (value: number) =>
   new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
     maximumFractionDigits: 0,
-  }).format(Math.round(n || 0));
+  }).format(Math.round(Number(value) || 0));
 
-async function getJSON<T>(url: string): Promise<T> {
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) throw new Error(`${url} -> ${res.status}`);
-  return res.json();
-}
-
-const STATUS_COLORS: Record<Status, string> = {
-  ACTIVE:
-    "bg-emerald-500/15 text-emerald-300 border-emerald-400/25 shadow-emerald-500/10",
-  PAUSED:
-    "bg-amber-500/15 text-amber-300 border-amber-400/25 shadow-amber-500/10",
-  PLACED: "bg-cyan-500/15 text-cyan-300 border-cyan-400/25 shadow-cyan-500/10",
-  DROPPED: "bg-rose-500/15 text-rose-300 border-rose-400/25 shadow-rose-500/10",
-};
-
-/* =============================== Page ============================== */
-
-export default function OverviewPage() {
-  const [studentsSummary, setStudentsSummary] =
-    useState<PreplacementSummaryAPI>({
-      totalStudents: 0,
-      countsByStatus: { ACTIVE: 0, PAUSED: 0, PLACED: 0, DROPPED: 0 },
-    });
-  const [loadingSummary, setLoadingSummary] = useState(true);
-  const [studentsModal, setStudentsModal] = useState<{
-    open: boolean;
-    status: StatusFilter;
-  }>({ open: false, status: "ALL" });
-
-  // Revenue state
-  const [revMonth, setRevMonth] = useState("");
-  const [revLoading, setRevLoading] = useState(true);
-  const [preRevenue, setPreRevenue] = useState(0);
-  const [postRevenue, setPostRevenue] = useState(0);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        setLoadingSummary(true);
-        const data = await getJSON<any>(
-          `${API_LMS_URL}/api/preplacement/summary`,
-        );
-        const counts = (data?.countsByStatus || {}) as Partial<
-          Record<Status, number>
-        >;
-        setStudentsSummary({
-          totalStudents: data?.totalStudents || 0,
-          countsByStatus: {
-            ACTIVE: counts.ACTIVE || 0,
-            PAUSED: counts.PAUSED || 0,
-            PLACED: counts.PLACED || 0,
-            DROPPED: counts.DROPPED || 0,
-          },
-          netCollected: data?.netCollected || 0,
-          collectedInRange: data?.collectedInRange || 0,
-        });
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoadingSummary(false);
-      }
-    })();
-  }, []);
-
-  // Fetch revenue data when revMonth changes
-  useEffect(() => {
-    (async () => {
-      try {
-        setRevLoading(true);
-
-        // Fetch pre-placement revenue
-        let preUrl = `${API_LMS_URL}/api/preplacement/summary`;
-        if (revMonth) {
-          preUrl += `?month=${revMonth}`;
-        }
-        const preData = await getJSON<any>(preUrl);
-        const preRev = revMonth
-          ? preData?.collectedInRange || 0
-          : preData?.netCollected || 0;
-        setPreRevenue(preRev);
-
-        // Fetch post-placement revenue
-        const postData = await getJSON<{ items: any[] }>(
-          `${API_BASE_URL}/api/post-placement/offers?limit=2000`,
-        );
-
-        let postRev = 0;
-        (postData.items || []).forEach((item: any) => {
-          // Prefer raw.installments if available
-          const installments =
-            item.raw?.installments || item.installments || [];
-
-          installments.forEach((inst: any) => {
-            const amount = Number(inst.amount);
-            if (isNaN(amount)) return;
-
-            // Get date from raw installment or mapped installment
-            const date = inst.date || inst.paidDate || inst.dueDate;
-
-            if (revMonth) {
-              if (!date) return; // Skip if no date and month filter is active
-
-              try {
-                const instDate = new Date(date);
-                const instMonth = instDate.toISOString().slice(0, 7); // YYYY-MM in UTC
-                if (instMonth === revMonth) {
-                  postRev += amount;
-                }
-              } catch (e) {
-                // Skip invalid dates
-                return;
-              }
-            } else {
-              // All time - include all installments with valid amounts
-              postRev += amount;
-            }
-          });
-        });
-
-        setPostRevenue(postRev);
-      } catch (e) {
-        console.error(e);
-        setPreRevenue(0);
-        setPostRevenue(0);
-      } finally {
-        setRevLoading(false);
-      }
-    })();
-  }, [revMonth]);
-
-  const chips = useMemo(() => {
-    const c = studentsSummary.countsByStatus || {};
-    return (["ACTIVE", "PAUSED", "PLACED", "DROPPED"] as Status[]).map((s) => ({
-      status: s,
-      count: c[s] || 0,
-    }));
-  }, [studentsSummary]);
-
-  // Generate month options (last 12 months)
-  const monthOptions = useMemo(() => {
-    const options = [{ value: "", label: "All time" }];
-    const now = new Date();
-
-    for (let i = 0; i < 12; i++) {
-      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const yearMonth = date.toISOString().slice(0, 7); // YYYY-MM
-      const label = date.toLocaleDateString("en-US", {
+const formatDate = (value?: string | null) => {
+  if (!value) return "Not recorded";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "Not recorded"
+    : date.toLocaleDateString("en-IN", {
+        day: "2-digit",
         month: "short",
         year: "numeric",
       });
-      options.push({ value: yearMonth, label });
-    }
+};
 
+async function getJSON<T>(url: string): Promise<T> {
+  const response = await fetch(url, { cache: "no-store" });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(body?.error || `Request failed with ${response.status}`);
+  }
+  return body as T;
+}
+
+type CourseBreakdown = DashboardSummary["students"]["courses"][number];
+
+async function loadAllActiveStudents(): Promise<StudentRow[]> {
+  const limit = 100;
+  const firstPage = await getJSON<StudentsResponse>(
+    `/api/fee-dashboard/students?status=ACTIVE&page=1&limit=${limit}`,
+  );
+  const pageCount = Math.ceil(firstPage.total / limit);
+  const remainingPages =
+    pageCount > 1
+      ? await Promise.all(
+          Array.from({ length: pageCount - 1 }, (_, index) =>
+            getJSON<StudentsResponse>(
+              `/api/fee-dashboard/students?status=ACTIVE&page=${index + 2}&limit=${limit}`,
+            ),
+          ),
+        )
+      : [];
+
+  return [...firstPage.rows, ...remainingPages.flatMap((page) => page.rows)];
+}
+
+async function loadCourseBreakdownFromStudents(): Promise<CourseBreakdown[]> {
+  const students = await loadAllActiveStudents();
+  const courses = new Map<string, CourseBreakdown>();
+
+  for (const student of students) {
+    const zone = ZONES.some((item) => item.value === student.zone)
+      ? student.zone
+      : "newly_enrolled";
+    const courseNames = student.courseNames?.length
+      ? student.courseNames
+      : student.courseName
+        ? [student.courseName]
+        : [];
+
+    for (const courseName of new Set(
+      courseNames.map((name) => name.trim()).filter(Boolean),
+    )) {
+      const courseKey = courseName.toLowerCase();
+      const course = courses.get(courseKey) || {
+        courseId: `course-${courseKey}`,
+        courseName,
+        total: 0,
+        zones: { blue: 0, yellow: 0, green: 0, newly_enrolled: 0 },
+      };
+      course.total += 1;
+      course.zones[zone] += 1;
+      courses.set(courseKey, course);
+    }
+  }
+
+  return [...courses.values()].sort(
+    (left, right) =>
+      right.total - left.total ||
+      left.courseName.localeCompare(right.courseName),
+  );
+}
+
+export default function FeeDashboardPage() {
+  const [summary, setSummary] = useState(EMPTY_SUMMARY);
+  const [revenueMonth, setRevenueMonth] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [studentsModal, setStudentsModal] = useState<{
+    open: boolean;
+    status: StatusFilter;
+    zone: ZoneFilter;
+  }>({ open: false, status: "ALL", zone: "ALL" });
+  const [selectedCourse, setSelectedCourse] =
+    useState<CourseBreakdown | null>(null);
+
+  const loadSummary = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const query = revenueMonth
+        ? `?month=${encodeURIComponent(revenueMonth)}`
+        : "";
+      const data = await getJSON<DashboardSummary>(
+        `/api/fee-dashboard/summary${query}`,
+      );
+      let courses = Array.isArray(data.students?.courses)
+        ? data.students.courses
+        : [];
+      if (!courses.length && data.students.active > 0) {
+        courses = await loadCourseBreakdownFromStudents();
+      }
+      setSummary({
+        ...data,
+        students: {
+          ...data.students,
+          courses,
+        },
+      });
+    } catch (requestError) {
+      console.error(requestError);
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to load dashboard",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [revenueMonth]);
+
+  useEffect(() => {
+    void loadSummary();
+  }, [loadSummary]);
+
+  const monthOptions = useMemo(() => {
+    const options = [{ value: "", label: "All time" }];
+    const now = new Date();
+    for (let index = 0; index < 12; index += 1) {
+      const date = new Date(now.getFullYear(), now.getMonth() - index, 1);
+      options.push({
+        value: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`,
+        label: date.toLocaleDateString("en-IN", {
+          month: "short",
+          year: "numeric",
+        }),
+      });
+    }
     return options;
   }, []);
 
-  const totalRevenue = preRevenue + postRevenue;
+  const openStudents = (status: StatusFilter, zone: ZoneFilter = "ALL") =>
+    setStudentsModal({ open: true, status, zone });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-indigo-900 to-purple-800 text-white">
-      {/* Background Effects */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-purple-400/10 via-transparent to-transparent" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))] from-indigo-400/5 via-transparent to-transparent" />
+    <main className="relative min-h-screen overflow-hidden bg-[#07111f] text-slate-100">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_4%,rgba(56,189,248,0.16),transparent_30%),radial-gradient(circle_at_88%_12%,rgba(45,212,191,0.10),transparent_28%),linear-gradient(rgba(148,163,184,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.025)_1px,transparent_1px)] bg-[size:auto,auto,32px_32px,32px_32px]" />
 
-      <div className="relative z-10 mx-auto w-full max-w-7xl px-6 py-12 space-y-8">
-        {/* Header Section */}
-        <div className="text-center space-y-3">
-          <Link href={"/"}>
-            {" "}
-            <h1 className="text-5xl font-[Righteous] font-bold text-sky-400">
-              <span className="text-yellow-500">IT</span> Jobs Factory
-              Fees-Summary
-            </h1>
-          </Link>
-
-          <p className="text-lg text-purple-200/80">
-            Comprehensive analytics and insights across your students
-          </p>
-        </div>
-
-        {/* Main Dashboard Grid */}
-        <div className="grid gap-8 lg:grid-cols-2">
-          {/* Students Tile */}
-          <div
-            role="button"
-            tabIndex={0}
-            aria-label="Open all students"
-            onClick={() => setStudentsModal({ open: true, status: "ALL" })}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                setStudentsModal({ open: true, status: "ALL" });
-              }
-            }}
-            className="group relative overflow-hidden rounded-3xl border border-purple-400/20 bg-white/5 backdrop-blur-xl p-8 text-left transition-all duration-300 hover:scale-[1.02] hover:bg-white/10 hover:border-purple-400/40 hover:shadow-2xl hover:shadow-purple-500/20 cursor-pointer"
-          >
-            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-
-            <div className="relative flex items-start gap-6">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-500/20 to-purple-600/20 border border-purple-400/30 shadow-lg">
-                <Users className="h-8 w-8 text-purple-300" />
-              </div>
-
-              <div className="flex-1 space-y-4">
-                <div>
-                  <div className="text-sm font-medium text-purple-200/70 uppercase tracking-wider">
-                    Total Students
-                  </div>
-                  <div className="mt-2 text-4xl font-bold text-white">
-                    {loadingSummary ? (
-                      <div className="flex items-center gap-2">
-                        <Loader2 className="h-8 w-8 animate-spin text-purple-300" />
-                        <span className="text-2xl">Loading...</span>
-                      </div>
-                    ) : (
-                      studentsSummary.totalStudents
-                    )}
-                  </div>
-                </div>
-
-                {/* Status chips 2×2 */}
-                <div className="mt-4 grid grid-cols-2 gap-3 max-w-md">
-                  {chips.map(({ status, count }) => (
-                    <button
-                      key={status}
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation(); // prevent parent tile click (ALL) from firing
-                        setStudentsModal({ open: true, status });
-                      }}
-                      className={cn(
-                        "w-full inline-flex items-center justify-between rounded-xl px-4 py-2 text-sm font-medium border shadow-sm cursor-pointer hover:shadow-2xl hover:scale-[1.05] hover:shadow-purple-500/20 transition-all duration-300",
-                        STATUS_COLORS[status],
-                      )}
-                      title={`View ${status} students`}
-                    >
-                      <span className="inline-flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-current opacity-80" />
-                        <span>{status}</span>
-                      </span>
-                      <span className="font-bold">{count}</span>
-                    </button>
-                  ))}
-                </div>
-
-                <div className="flex items-center text-purple-200/70 text-sm">
-                  <BarChart3 className="h-4 w-4 mr-2" />
-                  Click to view detailed breakdown
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Total Revenue Tile */}
-          <div className="group relative overflow-hidden rounded-3xl border border-purple-400/20 bg-white/5 backdrop-blur-xl ">
-            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-
-            <div className="relative p-8">
-              <div className="flex items-start justify-between mb-6">
-                <div className="flex items-start gap-6">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500/20 to-emerald-600/20 border border-emerald-400/30 shadow-lg">
-                    <Wallet className="h-8 w-8 text-emerald-300" />
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="text-sm font-medium text-purple-200/70 uppercase tracking-wider">
-                      Total Revenue
-                    </div>
-                    <div className="text-4xl font-bold text-white">
-                      {revLoading ? (
-                        <div className="flex items-center gap-2">
-                          <Loader2 className="h-8 w-8 animate-spin text-emerald-300" />
-                          <span className="text-2xl">Loading...</span>
-                        </div>
-                      ) : (
-                        formatINR(totalRevenue)
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div
-                  className="relative z-20"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <select
-                    value={revMonth}
-                    onChange={(e) => setRevMonth(e.target.value)}
-                    className="rounded-xl border border-purple-400/30 bg-white/10 backdrop-blur-sm px-4 py-2 text-sm font-medium text-white outline-none focus:ring-2 focus:ring-purple-400/50 focus:border-purple-400/50 transition-all duration-200 hover:bg-white/15"
-                  >
-                    {monthOptions.map(({ value, label }) => (
-                      <option
-                        key={value}
-                        value={value}
-                        className="bg-purple-800 text-white"
-                      >
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <Link href={"/fee-dashboard/pre-placement"}>
-                    <div className="p-4 rounded-xl bg-white/5 border border-white/10 transition-all duration-300 hover:scale-[1.02] hover:bg-white/10 hover:border-purple-400/40 hover:shadow-2xl hover:shadow-purple-500/20">
-                      <div className="flex items-center gap-2 mb-2">
-                        <TrendingUp className="h-4 w-4 text-purple-300" />
-                        <span className="text-xs font-medium text-purple-200/70 uppercase tracking-wider">
-                          Pre-Placement
-                        </span>
-                      </div>
-                      <div className="text-lg font-bold text-white">
-                        {revLoading ? "..." : formatINR(preRevenue)}
-                      </div>
-                    </div>
-                  </Link>
-                  <Link href={"/fee-dashboard/post-placement"}>
-                    <div className="p-4 rounded-xl bg-white/5 border border-white/10 transition-all duration-300 hover:scale-[1.02] hover:bg-white/10 hover:border-purple-400/40 hover:shadow-2xl hover:shadow-purple-500/20">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Clock className="h-4 w-4 text-cyan-300" />
-                        <span className="text-xs font-medium text-purple-200/70 uppercase tracking-wider">
-                          Post-Placement
-                        </span>
-                      </div>
-
-                      <div className="text-lg font-bold text-white">
-                        {revLoading ? "..." : formatINR(postRevenue)}
-                      </div>
-                    </div>
-                  </Link>
-                </div>
-
-                <div className="flex items-center text-purple-200/70 text-sm">
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Click to view detailed collections
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        {/* Reports Section */}
-        <div className="mt-10">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-white/90">Reports</h2>
-          </div>
-
-          {/* Report cards grid (add more later) */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Link href="/fee-dashboard/studentOverview">
-              <div
-                role="button"
-                aria-label="Student Overview"
-                className="group relative rounded-2xl border border-purple-400/20 bg-white/5 p-4 backdrop-blur-xl
-                   hover:bg-white/10 hover:border-purple-400/40 hover:shadow-2xl hover:shadow-purple-500/20
-                   transition-all duration-300 cursor-pointer"
-              >
-                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                <div className="relative flex items-start gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/20 to-fuchsia-500/20 border border-purple-400/30">
-                    <BarChart3 className="h-5 w-5 text-indigo-200" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="text-sm font-semibold text-white">
-                      Student Overview
-                    </div>
-                    <p className="mt-1 text-xs text-purple-200/80">
-                      Contains every detail of students
-                    </p>
-                  </div>
-                </div>
-              </div>
+      <div className="relative mx-auto w-full max-w-7xl space-y-7 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+        <header className="flex flex-col gap-5 rounded-3xl border border-slate-700/70 bg-slate-900/65 p-6 shadow-2xl shadow-black/20 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between lg:p-8">
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-sky-300">
+              Contains all Financial and Academics details of students
+            </p>
+            <Link href="/" className="inline-block">
+              <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+                IJF Executive Dashboard
+              </h1>
             </Link>
           </div>
-        </div>
+          <button
+            type="button"
+            onClick={() => void loadSummary()}
+            disabled={loading}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-600 bg-slate-800/80 px-4 text-sm font-semibold text-slate-100 transition hover:border-sky-400/60 hover:bg-slate-800 disabled:opacity-60"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            Refresh
+          </button>
+        </header>
+
+        {error && (
+          <div className="rounded-2xl border border-rose-400/30 bg-rose-400/10 px-5 py-4 text-sm text-rose-100">
+            {error}
+          </div>
+        )}
+
+        <section className="grid gap-5 lg:grid-cols-[1.05fr_1fr]">
+          <article className="rounded-3xl border border-slate-700/70 bg-slate-900/65 p-6 shadow-xl shadow-black/15 backdrop-blur-xl lg:p-7">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="mt-2 text-xl font-semibold text-white">
+                  Active students by course
+                </h2>
+              </div>
+              <div className="rounded-2xl border border-sky-400/20 bg-sky-400/10 p-3 text-sky-200">
+                <Users className="h-6 w-6" />
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => openStudents("ACTIVE")}
+              className="mt-6 flex w-full items-end justify-between rounded-2xl border border-slate-700 bg-[#0a1626]/80 p-5 text-left transition hover:border-sky-400/50 hover:bg-[#0d1b2d]"
+            >
+              <span>
+                <span className="block text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  Total active students
+                </span>
+                <span className="mt-2 block text-4xl font-bold text-white">
+                  {loading ? "--" : summary.students.active}
+                </span>
+              </span>
+              <span className="mb-1 inline-flex items-center gap-1 text-sm font-semibold text-sky-300">
+                View students <ArrowRight className="h-4 w-4" />
+              </span>
+            </button>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {loading ? (
+                Array.from({ length: 4 }).map((_, index) => (
+                  <div
+                    key={index}
+                    className="h-40 animate-pulse rounded-2xl border border-slate-700 bg-slate-800/45"
+                  />
+                ))
+              ) : (summary.students.courses?.length ?? 0) > 0 ? (
+                (summary.students.courses ?? []).map((course) => (
+                  <button
+                    type="button"
+                    key={course.courseId}
+                    onClick={() => setSelectedCourse(course)}
+                    className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-800/55 text-left transition hover:-translate-y-0.5 hover:border-sky-400/60 hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-400/40"
+                  >
+                    <div className="flex min-h-20 items-start justify-between gap-3 border-b border-slate-700/80 px-4 py-4">
+                      <div>
+                        <p className="text-sm font-semibold leading-5 text-slate-100">
+                          {course.courseName}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Active enrollment
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <span className="block text-2xl font-bold text-white">
+                          {course.total}
+                        </span>
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                          students
+                        </span>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-px bg-slate-700/70">
+                      {ZONES.map((zone) => (
+                        <div
+                          key={zone.value}
+                          className="flex items-center justify-between gap-2 bg-[#111e30] px-3 py-2.5"
+                        >
+                          <span className="flex min-w-0 items-center gap-2 text-[11px] font-medium text-slate-400">
+                            <span
+                              className={`h-2 w-2 shrink-0 rounded-full ${zone.color}`}
+                            />
+                            <span className="truncate">
+                              {zone.label.replace(" zone", "")}
+                            </span>
+                          </span>
+                          <span className="text-sm font-bold text-slate-100">
+                            {course.zones[zone.value]}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </button>
+                ))
+              ) : (
+                <div className="col-span-full rounded-2xl border border-dashed border-slate-700 px-5 py-8 text-center text-sm text-slate-500">
+                  No active course enrollments found.
+                </div>
+              )}
+            </div>
+          </article>
+
+          <article className="rounded-3xl border border-slate-700/70 bg-slate-900/65 p-6 shadow-xl shadow-black/15 backdrop-blur-xl lg:p-7">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="flex gap-4">
+                <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-3 text-emerald-200">
+                  <Wallet className="h-6 w-6" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">
+                    Collected revenue
+                  </p>
+                  <p className="mt-2 text-3xl font-bold text-white">
+                    {loading ? "--" : formatINR(summary.revenue.totalCollected)}
+                  </p>
+                </div>
+              </div>
+              <select
+                value={revenueMonth}
+                onChange={(event) => setRevenueMonth(event.target.value)}
+                aria-label="Revenue period"
+                className="h-11 rounded-xl border border-slate-600 bg-[#0a1626] px-4 text-sm font-semibold text-white outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20"
+              >
+                {monthOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              <RevenueCard
+                href="/fee-dashboard/pre-placement"
+                title="Pre-placement fee"
+                collected={summary.revenue.prePlacement.collected}
+                remaining={summary.revenue.prePlacement.remaining}
+                loading={loading}
+                tone="sky"
+              />
+              <RevenueCard
+                href="/fee-dashboard/post-placement"
+                title="Post-placement fee"
+                collected={summary.revenue.postPlacement.collected}
+                remaining={summary.revenue.postPlacement.remaining}
+                loading={loading}
+                tone="teal"
+              />
+            </div>
+
+            <div className="mt-4 flex items-center justify-between rounded-2xl border border-violet-400/25 bg-violet-400/[0.07] px-5 py-4">
+              <div className="flex items-center gap-3">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-violet-400/25 bg-violet-400/10 text-violet-200">
+                  <Users className="h-5 w-5" />
+                </span>
+                <span className="text-sm font-semibold text-violet-100">
+                  Total placed students
+                </span>
+              </div>
+              <span className="text-3xl font-bold tracking-tight text-white">
+                {loading ? (
+                  <Loader2 className="h-6 w-6 animate-spin text-violet-300" />
+                ) : (
+                  summary.students.placed
+                )}
+              </span>
+            </div>
+
+            <Link
+              href="/student_360"
+              className="group mt-4 flex items-center justify-between gap-4 rounded-2xl border border-sky-400/25 bg-sky-400/[0.07] px-5 py-4 transition hover:border-sky-400/50 hover:bg-sky-400/10"
+            >
+              <span className="flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-sky-400/25 bg-sky-400/10 text-sky-200">
+                  <Search className="h-4 w-4" />
+                </span>
+                <span className="text-sm font-semibold text-slate-200">
+                  Want to know about a specific student? Check Student 360.
+                </span>
+              </span>
+              <ArrowRight className="h-5 w-5 shrink-0 text-sky-300 transition-transform group-hover:translate-x-1" />
+            </Link>
+          </article>
+        </section>
+
+        <section>
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.16em] text-slate-400">
+            Reports
+          </h2>
+          <Link
+            href="/studentOverview"
+            className="group flex max-w-md items-center justify-between rounded-2xl border border-slate-700/70 bg-slate-900/60 p-5 backdrop-blur transition hover:border-sky-400/40 hover:bg-slate-900"
+          >
+            <span className="flex items-center gap-3">
+              <span className="rounded-xl border border-sky-400/20 bg-sky-400/10 p-2.5 text-sky-200">
+                <BarChart3 className="h-5 w-5" />
+              </span>
+              <span>
+                <span className="block font-semibold text-white">
+                  Student Overview
+                </span>
+                <span className="mt-1 block text-xs text-slate-400">
+                  Open the complete student report
+                </span>
+              </span>
+            </span>
+            <ArrowRight className="h-5 w-5 text-slate-400 transition group-hover:translate-x-1 group-hover:text-sky-300" />
+          </Link>
+        </section>
       </div>
 
       {studentsModal.open && (
         <StudentsModal
           initialStatus={studentsModal.status}
-          onClose={() => setStudentsModal({ open: false, status: "ALL" })}
+          initialZone={studentsModal.zone}
+          onClose={() =>
+            setStudentsModal((current) => ({ ...current, open: false }))
+          }
+        />
+      )}
+
+      {selectedCourse && (
+        <CourseStudentsModal
+          course={selectedCourse}
+          onClose={() => setSelectedCourse(null)}
+        />
+      )}
+    </main>
+  );
+}
+
+function StatusButton({
+  label,
+  count,
+  tone = "slate",
+  onClick,
+}: {
+  label: string;
+  count: number;
+  tone?: "slate" | "amber" | "emerald";
+  onClick: () => void;
+}) {
+  const tones = {
+    slate: "border-slate-700 bg-slate-800/45 text-white",
+    amber: "border-amber-400/20 bg-amber-400/[0.06] text-amber-100",
+    emerald: "border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-100",
+  };
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-xl border p-3 text-left transition hover:border-slate-500 ${tones[tone]}`}
+    >
+      <span className="text-xs uppercase tracking-wider opacity-70">
+        {label}
+      </span>
+      <span className="mt-1 block text-xl font-bold">{count}</span>
+    </button>
+  );
+}
+
+function RevenueCard({
+  href,
+  title,
+  collected,
+  remaining,
+  loading,
+  tone,
+}: {
+  href: string;
+  title: string;
+  collected: number;
+  remaining: number;
+  loading: boolean;
+  tone: "sky" | "teal";
+}) {
+  const styles =
+    tone === "sky"
+      ? "border-sky-400/20 bg-sky-400/[0.06] text-sky-200 hover:border-sky-400/45 hover:bg-sky-400/10"
+      : "border-teal-400/20 bg-teal-400/[0.06] text-teal-200 hover:border-teal-400/45 hover:bg-teal-400/10";
+  return (
+    <Link
+      href={href}
+      className={`group rounded-2xl border p-5 transition hover:-translate-y-0.5 ${styles}`}
+    >
+      <span className="flex items-center justify-between text-sm font-semibold">
+        <span className="flex items-center gap-2">
+          {tone === "sky" ? (
+            <TrendingUp className="h-4 w-4" />
+          ) : (
+            <Clock3 className="h-4 w-4" />
+          )}
+          {title}
+        </span>
+        <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
+      </span>
+      <span className="mt-5 block text-2xl font-bold text-white">
+        {loading ? "--" : formatINR(collected)}
+      </span>
+      <span className="mt-2 block text-xs text-slate-400">
+        Outstanding: {formatINR(remaining)}
+      </span>
+    </Link>
+  );
+}
+
+function StudentsModal({
+  initialStatus,
+  initialZone,
+  onClose,
+}: {
+  initialStatus: StatusFilter;
+  initialZone: ZoneFilter;
+  onClose: () => void;
+}) {
+  const [status, setStatus] = useState(initialStatus);
+  const [zone, setZone] = useState(initialZone);
+  const [search, setSearch] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [data, setData] = useState<StudentsResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [detail, setDetail] = useState<StudentDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const limit = 20;
+
+  const loadStudents = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(limit),
+        status,
+      });
+      if (zone !== "ALL") params.set("zone", zone);
+      if (appliedSearch) params.set("search", appliedSearch);
+      setData(
+        await getJSON<StudentsResponse>(
+          `/api/fee-dashboard/students?${params}`,
+        ),
+      );
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to load students",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [appliedSearch, page, status, zone]);
+
+  useEffect(() => {
+    void loadStudents();
+  }, [loadStudents]);
+
+  const openDetail = async (studentId: string) => {
+    setDetailLoading(true);
+    setError("");
+    try {
+      setDetail(
+        await getJSON<StudentDetail>(
+          `/api/fee-dashboard/students/${studentId}`,
+        ),
+      );
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to load fee details",
+      );
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#020712]/85 p-3 backdrop-blur-md sm:p-6"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Student fee records"
+    >
+      <div className="flex h-[92vh] w-full max-w-7xl flex-col overflow-hidden rounded-3xl border border-slate-700 bg-[#0a1422] shadow-2xl shadow-black/50">
+        <header className="flex items-center justify-between border-b border-slate-700 px-5 py-4 sm:px-7">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-300">
+              Student fee records
+            </p>
+            <h2 className="mt-1 text-xl font-bold text-white">
+              LMS student breakdown
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-600 bg-slate-800 px-3 text-sm font-semibold text-slate-200 hover:border-slate-500 hover:text-white"
+          >
+            <X className="h-4 w-4" /> Close
+          </button>
+        </header>
+
+        <div className="border-b border-slate-700 bg-slate-900/50 p-4 sm:px-7">
+          <div className="grid gap-3 lg:grid-cols-[1fr_180px_190px_auto]">
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                setPage(1);
+                setAppliedSearch(search.trim());
+              }}
+              className="relative"
+            >
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search name, email, or enrollment ID"
+                className="h-11 w-full rounded-xl border border-slate-600 bg-[#07111f] pl-10 pr-4 text-sm text-white outline-none placeholder:text-slate-500 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20"
+              />
+            </form>
+            <select
+              value={status}
+              onChange={(event) => {
+                setStatus(event.target.value as StatusFilter);
+                setPage(1);
+              }}
+              className="h-11 rounded-xl border border-slate-600 bg-[#07111f] px-3 text-sm text-white outline-none focus:border-sky-400"
+            >
+              <option value="ALL">All statuses</option>
+              <option value="ACTIVE">Active</option>
+              <option value="PAUSED">Paused</option>
+              <option value="PLACED">Placed</option>
+            </select>
+            <select
+              value={zone}
+              onChange={(event) => {
+                setZone(event.target.value as ZoneFilter);
+                setPage(1);
+              }}
+              className="h-11 rounded-xl border border-slate-600 bg-[#07111f] px-3 text-sm text-white outline-none focus:border-sky-400"
+            >
+              <option value="ALL">All zones</option>
+              {ZONES.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => {
+                setPage(1);
+                setAppliedSearch(search.trim());
+              }}
+              className="h-11 rounded-xl bg-sky-500 px-5 text-sm font-bold text-slate-950 transition hover:bg-sky-400"
+            >
+              Search
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <div className="border-b border-rose-400/20 bg-rose-400/10 px-7 py-3 text-sm text-rose-100">
+            {error}
+          </div>
+        )}
+
+        <div className="min-h-0 flex-1 overflow-auto">
+          {loading ? (
+            <div className="flex h-full min-h-64 items-center justify-center gap-3 text-slate-300">
+              <Loader2 className="h-6 w-6 animate-spin text-sky-300" />
+              Loading students...
+            </div>
+          ) : data?.rows.length ? (
+            <table className="w-full min-w-[1050px] text-left text-sm">
+              <thead className="sticky top-0 z-10 border-b border-slate-700 bg-[#0d1928] text-xs uppercase tracking-wider text-slate-400">
+                <tr>
+                  <th className="px-6 py-4">Student</th>
+                  <th className="px-4 py-4">Course & batch</th>
+                  <th className="px-4 py-4">Zone</th>
+                  <th className="px-4 py-4">Status</th>
+                  <th className="px-4 py-4">Pre-placement</th>
+                  <th className="px-4 py-4">Post-placement</th>
+                  <th className="px-6 py-4 text-right">Details</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {data.rows.map((student) => (
+                  <tr
+                    key={student._id}
+                    className="bg-[#0a1422] transition hover:bg-slate-800/55"
+                  >
+                    <td className="px-6 py-4">
+                      <div className="font-semibold text-white">
+                        {student.name}
+                      </div>
+                      <div className="mt-1 text-xs text-slate-400">
+                        {student.email ||
+                          student.enrollmentId ||
+                          "No contact ID"}
+                      </div>
+                    </td>
+                    <td className="px-4 py-4">
+                      <div className="max-w-64 font-medium text-slate-200">
+                        {student.courseName || "No course title"}
+                      </div>
+                      <div className="mt-1 text-xs text-slate-500">
+                        {student.batch || "No batch"}
+                      </div>
+                    </td>
+                    <td className="px-4 py-4">
+                      <ZoneBadge zone={student.zone} />
+                    </td>
+                    <td className="px-4 py-4">
+                      <span
+                        className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${STATUS_STYLES[student.status]}`}
+                      >
+                        {student.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4">
+                      <FeeCell fee={student.preplacementFee} />
+                    </td>
+                    <td className="px-4 py-4">
+                      <FeeCell fee={student.postplacementFee} />
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button
+                        type="button"
+                        onClick={() => void openDetail(student._id)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-sky-400/25 bg-sky-400/10 px-3 py-2 text-xs font-bold text-sky-200 hover:bg-sky-400/15"
+                      >
+                        View <ArrowRight className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="flex h-full min-h-64 flex-col items-center justify-center text-center">
+              <Users className="h-10 w-10 text-slate-600" />
+              <p className="mt-3 font-semibold text-slate-200">
+                No students found
+              </p>
+              <p className="mt-1 text-sm text-slate-500">
+                Try a different status, zone, or search.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <footer className="flex items-center justify-between border-t border-slate-700 bg-slate-900/60 px-5 py-4 text-sm sm:px-7">
+          <span className="text-slate-400">
+            Page {page} · {data?.total || 0} students
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => setPage((value) => Math.max(1, value - 1))}
+              className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-600 px-3 font-semibold text-slate-200 disabled:opacity-40"
+            >
+              <ArrowLeft className="h-4 w-4" /> Prev
+            </button>
+            <button
+              type="button"
+              disabled={page * limit >= (data?.total || 0)}
+              onClick={() => setPage((value) => value + 1)}
+              className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-600 px-3 font-semibold text-slate-200 disabled:opacity-40"
+            >
+              Next <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+        </footer>
+      </div>
+
+      {(detailLoading || detail) && (
+        <StudentFeeDetail
+          detail={detail}
+          loading={detailLoading}
+          onClose={() => setDetail(null)}
         />
       )}
     </div>
   );
 }
 
-/* ============================ Students Modal ============================ */
 
-function StudentsModal({
+function CourseStudentsModal({
+  course,
   onClose,
-  initialStatus = "ALL",
 }: {
+  course: CourseBreakdown;
   onClose: () => void;
-  initialStatus?: StatusFilter;
 }) {
-  // ---------- NEW: safe unique key helper ----------
-  const safeKey = (
-    idx: number,
-    ...parts: Array<string | number | undefined | null>
-  ) => {
-    const base = parts
-      .filter((p) => p !== undefined && p !== null && p !== "")
-      .join("|");
-    return base ? `${base}#${idx}` : `row#${idx}`;
-  };
+  const [students, setStudents] = useState<StudentRow[]>([]);
+  const [zone, setZone] = useState<ZoneFilter>("ALL");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState<StatusFilter>(initialStatus);
-  const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<StudentsListResponse | null>(null);
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    setError("");
 
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [pre, setPre] = useState<PreplacementDetail | null>(null);
-  const [post, setPost] = useState<PostOffer[]>([]);
-  const [page, setPage] = useState(1);
-  const limit = 50;
-
-  const fetchList = async () => {
-    try {
-      setLoading(true);
-      const qs = new URLSearchParams({
-        page: String(page),
-        limit: String(limit),
+    void loadAllActiveStudents()
+      .then((rows) => {
+        if (!mounted) return;
+        const selectedCourse = course.courseName.trim().toLowerCase();
+        const matchingStudents = rows
+          .filter((student) => {
+            const courseNames = student.courseNames?.length
+              ? student.courseNames
+              : student.courseName
+                ? [student.courseName]
+                : [];
+            return courseNames.some(
+              (name) => name.trim().toLowerCase() === selectedCourse,
+            );
+          })
+          .sort((left, right) => left.name.localeCompare(right.name));
+        setStudents(matchingStudents);
+      })
+      .catch((requestError) => {
+        if (!mounted) return;
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : "Unable to load course students",
+        );
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
       });
-      if (search.trim()) qs.set("search", search.trim());
-      if (status !== "ALL") qs.set("status", status);
-      const res = await getJSON<StudentsListResponse>(
-        `${API_LMS_URL}/api/preplacement/students?${qs.toString()}`,
-      );
-      setData(res);
-    } catch (e) {
-      console.error(e);
-      setData({ page: 1, limit: 50, total: 0, rows: [] });
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  useEffect(() => {
-    setStatus(initialStatus);
-  }, [initialStatus]);
+    return () => {
+      mounted = false;
+    };
+  }, [course.courseName]);
 
-  useEffect(() => {
-    fetchList();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
+  const zoneCounts = useMemo(() => {
+    const counts: Record<Zone, number> = {
+      blue: 0,
+      yellow: 0,
+      green: 0,
+      newly_enrolled: 0,
+    };
+    students.forEach((student) => {
+      if (Object.prototype.hasOwnProperty.call(counts, student.zone)) {
+        counts[student.zone] += 1;
+      }
+    });
+    return counts;
+  }, [students]);
 
-  useEffect(() => {
-    fetchList();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, page]);
+  const visibleStudents = useMemo(
+    () =>
+      zone === "ALL"
+        ? students
+        : students.filter((student) => student.zone === zone),
+    [students, zone],
+  );
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    fetchList();
-  };
-
-  const openDetail = async (row: StudentRow) => {
-    try {
-      setDetailOpen(true);
-      setDetailLoading(true);
-      setPre(null);
-      setPost([]);
-
-      const preData = await getJSON<PreplacementDetail>(
-        `${API_BASE_URL}/api/preplacement/students/${row._id}`,
-      );
-      setPre(preData);
-
-      const all = await getJSON<{ items: any[] }>(
-        `${API_BASE_URL}/api/post-placement/offers?search=${encodeURIComponent(
-          row.name,
-        )}&limit=100`,
-      );
-      const exact = (all.items || []).filter(
-        (o) =>
-          String(o?.studentName || "").toLowerCase() === row.name.toLowerCase(),
-      );
-      setPost(exact as PostOffer[]);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setDetailLoading(false);
-    }
-  };
-
-  const closeDetail = () => {
-    setDetailOpen(false);
-    setPre(null);
-    setPost([]);
-  };
+  const filters: Array<{
+    value: ZoneFilter;
+    label: string;
+    count: number;
+    color: string;
+  }> = [
+    { value: "ALL", label: "All zones", count: students.length, color: "bg-slate-300" },
+    ...ZONES.map((item) => ({
+      value: item.value,
+      label: item.label,
+      count: zoneCounts[item.value],
+      color: item.color,
+    })),
+  ];
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm"
-        onClick={() => (detailOpen ? closeDetail() : onClose())}
-      />
-      {/* Modal Shell */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-        <div className="w-full max-w-5xl h-[90vh] max-h-[90vh] overflow-hidden rounded-3xl border border-purple-400/30 bg-purple-900/95 backdrop-blur-xl shadow-2xl flex flex-col overscroll-contain">
-          {/* Header */}
-          <div className="flex items-center justify-between border-b border-purple-400/20 p-6 bg-gradient-to-r from-purple-800/50 to-purple-900/50">
-            <div>
-              <h2 className="text-2xl font-bold text-white">
-                Students Overview
-              </h2>
-              <p className="text-purple-200/70 mt-1">
-                Manage and view student details
-              </p>
-            </div>
-            <button
-              onClick={onClose}
-              className="rounded-xl border border-purple-400/30 bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/20 transition-all duration-200"
-            >
-              <X className="mr-2 inline-block h-4 w-4" />
-              Close
-            </button>
+    <div
+      className="fixed inset-0 z-[65] flex items-center justify-center bg-[#020712]/90 p-3 backdrop-blur-md sm:p-6"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${course.courseName} students`}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div className="flex h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-slate-700 bg-[#091421] shadow-2xl shadow-black/50">
+        <header className="flex items-start justify-between gap-4 border-b border-slate-700 px-5 py-5 sm:px-7">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-300">
+              Active course roster
+            </p>
+            <h2 className="mt-1 text-xl font-bold text-white sm:text-2xl">
+              {course.courseName}
+            </h2>
+            <p className="mt-1 text-sm text-slate-400">
+              {loading ? "Loading students..." : `${students.length} active students`}
+            </p>
           </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-600 bg-slate-800 px-3 text-sm font-semibold text-slate-200 transition hover:border-slate-500 hover:text-white"
+          >
+            <X className="h-4 w-4" /> Close
+          </button>
+        </header>
 
-          {/* Controls */}
-          {/* <div className="p-6 bg-gradient-to-r from-purple-800/30 to-purple-900/30 border-b border-purple-400/20">
-            <div className="flex flex-wrap items-end gap-4"> */}
-          {/* <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleSearch(e);
-                }}
-                className="flex-1 min-w-[280px]"
-              >
-                <label className="mb-2 block text-sm font-medium text-purple-200/80">
-                  Search Students
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search by student or course name..."
-                    className="w-full rounded-xl border border-purple-400/30 bg-white/10 backdrop-blur-sm px-4 py-3 text-white placeholder-purple-300/50 outline-none focus:ring-2 focus:ring-purple-400/50 focus:border-purple-400/50 transition-all duration-200"
-                  />
-                  <button
-                    type="submit"
-                    className="rounded-xl border border-purple-400/30 bg-white/10 px-4 py-3 text-sm font-medium text-white hover:bg-white/20 transition"
-                  >
-                    Search
-                  </button>
-                </div>
-              </form> */}
-
-          {/* <div>
-                <label className="mb-2 block text-sm font-medium text-purple-200/80">
-                  Filter by Status
-                </label>
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value as StatusFilter)}
-                  className="rounded-xl border border-purple-400/30 bg-white/10 backdrop-blur-sm px-4 py-3 text-white outline-none focus:ring-2 focus:ring-purple-400/50 focus:border-purple-400/50 transition-all duration-200"
+        <div className="border-b border-slate-700 bg-slate-900/45 px-5 py-4 sm:px-7">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+            Filter students by zone
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {filters.map((filter) => {
+              const selected = zone === filter.value;
+              return (
+                <button
+                  key={filter.value}
+                  type="button"
+                  onClick={() => setZone(filter.value)}
+                  className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+                    selected
+                      ? "border-sky-400/60 bg-sky-400/15 text-white ring-2 ring-sky-400/10"
+                      : "border-slate-700 bg-slate-800/55 text-slate-300 hover:border-slate-500"
+                  }`}
                 >
-                  <option value="ALL" className="bg-purple-800">
-                    All Statuses
-                  </option>
-                  {(["ACTIVE", "PAUSED", "PLACED", "DROPPED"] as Status[]).map(
-                    (s) => (
-                      <option key={s} value={s} className="bg-purple-800">
-                        {s}
-                      </option>
-                    )
-                  )}
-                </select>
-              </div> */}
-
-          {/*<button
-                onClick={fetchList}
-                className="h-[48px] rounded-xl border border-purple-400/30 bg-white/10 backdrop-blur-sm px-6 text-sm font-medium text-white hover:bg-white/20 transition-all duration-200"
-              >
-                Refresh
-              </button>*/}
-          {/* </div>
-          </div> */}
-
-          <div className="flex-1 min-h-0 overflow-y-auto px-4 py-5 sm:px-6 sm:py-8">
-            <div className="mx-auto w-full max-w-6xl">
-              <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 sm:p-6">
-                {/*  <table className="min-w-full text-sm">
-              <thead className="sticky top-0 bg-purple-800/80 backdrop-blur-sm text-left text-purple-100 border-b border-purple-400/20">
-                <tr>
-                  <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider">
-                    Student Name
-                  </th>
-                  <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider">
-                    Course
-                  </th>
-                  <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider">
-                    Status
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-purple-900/50">
-                {loading ? (
-                  <tr>
-                    <td className="px-6 py-12 text-center" colSpan={3}>
-                      <div className="flex items-center justify-center gap-3">
-                        <Loader2 className="h-6 w-6 animate-spin text-purple-300" />
-                        <span className="text-purple-200">
-                          Loading students...
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (data?.rows?.length || 0) > 0 ? (
-                  data!.rows.map((r, i) => (
-                    <tr
-                      key={r._id ?? safeKey(i, r.name, r.courseName, r.status)}
-                      className="border-b border-purple-400/10 hover:bg-white/5 transition-colors duration-200"
-                    >
-                      <td className="px-6 py-4">
-                        <button
-                          onClick={() => openDetail(r)}
-                          className="text-left font-medium text-white hover:text-purple-200 hover:underline transition-colors duration-200"
-                          title="View student details"
-                        >
-                          {r.name}
-                        </button>
-                      </td>
-                      <td className="px-6 py-4 text-purple-100">
-                        {r.courseName || "—"}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span
-                          className={cn(
-                            "inline-flex items-center gap-2 rounded-xl px-3 py-1 text-xs font-medium border",
-                            STATUS_COLORS[r.status]
-                          )}
-                        >
-                          <span className="w-2 h-2 rounded-full bg-current opacity-80" />
-                          {r.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td
-                      className="px-6 py-12 text-center text-purple-200/70"
-                      colSpan={3}
-                    >
-                      <div className="flex flex-col items-center gap-2">
-                        <Users className="h-12 w-12 text-purple-300/50" />
-                        <span>No students found</span>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>   */}
-              </div>
-            </div>
-          </div>
-
-          {/* Footer */}
-          <div className="flex items-center justify-between border-t border-purple-400/20 p-4 bg-gradient-to-r from-purple-800/30 to-purple-900/30 text-sm">
-            <div className="text-purple-200/70">
-              Page {page} • Showing {data?.rows?.length ?? 0} of{" "}
-              {data?.total ?? 0}
-            </div>
-            <div className="flex gap-2">
-              <button
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="px-3 py-1 rounded-lg border border-purple-400/30 bg-white/10 text-white disabled:opacity-40"
-              >
-                Prev
-              </button>
-              <button
-                disabled={page * limit >= (data?.total ?? 0)}
-                onClick={() => setPage((p) => p + 1)}
-                className="px-3 py-1 rounded-lg border border-purple-400/30 bg-white/10 text-white disabled:opacity-40"
-              >
-                Next
-              </button>
-            </div>
+                  <span className={`h-2 w-2 rounded-full ${filter.color}`} />
+                  {filter.label}
+                  <span className="rounded-md bg-black/20 px-1.5 py-0.5 text-[11px] text-slate-200">
+                    {filter.count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
+
+        {error && (
+          <div className="border-b border-rose-400/20 bg-rose-400/10 px-7 py-3 text-sm text-rose-100">
+            {error}
+          </div>
+        )}
+
+        <div className="min-h-0 flex-1 overflow-auto">
+          {loading ? (
+            <div className="flex h-full min-h-64 items-center justify-center gap-3 text-slate-300">
+              <Loader2 className="h-6 w-6 animate-spin text-sky-300" />
+              Loading course roster...
+            </div>
+          ) : visibleStudents.length ? (
+            <table className="w-full min-w-[680px] text-left text-sm">
+              <thead className="sticky top-0 z-10 border-b border-slate-700 bg-[#0d1928] text-xs uppercase tracking-wider text-slate-400">
+                <tr>
+                  <th className="px-6 py-4">Student</th>
+                  <th className="px-5 py-4">Batch</th>
+                  <th className="px-5 py-4">Zone</th>
+                  <th className="px-6 py-4">Enrollment ID</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {visibleStudents.map((student) => (
+                  <tr key={student._id} className="transition hover:bg-slate-800/55">
+                    <td className="px-6 py-4">
+                      <p className="font-semibold text-white">{student.name}</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {student.email || "Email not recorded"}
+                      </p>
+                    </td>
+                    <td className="px-5 py-4 font-semibold text-slate-200">
+                      {student.batch || "No batch assigned"}
+                    </td>
+                    <td className="px-5 py-4">
+                      <ZoneBadge zone={student.zone} />
+                    </td>
+                    <td className="px-6 py-4 text-slate-400">
+                      {student.enrollmentId || "Not recorded"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="flex h-full min-h-64 flex-col items-center justify-center px-6 text-center">
+              <Users className="h-10 w-10 text-slate-600" />
+              <p className="mt-3 font-semibold text-slate-200">
+                No students in this zone
+              </p>
+              <p className="mt-1 text-sm text-slate-500">
+                Select another zone to view its course roster.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <footer className="border-t border-slate-700 bg-slate-900/55 px-5 py-3 text-xs text-slate-400 sm:px-7">
+          Showing {visibleStudents.length} of {students.length} active students
+        </footer>
       </div>
+    </div>
+  );
+}
+function ZoneBadge({ zone }: { zone: Zone }) {
+  const item = ZONES.find((candidate) => candidate.value === zone) || ZONES[3];
+  return (
+    <span className="inline-flex items-center gap-2 whitespace-nowrap text-xs font-semibold text-slate-200">
+      <span className={`h-2 w-2 rounded-full ${item.color}`} />
+      {item.label}
+    </span>
+  );
+}
 
-      {/* ==================== Detail Modal (Pre + Post) ==================== */}
-      {detailOpen && (
-        <>
-          <div
-            className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm"
-            onClick={closeDetail}
-          />
-          <div className="fixed inset-0 z-[70] flex items-center justify-center px-4">
-            <div className="w-full max-w-5xl h-[90vh] max-h-[90vh] overflow-hidden rounded-3xl border border-purple-400/30 bg-purple-900/95 backdrop-blur-xl shadow-2xl flex flex-col overscroll-contain">
-              <div className="flex items-center justify-between border-b border-purple-400/20 p-6 bg-gradient-to-r from-purple-800/50 to-purple-900/50">
+function FeeCell({ fee }: { fee: FeeSummary | null }) {
+  if (!fee) {
+    return <span className="text-xs text-slate-500">No linked record</span>;
+  }
+  return (
+    <div>
+      <div className="font-semibold text-emerald-200">
+        {formatINR(fee.paid)}
+      </div>
+      <div className="mt-1 text-xs text-slate-500">
+        {formatINR(fee.remaining)} due
+      </div>
+    </div>
+  );
+}
+
+function StudentFeeDetail({
+  detail,
+  loading,
+  onClose,
+}: {
+  detail: StudentDetail | null;
+  loading: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-3 backdrop-blur-sm sm:p-6"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div className="flex h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-slate-700 bg-[#091421] shadow-2xl">
+        <header className="flex items-center justify-between border-b border-slate-700 px-5 py-4 sm:px-7">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-300">
+              Complete fee record
+            </p>
+            <h3 className="mt-1 text-xl font-bold text-white">
+              {detail?.student.name || "Loading student"}
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-slate-600 bg-slate-800 p-2.5 text-slate-200 hover:text-white"
+            aria-label="Close fee detail"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </header>
+
+        {loading || !detail ? (
+          <div className="flex flex-1 items-center justify-center gap-3 text-slate-300">
+            <Loader2 className="h-6 w-6 animate-spin text-sky-300" />
+            Loading linked fee records...
+          </div>
+        ) : (
+          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-5 sm:p-7">
+            <section className="grid gap-3 rounded-2xl border border-slate-700 bg-slate-900/50 p-5 sm:grid-cols-2 lg:grid-cols-4">
+              <Info
+                icon={<UserRound />}
+                label="Student"
+                value={detail.student.name}
+              />
+              <Info
+                icon={<Mail />}
+                label="Email"
+                value={detail.student.email || "Not recorded"}
+              />
+              <Info
+                icon={<BookOpen />}
+                label="Course"
+                value={detail.student.courseName || "Not recorded"}
+              />
+              <Info
+                icon={<MapPin />}
+                label="Zone"
+                value={
+                  ZONES.find((item) => item.value === detail.student.zone)
+                    ?.label || "Not recorded"
+                }
+              />
+            </section>
+
+            <PreplacementSection fee={detail.preplacementFee} />
+
+            <section className="rounded-2xl border border-teal-400/20 bg-teal-400/[0.035] p-5">
+              <div className="mb-5 flex items-center justify-between">
                 <div>
-                  <h3 className="text-2xl font-bold text-white">
-                    {pre?.name || "Student Details"}
-                  </h3>
-                  <p className="text-purple-200/70 mt-1">
-                    Complete fee and placement overview
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-300">
+                    Post-placement fee
                   </p>
+                  <h4 className="mt-1 text-lg font-bold text-white">
+                    Placement-linked collections
+                  </h4>
                 </div>
-                <button
-                  onClick={closeDetail}
-                  className="rounded-xl border border-purple-400/30 bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/20 transition-all duration-200"
-                >
-                  <X className="mr-2 inline-block h-4 w-4" />
-                  Close
-                </button>
+                <ReceiptIndianRupee className="h-6 w-6 text-teal-300" />
               </div>
-
-              {detailLoading ? (
-                <div className="p-12 text-center">
-                  <div className="flex flex-col items-center gap-4">
-                    <Loader2 className="h-8 w-8 animate-spin text-purple-300" />
-                    <span className="text-lg text-purple-200">
-                      Loading student details...
-                    </span>
-                  </div>
+              {detail.postplacementFees.length ? (
+                <div className="space-y-4">
+                  {detail.postplacementFees.map((offer) => (
+                    <div
+                      key={offer.id}
+                      className="rounded-2xl border border-slate-700 bg-[#081321] p-4 sm:p-5"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <h5 className="font-bold text-white">
+                            {offer.companyName || "Company not recorded"}
+                          </h5>
+                          <p className="mt-1 text-xs text-slate-400">
+                            {offer.location || "Location not recorded"} · Offer{" "}
+                            {formatDate(offer.offerDate)}
+                          </p>
+                        </div>
+                        {offer.packageLPA != null && (
+                          <span className="rounded-full border border-teal-400/25 bg-teal-400/10 px-3 py-1 text-xs font-semibold text-teal-200">
+                            {offer.packageLPA} LPA
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                        <Metric
+                          label="Total fee"
+                          value={formatINR(offer.totalFee)}
+                        />
+                        <Metric
+                          label="Collected"
+                          value={formatINR(offer.paid)}
+                          positive
+                        />
+                        <Metric
+                          label="Discount"
+                          value={formatINR(offer.discount)}
+                        />
+                        <Metric
+                          label="Outstanding"
+                          value={formatINR(offer.remaining)}
+                          warning
+                        />
+                      </div>
+                      <Transactions
+                        items={offer.installments}
+                        empty="No post-placement installments recorded"
+                      />
+                    </div>
+                  ))}
                 </div>
               ) : (
-                <div className="flex-1 min-h-0 overflow-y-auto">
-                  <div className="space-y-8 p-6">
-                    {/* Pre-placement */}
-                    {pre && (
-                      <section>
-                        <div className="flex items-center gap-3 mb-6">
-                          <TrendingUp className="h-6 w-6 text-purple-300" />
-                          <h4 className="text-xl font-semibold text-white">
-                            Pre-Placement Overview
-                          </h4>
-                        </div>
-
-                        <div className="rounded-2xl border border-purple-400/20 bg-white/5 backdrop-blur-sm overflow-hidden">
-                          <div className="p-4 bg-gradient-to-r from-purple-800/30 to-purple-900/30 border-b border-purple-400/20">
-                            <h5 className="font-semibold text-white">
-                              Payment History
-                            </h5>
-                          </div>
-                          <div className="max-h-[400px] overflow-auto">
-                            <table className="min-w-full text-sm">
-                              <thead className="sticky top-0 bg-purple-800/80 backdrop-blur-sm text-left text-purple-100">
-                                <tr>
-                                  <th className="px-4 py-3 font-medium">
-                                    Amount
-                                  </th>
-                                  <th className="px-4 py-3 font-medium">
-                                    Date
-                                  </th>
-                                  <th className="px-4 py-3 font-medium">
-                                    Mode
-                                  </th>
-                                  <th className="px-4 py-3 font-medium">
-                                    Receipt Nos
-                                  </th>
-                                  <th className="px-4 py-3 font-medium">
-                                    Note
-                                  </th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {(pre.payments || []).length ? (
-                                  pre.payments.map((p, i) => (
-                                    <tr
-                                      key={
-                                        (p as any)?._id ??
-                                        safeKey(i, p.date, p.amount, p.mode)
-                                      }
-                                      className="border-b border-purple-400/10 hover:bg-white/5 transition-colors duration-200"
-                                    >
-                                      <td className="px-4 py-3 text-emerald-300 font-semibold">
-                                        {formatINR(p.amount || 0)}
-                                      </td>
-                                      <td className="px-4 py-3 text-white">
-                                        {p.date
-                                          ? new Date(p.date).toLocaleDateString(
-                                              "en-IN",
-                                            )
-                                          : "—"}
-                                      </td>
-                                      <td className="px-4 py-3 text-purple-200">
-                                        {p.mode || "—"}
-                                      </td>
-                                      <td className="px-4 py-3 text-purple-200">
-                                        {(p.receiptNos || []).join(", ") || "—"}
-                                      </td>
-                                      <td className="px-4 py-3 text-purple-200">
-                                        {p.note || "—"}
-                                      </td>
-                                    </tr>
-                                  ))
-                                ) : (
-                                  <tr>
-                                    <td
-                                      className="px-4 py-8 text-center text-purple-200/70"
-                                      colSpan={5}
-                                    >
-                                      <div className="flex flex-col items-center gap-2">
-                                        <Wallet className="h-8 w-8 text-purple-300/50" />
-                                        <span>No payment records found</span>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                )}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      </section>
-                    )}
-
-                    {/* Post-placement */}
-                    <section>
-                      <div className="flex items-center gap-3 mb-6">
-                        <Users className="h-6 w-6 text-cyan-300" />
-                        <h4 className="text-xl font-semibold text-white">
-                          Post-Placement Overview
-                          {post.length > 0 && (
-                            <span className="ml-2 text-sm text-cyan-300 font-normal">
-                              ({post.length} placement
-                              {post.length !== 1 ? "s" : ""})
-                            </span>
-                          )}
-                        </h4>
-                      </div>
-
-                      {post.length ? (
-                        <div className="space-y-6">
-                          {post.map((o, oi) => {
-                            const companyName =
-                              o.company || o.raw?.companyName || "Company —";
-                            const location =
-                              o.location || o.raw?.location || "—";
-                            const totalPP =
-                              (typeof o.totalPPFee === "number"
-                                ? o.totalPPFee
-                                : undefined) ??
-                              Number(o.raw?.totalPostPlacementFee || 0);
-
-                            const postInst = (o as any)?.raw?.installments
-                              ?.length
-                              ? (o as any).raw.installments.map((i: any) => ({
-                                  label: i.label || "—",
-                                  amount: Number(i.amount || 0),
-                                  date: i.date || null,
-                                  mode: i.mode || "—",
-                                  note: i.note || "—",
-                                  _id: i._id,
-                                }))
-                              : (o.installments || []).map((i: any) => ({
-                                  label: "—",
-                                  amount: Number(i.amount || 0),
-                                  date: i.paidDate || i.dueDate || null,
-                                  mode: "—",
-                                  note: "—",
-                                  _id: i._id,
-                                }));
-
-                            const collected = postInst.reduce(
-                              (s: number, i: any) => s + (i.amount || 0),
-                              0,
-                            );
-                            const remaining = Math.max(
-                              Number(totalPP || 0) - collected,
-                              0,
-                            );
-
-                            return (
-                              <div
-                                key={
-                                  o._id ??
-                                  safeKey(
-                                    oi,
-                                    o.studentName,
-                                    companyName,
-                                    o.offerDate,
-                                  )
-                                }
-                                className="rounded-2xl border border-purple-400/20 bg-white/5 backdrop-blur-sm overflow-hidden"
-                              >
-                                <div className="p-6">
-                                  <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-                                    <div className="text-white">
-                                      <div className="text-lg font-semibold">
-                                        {companyName}
-                                      </div>
-                                      <div className="text-sm text-purple-200/70">
-                                        {location}
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  <div className="rounded-xl border border-purple-400/20 bg-white/5 overflow-hidden">
-                                    <div className="p-3 bg-gradient-to-r from-purple-800/30 to-purple-900/30 border-b border-purple-400/20">
-                                      <h6 className="font-medium text-white text-sm">
-                                        Installment Details
-                                      </h6>
-                                    </div>
-                                    <div className="max-h-[300px] overflow-auto">
-                                      <table className="min-w-full text-sm">
-                                        <thead className="sticky top-0 bg-purple-800/80 backdrop-blur-sm text-left text-purple-100">
-                                          <tr>
-                                            <th className="px-4 py-2 font-medium">
-                                              Label
-                                            </th>
-                                            <th className="px-4 py-2 font-medium">
-                                              Amount
-                                            </th>
-                                            <th className="px-4 py-2 font-medium">
-                                              Date
-                                            </th>
-                                            <th className="px-4 py-2 font-medium">
-                                              Mode
-                                            </th>
-                                            <th className="px-4 py-2 font-medium">
-                                              Note
-                                            </th>
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {postInst.length ? (
-                                            postInst.map(
-                                              (inst: any, ii: number) => (
-                                                <tr
-                                                  key={
-                                                    inst._id ??
-                                                    safeKey(
-                                                      ii,
-                                                      inst.date,
-                                                      inst.amount,
-                                                      inst.label,
-                                                    )
-                                                  }
-                                                  className="border-b border-purple-400/10 hover:bg-white/5 transition-colors duration-200"
-                                                >
-                                                  <td className="px-4 py-2 text-purple-200">
-                                                    {inst.label || "—"}
-                                                  </td>
-                                                  <td className="px-4 py-2 text-emerald-300 font-semibold">
-                                                    {formatINR(
-                                                      Number(inst.amount || 0),
-                                                    )}
-                                                  </td>
-                                                  <td className="px-4 py-2 text-white">
-                                                    {inst.date
-                                                      ? new Date(
-                                                          inst.date,
-                                                        ).toLocaleDateString(
-                                                          "en-IN",
-                                                        )
-                                                      : "—"}
-                                                  </td>
-                                                  <td className="px-4 py-2 text-purple-200">
-                                                    {inst.mode || "—"}
-                                                  </td>
-                                                  <td className="px-4 py-2 text-purple-200">
-                                                    {inst.note || "—"}
-                                                  </td>
-                                                </tr>
-                                              ),
-                                            )
-                                          ) : (
-                                            <tr>
-                                              <td
-                                                className="px-4 py-6 text-center text-purple-200/70"
-                                                colSpan={5}
-                                              >
-                                                <div className="flex flex-col items-center gap-2">
-                                                  <Calendar className="h-6 w-6 text-purple-300/50" />
-                                                  <span>
-                                                    No installments recorded
-                                                  </span>
-                                                </div>
-                                              </td>
-                                            </tr>
-                                          )}
-                                        </tbody>
-                                      </table>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <div className="rounded-2xl border border-purple-400/20 bg-white/5 backdrop-blur-sm p-12 text-center">
-                          <div className="flex flex-col items-center gap-4">
-                            <Users className="h-16 w-16 text-purple-300/50" />
-                            <div>
-                              <h5 className="text-lg font-semibold text-white mb-2">
-                                No Placements Found
-                              </h5>
-                              <p className="text-purple-200/70">
-                                This student hasn't been placed yet or placement
-                                records are not available.
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </section>
-                  </div>
-                </div>
+                <EmptyFees text="No post-placement fee record is linked to this LMS user." />
               )}
-            </div>
+            </section>
           </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Info({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+        <span className="[&>svg]:h-4 [&>svg]:w-4">{icon}</span>
+        {label}
+      </div>
+      <div className="mt-2 break-words text-sm font-semibold text-slate-100">
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function PreplacementSection({
+  fee,
+}: {
+  fee: StudentDetail["preplacementFee"];
+}) {
+  return (
+    <section className="rounded-2xl border border-sky-400/20 bg-sky-400/[0.035] p-5">
+      <div className="mb-5 flex items-center justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-300">
+            Pre-placement fee
+          </p>
+          <h4 className="mt-1 text-lg font-bold text-white">
+            Fee position and payment history
+          </h4>
+        </div>
+        <TrendingUp className="h-5 w-5 text-sky-300" />
+      </div>
+      {fee ? (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Metric label="Total fee" value={formatINR(fee.totalFee)} />
+            <Metric label="Collected" value={formatINR(fee.paid)} positive />
+            <Metric label="Refunded" value={formatINR(fee.refunded || 0)} />
+            <Metric
+              label="Outstanding"
+              value={formatINR(fee.remaining)}
+              warning
+            />
+          </div>
+          <Transactions
+            items={fee.payments || []}
+            empty="No pre-placement payments recorded"
+          />
         </>
+      ) : (
+        <EmptyFees text="No pre-placement fee record is linked to this LMS user." />
       )}
-    </>
+    </section>
+  );
+}
+
+function Metric({
+  label,
+  value,
+  positive,
+  warning,
+}: {
+  label: string;
+  value: string;
+  positive?: boolean;
+  warning?: boolean;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-700 bg-[#081321] p-3">
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+        {label}
+      </div>
+      <div
+        className={`mt-1 text-base font-bold ${
+          positive
+            ? "text-emerald-200"
+            : warning
+              ? "text-amber-100"
+              : "text-white"
+        }`}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function Transactions({ items, empty }: { items: Payment[]; empty: string }) {
+  if (!items.length) {
+    return (
+      <p className="mt-4 rounded-xl border border-dashed border-slate-700 px-4 py-5 text-center text-sm text-slate-500">
+        {empty}
+      </p>
+    );
+  }
+  return (
+    <div className="mt-4 overflow-hidden rounded-xl border border-slate-700">
+      <div className="grid grid-cols-[1fr_1fr_1fr] bg-slate-800/80 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+        <span>Amount</span>
+        <span>Date</span>
+        <span>Mode / note</span>
+      </div>
+      {items.map((payment, index) => (
+        <div
+          key={payment._id || `${payment.date}-${payment.amount}-${index}`}
+          className="grid grid-cols-[1fr_1fr_1fr] border-t border-slate-800 px-4 py-3 text-xs"
+        >
+          <span className="font-semibold text-emerald-200">
+            {formatINR(payment.amount)}
+          </span>
+          <span className="text-slate-300">{formatDate(payment.date)}</span>
+          <span className="truncate text-slate-400">
+            {payment.mode || payment.note || "Not recorded"}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EmptyFees({ text }: { text: string }) {
+  return (
+    <div className="rounded-xl border border-dashed border-slate-700 px-5 py-8 text-center">
+      <Wallet className="mx-auto h-7 w-7 text-slate-600" />
+      <p className="mt-3 text-sm text-slate-400">{text}</p>
+    </div>
   );
 }
