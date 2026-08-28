@@ -251,12 +251,16 @@ export type Course = {
 /**
  * Fixed course scoping for the Academic Results dashboard (mirrors the ids in
  * lms-backend config/Quizcourseconfig.js and lib/academicRoster.js).
- * Daily Quiz is filterable between the two; Mock Interview and AI HR Calling
- * admit both courses (fixed, not selectable); Real HR Calling is Bootcamp-only.
+ * Daily Quiz is filterable between the two; Mock Interview, AI HR Calling and
+ * Real HR Calling all admit both courses (fixed, not selectable).
  */
 export const JOB_READY_BOOTCAMP_COURSE_ID = "68fc62edc1dd02f23abdbcf9";
 export const DATA_ANALYST_COURSE_ID = "69b2a39602fee72dcc6a2121";
 export const QUIZ_ALLOWED_COURSE_IDS = [
+  JOB_READY_BOOTCAMP_COURSE_ID,
+  DATA_ANALYST_COURSE_ID,
+];
+export const REAL_HR_ALLOWED_COURSE_IDS = [
   JOB_READY_BOOTCAMP_COURSE_ID,
   DATA_ANALYST_COURSE_ID,
 ];
@@ -1161,7 +1165,7 @@ export function useMonthDay<MRow, DRow>(
 // Returns nothing until a date is picked. Eager so the toggle can show counts.
 //
 // `courseId` is the dashboard's course selection (only Daily Quiz has one). It
-// narrows the roster server-side, exactly as useExpectedRoster does — without it
+// narrows the roster server-side, exactly as useExpectedRosterByDate does — without it
 // the Absent list would keep listing students the selected course never expected,
 // and its "expected" would disagree with the chart's denominator.
 export function useAbsent(
@@ -1221,51 +1225,151 @@ export function pct(part: number, whole: number): number | null {
 }
 
 /**
- * Size of the tab's expected roster — the denominator the chart's percentages
- * are taken against.
+ * A day's participation rate, guaranteed never to exceed 100%: the
+ * denominator is floored up to the attended count when real attendance
+ * exceeds the roster's eligible count for that day.
  *
- * It reuses the absent endpoint because that endpoint already owns the roster
- * definition (zone + course + active, per tab), so the chart's denominator can
- * never disagree with the "expected" shown by the Absent list.
- *
- * ONE roster is used for the whole span, probed at its first day. Most of the
- * roster rules are point-in-time state (zone, paused, placed) rather than
- * per-day, but the quiz roster does move day to day — a blue-zone student is
- * excluded until their settling period ends. So over a long span this is an
- * approximation; per-day exactness would cost one request per day. For the
- * default single-month view it behaves exactly as it did before.
+ * Mirrors `participation()` in lms-backend services/reportPdf.js (the daily
+ * WhatsApp report), which solves the same problem the same way. The
+ * alternative — restricting the numerator to today's live roster — was tried
+ * here first and reverted: a student's zone or mock-attempt count has no
+ * history, only a current value, so a live roster can't tell whether they
+ * were eligible on a PAST day. That silently undercounts older days more and
+ * more as students progress (e.g. yellow → green zone) or exhaust their mock
+ * attempts, whereas flooring the denominator never discards real activity —
+ * it only widens "expected" to admit it, exactly like the report already does.
  */
-export function useExpectedRoster(
+export function participationRate(
+  attended: number,
+  expectedRaw: number
+): { expected: number; rate: number } {
+  const expected = Math.max(expectedRaw || 0, attended || 0);
+  return { expected, rate: pct(attended, expected) ?? 0 };
+}
+
+/**
+ * One day's frozen eligible-student counts, as captured by
+ * jobs/academicEligibilityJob.js — the `total` plus the same total split by
+ * course (see lib/academicRoster.js ACADEMIC_COURSES).
+ */
+export type EligibilityCounts = {
+  total: number;
+  productionSupport: number;
+  dataAnalyst: number;
+  dataScience: number;
+  dataEngineering: number;
+};
+
+type EligibilityDayRow = {
+  dateStr: string;
+  eligibleForAcademic: Record<TabKey, EligibilityCounts>;
+};
+
+/** One month of frozen daily snapshots (only the days actually captured). */
+async function fetchEligibilityMonth(month: string): Promise<EligibilityDayRow[]> {
+  const { data } = await axios.get(
+    `${LMS}/api/academic-results/eligibility/month`,
+    { params: { month } }
+  );
+  return data?.days ?? [];
+}
+
+/** Maps a single selected dashboard course id to its key in the frozen breakdown. */
+const ELIGIBILITY_COURSE_KEY: Record<string, keyof EligibilityCounts> = {
+  [JOB_READY_BOOTCAMP_COURSE_ID]: "productionSupport",
+  [DATA_ANALYST_COURSE_ID]: "dataAnalyst",
+};
+
+/**
+ * Per-day expected-roster counts for a tab across a span, keyed by
+ * "YYYY-MM-DD" — the denominator each day of the chart's percentages is
+ * taken against.
+ *
+ * Reads jobs/academicEligibilityJob.js's frozen daily snapshot instead of
+ * querying the roster live: eligibility is derived from a student's CURRENT
+ * zone/paused/placed state, so a single live probe (the old useExpectedRoster,
+ * which asked only once for the first day of the range and reused that one
+ * number for every day) drifts more and more wrong the further a day is from
+ * when it was probed — a student who changes zone, gets placed, or exhausts
+ * their mock attempts silently rewrites every other day's percentage. The
+ * frozen snapshot is exactly what makes each day's figure describe THAT day.
+ *
+ * A date with no captured row (in practice: today, before the 00:05 IST job
+ * has run yet, or a date predating the snapshot job's rollout) falls back to
+ * a live probe of that specific date, same as the Absent list uses.
+ */
+export function useExpectedRosterByDate(
   tab: TabKey,
   range: MonthRange,
   refreshKey: number,
   courseId?: string
 ) {
-  const [expected, setExpected] = useState(0);
+  const [expectedByDate, setExpectedByDate] = useState<Map<string, number>>(
+    new Map()
+  );
   const [loading, setLoading] = useState(false);
-  const { from } = normalizeRange(range);
 
   useEffect(() => {
-    if (!isValidMonth(from)) {
-      setExpected(0);
+    if (!isValidRange(range)) {
+      setExpectedByDate(new Map());
       return;
     }
     let cancelled = false;
     setLoading(true);
-    fetchAbsent(tab, `${from}-01`, courseId)
-      .then((res) => !cancelled && setExpected(res.expected))
-      .catch((err) => {
-        if (cancelled) return;
-        console.error("[useExpectedRoster] load failed", err);
-        setExpected(0);
-      })
-      .finally(() => {
+
+    const courseKey = courseId ? ELIGIBILITY_COURSE_KEY[courseId] : undefined;
+
+    (async () => {
+      try {
+        const monthRows = await Promise.all(
+          monthsInRange(range).map((m) => fetchEligibilityMonth(m).catch(() => []))
+        );
+        const byDateStr = new Map<string, EligibilityDayRow>();
+        for (const rows of monthRows) {
+          for (const row of rows) byDateStr.set(row.dateStr, row);
+        }
+
+        const map = new Map<string, number>();
+        const missing: string[] = [];
+        for (const date of datesInRange(range)) {
+          const row = byDateStr.get(date);
+          if (!row) {
+            missing.push(date);
+            continue;
+          }
+          const counts = row.eligibleForAcademic?.[tab];
+          map.set(date, (courseKey ? counts?.[courseKey] : counts?.total) ?? 0);
+        }
+
+        // Fill in whatever days weren't captured with a live probe, same rule
+        // (and same denominator) as the Absent list for that date.
+        if (missing.length > 0) {
+          const live = await Promise.all(
+            missing.map((date) =>
+              fetchAbsent(tab, date, courseId)
+                .then((res) => [date, res.expected] as const)
+                .catch(() => [date, 0] as const)
+            )
+          );
+          for (const [date, expected] of live) map.set(date, expected);
+        }
+
+        if (!cancelled) setExpectedByDate(map);
+      } catch (err) {
+        if (!cancelled) {
+          console.error("[useExpectedRosterByDate] load failed", err);
+          setExpectedByDate(new Map());
+        }
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    })();
+
     return () => {
       cancelled = true;
     };
-  }, [tab, from, refreshKey, courseId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, range.from, range.to, refreshKey, courseId]);
 
-  return { expected, loading };
+  return { expectedByDate, loading };
 }

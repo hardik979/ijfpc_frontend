@@ -28,6 +28,10 @@ interface Student {
     joinedMonth: string; // ISO date string or month string (your backend)
     avatar?: string;
     zone: string;
+    /** Repurposed: now means "individually selected for AI HR calling"
+     * (green-zone students only — lms-backend lib/academicRoster.js
+     * ACADEMIC_ROSTERS.ai.includeSelectedGreenZone). Its original "Green
+     * Report today" meaning was retired; the field/endpoints are unchanged. */
     eligible_today: boolean;
 }
 
@@ -97,6 +101,11 @@ const StudentZoneUpdate: React.FC = () => {
             params.set("page", String(page));
             params.set("limit", String(limit));
             params.set('zone', String('green'))
+            // Only currently active students — a placed or paused green-zone
+            // student is no longer a candidate for AI HR calling. No course
+            // filter is set, so every course is included, as before.
+            params.set("isPlaced", "false");
+            params.set("isPaused", "false");
             if (appliedSearch.trim()) params.set("search", appliedSearch.trim());
 
             const response = await fetch(`${API_LMS_URL}/api/users/get-student-list?${params.toString()}`, {
@@ -153,11 +162,11 @@ const StudentZoneUpdate: React.FC = () => {
                 throw new Error(json?.message || "Failed to update eligibility");
             }
 
-            toast.success("Eligibility updated");
+            toast.success("AI HR calling selection updated");
         } catch (error) {
-            console.error("Eligibility toggle failed:", error);
+            console.error("AI HR calling selection toggle failed:", error);
             setStudents(snapshot); // rollback
-            toast.error("Eligibility update failed");
+            toast.error("AI HR calling selection update failed");
         }
     };
 
@@ -184,11 +193,11 @@ const StudentZoneUpdate: React.FC = () => {
                 throw new Error(json?.message || "Failed to bulk update eligibility");
             }
 
-            toast.success(`Eligibility ${setValue ? "set for all" : "reset for all"}`);
+            toast.success(`AI HR calling ${setValue ? "enabled for all" : "disabled for all"}`);
         } catch (error) {
-            console.error("Bulk eligibility update failed:", error);
+            console.error("Bulk AI HR calling selection update failed:", error);
             setStudents(snapshot); // rollback
-            toast.error("Eligibility update failed");
+            toast.error("AI HR calling selection update failed");
         }
     };
 
@@ -235,8 +244,8 @@ const StudentZoneUpdate: React.FC = () => {
                     {/* Header */}
                     <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
                         <div>
-                            <h1 className="text-3xl font-bold text-[var(--panel-text-primary)]">Student Eligibility</h1>
-                            <p className="text-[var(--panel-text-secondary)] mt-2">Mark students eligible for today&rsquo;s attendance</p>
+                            <h1 className="text-3xl font-bold text-[var(--panel-text-primary)]">AI HR Calling — Green Zone Selection</h1>
+                            <p className="text-[var(--panel-text-secondary)] mt-2">Select green-zone students who should also receive AI HR calls</p>
                         </div>
                         <ThemeToggle />
                     </div>
@@ -263,9 +272,9 @@ const StudentZoneUpdate: React.FC = () => {
                     <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-card)] backdrop-blur-xl shadow-2xl overflow-hidden">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-6 py-4 border-b border-[var(--panel-border)] bg-[var(--panel-card-soft)]">
                             <div>
-                                <h3 className="text-sm font-semibold text-[var(--panel-text-primary)]">Eligibility Controls</h3>
+                                <h3 className="text-sm font-semibold text-[var(--panel-text-primary)]">AI HR Selection Controls</h3>
                                 <p className="text-xs text-[var(--panel-text-secondary)]">
-                                    Apply today eligibility to all students in this list.
+                                    Include or exclude every green-zone student below from AI HR calling.
                                 </p>
                             </div>
 
@@ -314,7 +323,7 @@ const StudentZoneUpdate: React.FC = () => {
                                             Enrollment Date
                                         </th>
                                         <th className="px-6 py-3 text-left text-xs font-semibold text-[var(--panel-text-secondary)] uppercase tracking-wider">
-                                            Actions
+                                            AI HR Calling
                                         </th>
                                     </tr>
                                 </thead>

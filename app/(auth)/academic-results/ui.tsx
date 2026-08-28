@@ -274,7 +274,6 @@ export function MonthlyChart({
   yLabel,
   range,
   percent = false,
-  percentBase,
 }: {
   data: Array<{ date: string } & Record<string, unknown>>;
   series: ChartSeries[];
@@ -294,8 +293,6 @@ export function MonthlyChart({
    * still counts as having attended), and clamping would hide that.
    */
   percent?: boolean;
-  /** Denominator the percentages were computed against, shown in the tooltip. */
-  percentBase?: number;
 }) {
   // A single month keeps the compact "01…31" axis it always had; a span that
   // crosses months needs the month too, or day 3 of January and day 3 of March
@@ -311,9 +308,12 @@ export function MonthlyChart({
         ? `${date.slice(8)} ${monthShortLabel(date.slice(0, 7))}`
         : date.slice(8);
     const byDate = new Map(data.map((d) => [d.date, d]));
-    const zeros = Object.fromEntries(
-      series.flatMap((s) => (s.countKey ? [[s.key, 0], [s.countKey, 0]] : [[s.key, 0]]))
-    );
+    // `expected` is the per-day denominator (percent mode); zero-filled days
+    // carry it too so the tooltip never falls back to a stale prior value.
+    const zeros = Object.fromEntries([
+      ...series.flatMap((s) => (s.countKey ? [[s.key, 0], [s.countKey, 0]] : [[s.key, 0]])),
+      ["expected", 0],
+    ]);
     return datesInRange(range).map((date) => {
       const existing = byDate.get(date);
       return existing
@@ -393,6 +393,9 @@ export function MonthlyChart({
                 labelFormatter={(label) => (spansMonths ? `${label}` : `Day ${label}`)}
                 // In percent mode show the rate plus the counts behind it, so a
                 // bar can be checked against the table without leaving the page.
+                // The denominator is per-day (each row carries its own
+                // `expected`), not a single figure for the whole chart — the
+                // roster size can genuinely differ from one day to the next.
                 formatter={
                   percent
                     ? (value: unknown, name: unknown, item: any) => {
@@ -400,8 +403,11 @@ export function MonthlyChart({
                         const count = s?.countKey
                           ? item?.payload?.[s.countKey]
                           : undefined;
-                        return typeof count === "number" && percentBase && percentBase > 0
-                          ? `${value}% (${count} of ${percentBase})`
+                        const base = item?.payload?.expected;
+                        return typeof count === "number" &&
+                          typeof base === "number" &&
+                          base > 0
+                          ? `${value}% (${count} of ${base})`
                           : `${value}%`;
                       }
                     : undefined
