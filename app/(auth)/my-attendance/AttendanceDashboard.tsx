@@ -16,12 +16,15 @@ import {
   ArrowLeft,
   BarChart3,
   CalendarDays,
+  Check,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Clock,
+  EllipsisVertical,
   LogIn,
   LogOut,
+  LoaderCircle,
   MinusCircle,
   Percent,
   RefreshCw,
@@ -38,6 +41,8 @@ type AttendanceStatus =
   | "incomplete"
   | "weekly_off"
   | "leave"
+  | "exception"
+  | "public_holiday"
   | "half";
 
 type HalfDayReason = "short_hours" | "no_punch_out" | null;
@@ -52,6 +57,12 @@ interface AttendanceRecord {
   punchCount: number;
   workedMinutes: number | null;
   workedLabel: string | null;
+  holidayName?: string | null;
+  adjustment?: {
+    exception: boolean;
+    approvedLeave: boolean;
+    leaveLimitExceeded: boolean;
+  };
 }
 
 interface AttendanceSummary {
@@ -62,6 +73,8 @@ interface AttendanceSummary {
   incompleteDays: number;
   missingPunchOutDays: number;
   leaveDays: number;
+  exceptionDays: number;
+  publicHolidayDays: number;
   weeklyOffDays: number;
   attendancePercentage: number;
   totalWorkedMinutes: number;
@@ -86,6 +99,8 @@ interface OverallSummary {
   halfDays: number;
   absentDays: number;
   leaveDays: number;
+  exceptionDays: number;
+  publicHolidayDays: number;
   weeklyOffDays: number;
   attendancePercentage: number;
 }
@@ -98,6 +113,8 @@ interface DailyOverview {
   halfDays: number;
   absentDays: number;
   leaveDays: number;
+  exceptionDays: number;
+  publicHolidayDays: number;
   weeklyOffDays: number;
   attendancePercentage: number;
 }
@@ -121,6 +138,8 @@ interface StaffSummaryRow {
     | "halfDays"
     | "absentDays"
     | "leaveDays"
+    | "exceptionDays"
+    | "publicHolidayDays"
     | "weeklyOffDays"
     | "attendancePercentage"
   >;
@@ -141,6 +160,8 @@ const STATUS_LABEL: Record<AttendanceStatus, string> = {
   incomplete: "Incomplete",
   weekly_off: "Weekly off",
   leave: "Leave",
+  exception: "Exception",
+  public_holiday: "Public holiday",
 };
 
 const STATUS_STYLE: Record<AttendanceStatus, string> = {
@@ -155,6 +176,10 @@ const STATUS_STYLE: Record<AttendanceStatus, string> = {
     "border-slate-300/70 bg-slate-50/80 text-slate-600 dark:border-slate-400/25 dark:bg-slate-400/10 dark:text-slate-300",
   leave:
     "border-sky-300/70 bg-sky-50/80 text-sky-800 dark:border-sky-400/25 dark:bg-sky-400/10 dark:text-sky-300",
+  exception:
+    "border-violet-300/70 bg-violet-50/80 text-violet-800 dark:border-violet-400/25 dark:bg-violet-400/10 dark:text-violet-300",
+  public_holiday:
+    "border-cyan-300/70 bg-cyan-50/80 text-cyan-800 dark:border-cyan-400/25 dark:bg-cyan-400/10 dark:text-cyan-300",
 };
 
 const STATUS_DOT: Record<AttendanceStatus, string> = {
@@ -164,6 +189,8 @@ const STATUS_DOT: Record<AttendanceStatus, string> = {
   incomplete: "bg-orange-500",
   weekly_off: "bg-slate-400",
   leave: "bg-sky-500",
+  exception: "bg-violet-500",
+  public_holiday: "bg-cyan-500",
 };
 
 const HALF_DAY_REASON: Record<string, string> = {
@@ -220,7 +247,13 @@ const initials = (name: string) =>
     .join("")
     .toUpperCase() || "ST";
 
-function StatusBadge({ status }: { status: AttendanceStatus }) {
+function StatusBadge({
+  status,
+  label,
+}: {
+  status: AttendanceStatus;
+  label?: string;
+}) {
   return (
     <span
       className={
@@ -232,7 +265,7 @@ function StatusBadge({ status }: { status: AttendanceStatus }) {
         aria-hidden="true"
         className={"h-1.5 w-1.5 rounded-full " + STATUS_DOT[status]}
       />
-      {STATUS_LABEL[status]}
+      {label || STATUS_LABEL[status]}
     </span>
   );
 }
@@ -543,21 +576,141 @@ function EmptyState({ title, detail }: { title: string; detail: string }) {
   );
 }
 
+type AttendanceAdjustmentInput = {
+  exception: boolean;
+  approvedLeave: boolean;
+};
+
+const adjustmentFor = (
+  record: AttendanceRecord,
+): AttendanceAdjustmentInput => ({
+  exception: record.adjustment?.exception === true,
+  approvedLeave: record.adjustment?.approvedLeave === true,
+});
+
+function AttendanceAdjustmentMenu({
+  record,
+  saving,
+  disabled,
+  floating = false,
+  onChange,
+}: {
+  record: AttendanceRecord;
+  saving: boolean;
+  disabled: boolean;
+  floating?: boolean;
+  onChange: (dateKey: string, adjustment: AttendanceAdjustmentInput) => void;
+}) {
+  const adjustment = adjustmentFor(record);
+  const options = [
+    {
+      label: "Exceptions",
+      checked: adjustment.exception,
+      next: { ...adjustment, exception: !adjustment.exception },
+    },
+    {
+      label: "Approved Leave",
+      checked: adjustment.approvedLeave,
+      next: { ...adjustment, approvedLeave: !adjustment.approvedLeave },
+    },
+  ];
+
+  return (
+    <details className="relative shrink-0">
+      <summary
+        className={
+          styles.iconButton +
+          " flex h-8 w-8 cursor-pointer list-none items-center justify-center [&::-webkit-details-marker]:hidden"
+        }
+        aria-label={"Attendance options for " + formatDate(record.dateKey)}
+        title="Attendance options"
+      >
+        {saving ? (
+          <LoaderCircle
+            aria-hidden="true"
+            className="h-4 w-4 animate-spin motion-reduce:animate-none"
+          />
+        ) : (
+          <EllipsisVertical aria-hidden="true" className="h-4 w-4" />
+        )}
+      </summary>
+      <div
+        className={
+          styles.surfaceMuted +
+          " " +
+          styles.divider +
+          " w-48 overflow-hidden rounded-md border " +
+          (floating ? "absolute right-0 top-9 z-30" : "mt-2")
+        }
+      >
+        {options.map((option) => (
+          <button
+            key={option.label}
+            type="button"
+            disabled={disabled}
+            aria-pressed={option.checked}
+            onClick={() => onChange(record.dateKey, option.next)}
+            className={
+              styles.divider +
+              " flex min-h-10 w-full items-center gap-2 border-b px-3 text-left text-xs font-semibold outline-none last:border-b-0 hover:bg-indigo-500/[0.06] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400/70 disabled:cursor-wait disabled:opacity-60"
+            }
+          >
+            <span
+              aria-hidden="true"
+              className={
+                "flex h-4 w-4 shrink-0 items-center justify-center rounded border " +
+                (option.checked
+                  ? "border-indigo-500 bg-indigo-500 text-white"
+                  : "border-slate-400/60")
+              }
+            >
+              {option.checked ? <Check className="h-3 w-3" /> : null}
+            </span>
+            <span className={styles.primary}>{option.label}</span>
+          </button>
+        ))}
+      </div>
+    </details>
+  );
+}
+
+const adjustmentNote = (record: AttendanceRecord) => {
+  if (record.adjustment?.leaveLimitExceeded) {
+    return "Approved leave limit exceeded";
+  }
+  if (record.adjustment?.approvedLeave && record.adjustment?.exception) {
+    return "Exception also applied";
+  }
+  return null;
+};
+
 function PersonalHistory({
   records,
   month,
   embedded = false,
   title = "Attendance history",
+  canAdjust = false,
+  savingDate = "",
+  onAdjustmentChange,
 }: {
   records: AttendanceRecord[];
   month: string;
   embedded?: boolean;
   title?: string;
+  canAdjust?: boolean;
+  savingDate?: string;
+  onAdjustmentChange?: (
+    dateKey: string,
+    adjustment: AttendanceAdjustmentInput,
+  ) => void;
 }) {
   return (
     <section
       aria-labelledby="history-title"
-      className={(embedded ? "" : styles.glass + " ") + "overflow-hidden"}
+      className={
+        (embedded ? "" : styles.glass + " ") +
+        (canAdjust ? "overflow-visible" : "overflow-hidden")
+      }
     >
       <div
         className={
@@ -629,23 +782,49 @@ function PersonalHistory({
                     }
                   >
                     <td className="px-5 py-3.5">
-                      <p
-                        className={
-                          styles.primary + " whitespace-nowrap font-semibold"
-                        }
-                      >
-                        {formatDate(record.dateKey)}
-                      </p>
-                      <p className={styles.muted + " mt-0.5 text-xs"}>
-                        {record.dayOfWeek || ""}
-                      </p>
+                      <div className="flex items-start gap-2">
+                        <div className="min-w-0">
+                          <p
+                            className={
+                              styles.primary +
+                              " whitespace-nowrap font-semibold"
+                            }
+                          >
+                            {formatDate(record.dateKey)}
+                          </p>
+                          <p className={styles.muted + " mt-0.5 text-xs"}>
+                            {record.dayOfWeek || ""}
+                          </p>
+                        </div>
+                        {canAdjust &&
+                        onAdjustmentChange &&
+                        record.status !== "public_holiday" ? (
+                          <AttendanceAdjustmentMenu
+                            record={record}
+                            saving={savingDate === record.dateKey}
+                            disabled={Boolean(savingDate)}
+                            onChange={onAdjustmentChange}
+                          />
+                        ) : null}
+                      </div>
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex flex-wrap items-center gap-2">
-                        <StatusBadge status={record.status} />
-                        {record.halfDayReason ? (
+                        <StatusBadge
+                          status={record.status}
+                          label={
+                            record.status === "public_holiday"
+                              ? record.holidayName || "Public holiday"
+                              : record.adjustment?.approvedLeave &&
+                                  !record.adjustment.leaveLimitExceeded
+                                ? "Approved leave"
+                                : undefined
+                          }
+                        />
+                        {record.halfDayReason || adjustmentNote(record) ? (
                           <span className={styles.muted + " text-xs"}>
-                            {HALF_DAY_REASON[record.halfDayReason]}
+                            {adjustmentNote(record) ||
+                              HALF_DAY_REASON[record.halfDayReason || ""]}
                           </span>
                         ) : null}
                       </div>
@@ -694,7 +873,30 @@ function PersonalHistory({
                       {record.dayOfWeek || ""}
                     </p>
                   </div>
-                  <StatusBadge status={record.status} />
+                  <div className="flex items-start gap-2">
+                    <StatusBadge
+                      status={record.status}
+                      label={
+                        record.status === "public_holiday"
+                          ? record.holidayName || "Public holiday"
+                          : record.adjustment?.approvedLeave &&
+                              !record.adjustment.leaveLimitExceeded
+                            ? "Approved leave"
+                            : undefined
+                      }
+                    />
+                    {canAdjust &&
+                    onAdjustmentChange &&
+                    record.status !== "public_holiday" ? (
+                      <AttendanceAdjustmentMenu
+                        record={record}
+                        saving={savingDate === record.dateKey}
+                        disabled={Boolean(savingDate)}
+                        floating
+                        onChange={onAdjustmentChange}
+                      />
+                    ) : null}
+                  </div>
                 </div>
                 <dl className="mt-3 grid grid-cols-3 gap-3">
                   {[
@@ -719,9 +921,10 @@ function PersonalHistory({
                     </div>
                   ))}
                 </dl>
-                {record.halfDayReason ? (
+                {record.halfDayReason || adjustmentNote(record) ? (
                   <p className={styles.muted + " mt-3 text-xs"}>
-                    {HALF_DAY_REASON[record.halfDayReason]}
+                    {adjustmentNote(record) ||
+                      HALF_DAY_REASON[record.halfDayReason || ""]}
                   </p>
                 ) : null}
               </li>
@@ -886,9 +1089,16 @@ function PersonalDashboard({
 function StaffDetailView({
   data,
   month,
+  savingDate,
+  onAdjustmentChange,
 }: {
   data: AttendancePayload;
   month: string;
+  savingDate: string;
+  onAdjustmentChange: (
+    dateKey: string,
+    adjustment: AttendanceAdjustmentInput,
+  ) => void;
 }) {
   const summary = data.summary;
   const facts = [
@@ -896,7 +1106,14 @@ function StaffDetailView({
     { label: "Present", value: summary.presentDays },
     { label: "Half day", value: summary.halfDays },
     { label: "Absent", value: summary.absentDays },
-    { label: "Leave / off", value: summary.leaveDays + summary.weeklyOffDays },
+    {
+      label: "Leave / off",
+      value:
+        summary.leaveDays +
+        summary.weeklyOffDays +
+        (summary.publicHolidayDays || 0),
+    },
+    { label: "Exceptions", value: summary.exceptionDays || 0 },
     { label: "Attendance", value: summary.attendancePercentage + "%" },
   ];
 
@@ -930,7 +1147,7 @@ function StaffDetailView({
             styles.surfaceMuted +
             " " +
             styles.divider +
-            " grid grid-cols-2 border-t sm:grid-cols-3 lg:grid-cols-6"
+            " grid grid-cols-2 border-t sm:grid-cols-3 lg:grid-cols-7"
           }
         >
           {facts.map((fact) => (
@@ -960,6 +1177,9 @@ function StaffDetailView({
         records={data.records}
         month={month}
         title="Individual attendance details"
+        canAdjust
+        savingDate={savingDate}
+        onAdjustmentChange={onAdjustmentChange}
       />
     </>
   );
@@ -1238,7 +1458,6 @@ function AdminDashboard({
   month: string;
 }) {
   const summary = data.overview;
-  const exceptions = summary.halfDays + summary.absentDays;
   const reportingRate = summary.staffCount
     ? Math.round((summary.staffWithRecords / summary.staffCount) * 100)
     : 0;
@@ -1247,7 +1466,7 @@ function AdminDashboard({
     <>
       <section
         aria-label="Overall staff attendance summary"
-        className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-5"
+        className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-3"
       >
         <MetricCard
           icon={<Users className="h-4 w-4" />}
@@ -1263,20 +1482,6 @@ function AdminDashboard({
           hint={reportingRate + "% have records this month"}
           tone="accent"
           progress={reportingRate}
-        />
-        <MetricCard
-          icon={<CheckCircle2 className="h-4 w-4" />}
-          label="Present days"
-          value={String(summary.presentDays)}
-          hint={summary.recordedWorkingDays + " working-day records"}
-          tone="teal"
-        />
-        <MetricCard
-          icon={<AlertCircle className="h-4 w-4" />}
-          label="Exceptions"
-          value={String(exceptions)}
-          hint={summary.halfDays + " half | " + summary.absentDays + " absent"}
-          tone={exceptions ? "amber" : "teal"}
         />
         <MetricCard
           icon={<Percent className="h-4 w-4" />}
@@ -1341,6 +1546,7 @@ export function StaffAttendanceDetailPage({
   const [data, setData] = useState<AttendancePayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [savingDate, setSavingDate] = useState("");
   const [error, setError] = useState("");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const requestSequence = useRef(0);
@@ -1383,6 +1589,43 @@ export function StaffAttendanceDetailPage({
       }
     },
     [validEmployeeId],
+  );
+
+  const updateAdjustment = useCallback(
+    async (dateKey: string, adjustment: AttendanceAdjustmentInput) => {
+      if (savingDate) return;
+      setSavingDate(dateKey);
+      setError("");
+
+      try {
+        const response = await fetch(
+          "/api/staff/attendance/staff/" +
+            validEmployeeId +
+            "?month=" +
+            encodeURIComponent(month),
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ dateKey, ...adjustment }),
+          },
+        );
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload?.error || "Could not update attendance");
+        }
+        setData(payload as AttendancePayload);
+        setLastUpdated(new Date());
+      } catch (caught) {
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "Could not update attendance",
+        );
+      } finally {
+        setSavingDate("");
+      }
+    },
+    [month, savingDate, validEmployeeId],
   );
 
   useEffect(() => {
@@ -1479,7 +1722,12 @@ export function StaffAttendanceDetailPage({
         <ErrorBanner error={error} code="" />
         {!isLoaded || loading ? <LoadingState /> : null}
         {isLoaded && !loading && data ? (
-          <StaffDetailView data={data} month={month} />
+          <StaffDetailView
+            data={data}
+            month={month}
+            savingDate={savingDate}
+            onAdjustmentChange={updateAdjustment}
+          />
         ) : null}
       </div>
     </main>
