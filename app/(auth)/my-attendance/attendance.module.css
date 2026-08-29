@@ -1,0 +1,328 @@
+.page {
+  --attendance-bg: #e9eef3;
+  --attendance-surface: rgb(255 255 255 / 0.76);
+  --attendance-surface-strong: rgb(255 255 255 / 0.9);
+  --attendance-surface-muted: rgb(241 245 249 / 0.76);
+  --attendance-border: rgb(71 85 105 / 0.16);
+  --attendance-highlight: rgb(255 255 255 / 0.96);
+  --attendance-text: #172033;
+  --attendance-text-secondary: #475569;
+  --attendance-text-muted: #64748b;
+  --attendance-accent: #4f5fa7;
+  --attendance-accent-strong: #354583;
+  --attendance-accent-soft: rgb(79 95 167 / 0.12);
+  --attendance-teal: #287d71;
+  --attendance-teal-soft: rgb(40 125 113 / 0.12);
+  --attendance-amber: #9a6427;
+  --attendance-amber-soft: rgb(154 100 39 / 0.12);
+  --attendance-rose: #a54857;
+  --attendance-rose-soft: rgb(165 72 87 / 0.11);
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  overflow-x: hidden;
+  color: var(--attendance-text);
+  letter-spacing: 0;
+  background:
+    linear-gradient(130deg, rgb(255 255 255 / 0.72), transparent 48%),
+    linear-gradient(145deg, #eef2f6 0%, var(--attendance-bg) 54%, #e5efeb 100%);
+}
+
+.page::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgb(58 79 101 / 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(58 79 101 / 0.035) 1px, transparent 1px);
+  background-size: 52px 52px;
+  mask-image: linear-gradient(to bottom, black, transparent 74%);
+}
+
+:global([data-theme="dark"]) .page {
+  --attendance-bg: #0d1724;
+  --attendance-surface: rgb(19 33 49 / 0.82);
+  --attendance-surface-strong: rgb(24 40 58 / 0.94);
+  --attendance-surface-muted: rgb(13 27 42 / 0.82);
+  --attendance-border: rgb(148 163 184 / 0.2);
+  --attendance-highlight: rgb(255 255 255 / 0.075);
+  --attendance-text: #f1f5f9;
+  --attendance-text-secondary: #bac7d6;
+  --attendance-text-muted: #8fa0b2;
+  --attendance-accent: #91a5ef;
+  --attendance-accent-strong: #b3c0f7;
+  --attendance-accent-soft: rgb(145 165 239 / 0.14);
+  --attendance-teal: #78c7b7;
+  --attendance-teal-soft: rgb(120 199 183 / 0.13);
+  --attendance-amber: #e2b675;
+  --attendance-amber-soft: rgb(226 182 117 / 0.13);
+  --attendance-rose: #ef9aa7;
+  --attendance-rose-soft: rgb(239 154 167 / 0.12);
+  background:
+    linear-gradient(130deg, rgb(39 57 77 / 0.5), transparent 48%),
+    linear-gradient(145deg, #111e2d 0%, var(--attendance-bg) 54%, #10241f 100%);
+}
+
+.glass,
+.control,
+.iconButton,
+.alert {
+  border: 1px solid var(--attendance-border);
+  background: var(--attendance-surface);
+  box-shadow:
+    inset 0 1px 0 var(--attendance-highlight),
+    0 18px 48px rgb(30 41 59 / 0.1);
+  -webkit-backdrop-filter: blur(20px) saturate(120%);
+  backdrop-filter: blur(20px) saturate(120%);
+}
+
+.glass {
+  border-radius: 8px;
+}
+
+.control,
+.iconButton {
+  border-radius: 8px;
+}
+
+.control {
+  color: var(--attendance-text-secondary);
+}
+
+.iconButton {
+  color: var(--attendance-accent-strong);
+  transition:
+    color 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.iconButton:hover:not(:disabled),
+.iconButton:focus-visible {
+  color: var(--attendance-text);
+  border-color: color-mix(in srgb, var(--attendance-accent) 42%, transparent);
+  background: var(--attendance-surface-strong);
+}
+
+.iconButton:focus-visible,
+.monthButton:focus-visible,
+.monthSelect:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--attendance-accent) 65%, transparent);
+  outline-offset: 2px;
+}
+
+.iconButton:disabled,
+.monthButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.monthButton,
+.monthSelect {
+  color: var(--attendance-text-secondary);
+  background: transparent;
+}
+
+.monthButton {
+  transition:
+    color 160ms ease,
+    background-color 160ms ease;
+}
+
+.monthButton:hover:not(:disabled) {
+  color: var(--attendance-text);
+  background: var(--attendance-accent-soft);
+}
+
+.monthSelect {
+  min-width: 9.75rem;
+  color-scheme: light;
+}
+
+:global([data-theme="dark"]) .monthSelect {
+  color-scheme: dark;
+}
+
+.identityIcon {
+  color: var(--attendance-accent-strong);
+  border: 1px solid color-mix(in srgb, var(--attendance-accent) 30%, transparent);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, var(--attendance-accent-soft), var(--attendance-teal-soft)),
+    var(--attendance-surface-strong);
+  box-shadow:
+    inset 0 1px 0 var(--attendance-highlight),
+    0 12px 28px rgb(44 65 101 / 0.12);
+}
+
+.statCard {
+  position: relative;
+  min-width: 0;
+  min-height: 8.25rem;
+  padding: 1rem;
+  overflow: hidden;
+}
+
+.statCard::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  content: "";
+  background: var(--metric-color, var(--attendance-accent));
+  opacity: 0.82;
+}
+
+.metricAccent {
+  --metric-color: var(--attendance-accent);
+  --metric-soft: var(--attendance-accent-soft);
+}
+
+.metricTeal {
+  --metric-color: var(--attendance-teal);
+  --metric-soft: var(--attendance-teal-soft);
+}
+
+.metricAmber {
+  --metric-color: var(--attendance-amber);
+  --metric-soft: var(--attendance-amber-soft);
+}
+
+.metricRose {
+  --metric-color: var(--attendance-rose);
+  --metric-soft: var(--attendance-rose-soft);
+}
+
+.metricNeutral {
+  --metric-color: var(--attendance-text-muted);
+  --metric-soft: rgb(100 116 139 / 0.11);
+}
+
+.metricIcon {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  color: var(--metric-color);
+  border: 1px solid color-mix(in srgb, var(--metric-color) 24%, transparent);
+  border-radius: 7px;
+  background: var(--metric-soft);
+}
+
+.muted {
+  color: var(--attendance-text-muted);
+}
+
+.secondary {
+  color: var(--attendance-text-secondary);
+}
+
+.primary {
+  color: var(--attendance-text);
+}
+
+.accent {
+  color: var(--attendance-accent-strong);
+}
+
+.surfaceMuted {
+  background: var(--attendance-surface-muted);
+}
+
+.divider {
+  border-color: var(--attendance-border);
+}
+
+.progressTrack {
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--attendance-border) 70%, transparent);
+  box-shadow: inset 0 1px 2px rgb(15 23 42 / 0.08);
+}
+
+.progressValue {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--metric-color, var(--attendance-accent));
+  transition: width 280ms ease;
+}
+
+.tableRow {
+  transition: background-color 150ms ease;
+}
+
+.tableRow:hover {
+  background: color-mix(in srgb, var(--attendance-surface-strong) 62%, transparent);
+}
+
+.alert {
+  border-color: color-mix(in srgb, var(--attendance-amber) 34%, transparent);
+  border-radius: 8px;
+  color: var(--attendance-text);
+  background: color-mix(in srgb, var(--attendance-amber-soft) 64%, var(--attendance-surface));
+}
+
+.skeleton {
+  background:
+    linear-gradient(
+      100deg,
+      transparent 25%,
+      color-mix(in srgb, var(--attendance-highlight) 70%, transparent) 45%,
+      transparent 65%
+    ),
+    var(--attendance-surface);
+  background-size: 200% 100%;
+  animation: attendance-shimmer 1.35s linear infinite;
+}
+
+@keyframes attendance-shimmer {
+  from {
+    background-position: 160% 0;
+  }
+  to {
+    background-position: -60% 0;
+  }
+}
+
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .glass,
+  .control,
+  .iconButton,
+  .alert {
+    background: #f8fafc;
+  }
+
+  :global([data-theme="dark"]) .glass,
+  :global([data-theme="dark"]) .control,
+  :global([data-theme="dark"]) .iconButton,
+  :global([data-theme="dark"]) .alert {
+    background: #132235;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass,
+  .control,
+  .iconButton,
+  .alert {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .iconButton,
+  .monthButton,
+  .progressValue,
+  .tableRow {
+    transition: none;
+  }
+
+  .skeleton {
+    animation: none;
+  }
+}

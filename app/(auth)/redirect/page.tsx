@@ -51,6 +51,10 @@ export default function RedirectAfterLogin() {
       case ROLES.ADMIN:
           router.replace("/admin-access")
           break;
+      case ROLES.ATTENDANCE:
+      case ROLES.ATTENDANCE_ADMIN:
+          router.replace("/my-attendance")
+          break;
       default:
         router.replace("/unauthorized");
     }

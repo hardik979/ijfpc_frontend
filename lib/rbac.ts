@@ -9,6 +9,8 @@ export const ROLES = {
   STUDENT_MANAGEMENT: "STUDENT_MANAGEMENT",
   MANAGERS: "MANAGERS",
   TRAINER: "TRAINER",
+  ATTENDANCE: "ATTENDANCE",
+  ATTENDANCE_ADMIN: "ATTENDANCE_ADMIN",
 } as const;
 
 export type Role = (typeof ROLES)[keyof typeof ROLES];
@@ -37,6 +39,7 @@ export const ACCESS: Record<string, readonly Role[]> = {
   "/studentOverview":[ROLES.STUDENT_MANAGEMENT, ROLES?.ADMIN],
   "/student_360": [ROLES.MANAGERS],
   "/trainer-dashboard": [ROLES.TRAINER],
+  "/my-attendance": [ROLES.ATTENDANCE, ROLES.ATTENDANCE_ADMIN],
   "/student-full-info":[ROLES.STUDENT_MANAGEMENT, ROLES?.ADMIN],
   "/academic-results":[ROLES.STUDENT_MANAGEMENT, ROLES.ADMIN, ROLES.SUPER_ADMIN],
   "/feedback-dash" : [ROLES?.FOUNDER, ROLES?.SUPER_ADMIN]
