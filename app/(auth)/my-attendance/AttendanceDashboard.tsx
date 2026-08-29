@@ -130,6 +130,8 @@ type MetricTone = "accent" | "teal" | "amber" | "rose" | "neutral";
 
 const ATTENDANCE_ROLE = "ATTENDANCE";
 const ATTENDANCE_ADMIN_ROLE = "ATTENDANCE_ADMIN";
+const SUPER_ADMIN_ROLE = "SUPER_ADMIN";
+
 const REFRESH_INTERVAL_MS = 60_000;
 
 const STATUS_LABEL: Record<AttendanceStatus, string> = {
@@ -144,8 +146,7 @@ const STATUS_LABEL: Record<AttendanceStatus, string> = {
 const STATUS_STYLE: Record<AttendanceStatus, string> = {
   present:
     "border-emerald-300/70 bg-emerald-50/80 text-emerald-800 dark:border-emerald-400/25 dark:bg-emerald-400/10 dark:text-emerald-300",
-  half:
-    "border-amber-300/70 bg-amber-50/80 text-amber-800 dark:border-amber-400/25 dark:bg-amber-400/10 dark:text-amber-300",
+  half: "border-amber-300/70 bg-amber-50/80 text-amber-800 dark:border-amber-400/25 dark:bg-amber-400/10 dark:text-amber-300",
   absent:
     "border-rose-300/70 bg-rose-50/80 text-rose-800 dark:border-rose-400/25 dark:bg-rose-400/10 dark:text-rose-300",
   incomplete:
@@ -184,7 +185,11 @@ const toMonthKey = (date: Date) =>
   date.getFullYear() + "-" + pad(date.getMonth() + 1);
 
 const toDateKey = (date: Date) =>
-  date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate());
+  date.getFullYear() +
+  "-" +
+  pad(date.getMonth() + 1) +
+  "-" +
+  pad(date.getDate());
 
 const shiftMonth = (monthKey: string, offset: number) => {
   const [year, month] = monthKey.split("-").map(Number);
@@ -269,13 +274,7 @@ function MetricCard({
 }) {
   return (
     <article
-      className={
-        styles.glass +
-        " " +
-        styles.statCard +
-        " " +
-        METRIC_TONE[tone]
-      }
+      className={styles.glass + " " + styles.statCard + " " + METRIC_TONE[tone]}
     >
       <div className="flex items-center gap-2.5">
         <span aria-hidden="true" className={styles.metricIcon}>
@@ -320,13 +319,17 @@ function MonthControls({
       <div className="flex items-center gap-2">
         <div
           className={
-            styles.control + " flex h-11 min-w-0 flex-1 items-center p-0.5 sm:flex-none"
+            styles.control +
+            " flex h-11 min-w-0 flex-1 items-center p-0.5 sm:flex-none"
           }
         >
           <button
             type="button"
             onClick={() => onMonthChange(shiftMonth(month, -1))}
-            className={styles.monthButton + " flex h-10 w-10 shrink-0 items-center justify-center rounded-md"}
+            className={
+              styles.monthButton +
+              " flex h-10 w-10 shrink-0 items-center justify-center rounded-md"
+            }
             aria-label="Previous month"
           >
             <ChevronLeft aria-hidden="true" className="h-4 w-4" />
@@ -350,7 +353,10 @@ function MonthControls({
             type="button"
             onClick={() => onMonthChange(shiftMonth(month, 1))}
             disabled={isCurrentMonth}
-            className={styles.monthButton + " flex h-10 w-10 shrink-0 items-center justify-center rounded-md"}
+            className={
+              styles.monthButton +
+              " flex h-10 w-10 shrink-0 items-center justify-center rounded-md"
+            }
             aria-label="Next month"
           >
             <ChevronRight aria-hidden="true" className="h-4 w-4" />
@@ -360,17 +366,26 @@ function MonthControls({
           type="button"
           onClick={onRefresh}
           disabled={loading || refreshing}
-          className={styles.iconButton + " flex h-11 w-11 shrink-0 items-center justify-center"}
+          className={
+            styles.iconButton +
+            " flex h-11 w-11 shrink-0 items-center justify-center"
+          }
           aria-label="Refresh attendance"
           title="Refresh attendance"
         >
           <RefreshCw
             aria-hidden="true"
-            className={"h-4 w-4 motion-reduce:animate-none" + (refreshing ? " animate-spin" : "")}
+            className={
+              "h-4 w-4 motion-reduce:animate-none" +
+              (refreshing ? " animate-spin" : "")
+            }
           />
         </button>
       </div>
-      <p className={styles.muted + " min-h-4 text-right text-xs"} aria-live="polite">
+      <p
+        className={styles.muted + " min-h-4 text-right text-xs"}
+        aria-live="polite"
+      >
         {lastUpdated
           ? "Updated " +
             lastUpdated.toLocaleTimeString("en-IN", {
@@ -409,19 +424,28 @@ function PageHeader({
       <div className="flex min-w-0 items-start gap-3.5">
         <span
           aria-hidden="true"
-          className={styles.identityIcon + " flex h-12 w-12 shrink-0 items-center justify-center"}
+          className={
+            styles.identityIcon +
+            " flex h-12 w-12 shrink-0 items-center justify-center"
+          }
         >
           {isAdmin ? (
             <Users className="h-5 w-5" />
           ) : personal ? (
-            <span className="text-sm font-bold">{initials(personal.staff.name)}</span>
+            <span className="text-sm font-bold">
+              {initials(personal.staff.name)}
+            </span>
           ) : (
             <UserRound className="h-5 w-5" />
           )}
         </span>
         <div className="min-w-0 pt-0.5">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className={styles.primary + " text-2xl font-bold sm:text-[1.7rem]"}>
+            <h1
+              className={
+                styles.primary + " text-2xl font-bold sm:text-[1.7rem]"
+              }
+            >
               {isAdmin ? "Staff attendance overview" : "My attendance"}
             </h1>
             {isAdmin ? (
@@ -435,7 +459,9 @@ function PageHeader({
             {isAdmin
               ? "Monthly attendance totals across active staff"
               : personal
-                ? personal.staff.name + " | Employee ID " + personal.staff.employeeId
+                ? personal.staff.name +
+                  " | Employee ID " +
+                  personal.staff.employeeId
                 : "Your biometric attendance record"}
           </p>
         </div>
@@ -458,13 +484,22 @@ function ErrorBanner({ error, code }: { error: string; code: string }) {
   if (!error) return null;
 
   return (
-    <div role="alert" className={styles.alert + " mb-5 flex items-start gap-3 px-4 py-3.5 text-sm"}>
-      <AlertCircle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
+    <div
+      role="alert"
+      className={
+        styles.alert + " mb-5 flex items-start gap-3 px-4 py-3.5 text-sm"
+      }
+    >
+      <AlertCircle
+        aria-hidden="true"
+        className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300"
+      />
       <div>
         <p className="font-semibold">{error}</p>
         {code === "NOT_LINKED" ? (
           <p className={styles.secondary + " mt-1 text-xs leading-5"}>
-            Ask an administrator to link your sign-in email to the staff directory.
+            Ask an administrator to link your sign-in email to the staff
+            directory.
           </p>
         ) : null}
       </div>
@@ -478,7 +513,10 @@ function LoadingState() {
       <div className={styles.glass + " " + styles.skeleton + " h-28"} />
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         {Array.from({ length: 5 }, (_, index) => (
-          <div key={index} className={styles.glass + " " + styles.skeleton + " h-32"} />
+          <div
+            key={index}
+            className={styles.glass + " " + styles.skeleton + " h-32"}
+          />
         ))}
       </div>
       <div className={styles.glass + " " + styles.skeleton + " h-72"} />
@@ -491,12 +529,16 @@ function EmptyState({ title, detail }: { title: string; detail: string }) {
     <div className="flex min-h-52 flex-col items-center justify-center px-5 py-10 text-center">
       <span
         aria-hidden="true"
-        className={styles.metricIcon + " " + styles.metricNeutral + " h-10 w-10"}
+        className={
+          styles.metricIcon + " " + styles.metricNeutral + " h-10 w-10"
+        }
       >
         <CalendarDays className="h-5 w-5" />
       </span>
       <p className={styles.primary + " mt-3 text-sm font-semibold"}>{title}</p>
-      <p className={styles.muted + " mt-1 max-w-sm text-xs leading-5"}>{detail}</p>
+      <p className={styles.muted + " mt-1 max-w-sm text-xs leading-5"}>
+        {detail}
+      </p>
     </div>
   );
 }
@@ -517,14 +559,29 @@ function PersonalHistory({
       aria-labelledby="history-title"
       className={(embedded ? "" : styles.glass + " ") + "overflow-hidden"}
     >
-      <div className={styles.divider + " flex items-center justify-between gap-3 border-b px-4 py-3.5 sm:px-5"}>
+      <div
+        className={
+          styles.divider +
+          " flex items-center justify-between gap-3 border-b px-4 py-3.5 sm:px-5"
+        }
+      >
         <div>
-          <h2 id="history-title" className={styles.primary + " text-sm font-bold"}>
+          <h2
+            id="history-title"
+            className={styles.primary + " text-sm font-bold"}
+          >
             {title}
           </h2>
-          <p className={styles.muted + " mt-0.5 text-xs"}>{formatMonth(month)}</p>
+          <p className={styles.muted + " mt-0.5 text-xs"}>
+            {formatMonth(month)}
+          </p>
         </div>
-        <span className={styles.control + " inline-flex min-h-8 items-center px-2.5 text-xs font-semibold"}>
+        <span
+          className={
+            styles.control +
+            " inline-flex min-h-8 items-center px-2.5 text-xs font-semibold"
+          }
+        >
           {records.length} {records.length === 1 ? "day" : "days"}
         </span>
       </div>
@@ -538,7 +595,9 @@ function PersonalHistory({
         <>
           <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-left text-sm">
-              <caption className="sr-only">Personal attendance history for {formatMonth(month)}</caption>
+              <caption className="sr-only">
+                Personal attendance history for {formatMonth(month)}
+              </caption>
               <thead className={styles.surfaceMuted}>
                 <tr className={styles.divider + " border-b"}>
                   {["Date", "Status", "Check-in", "Check-out", "Hours"].map(
@@ -560,12 +619,26 @@ function PersonalHistory({
               </thead>
               <tbody>
                 {records.map((record) => (
-                  <tr key={record.dateKey} className={styles.tableRow + " " + styles.divider + " border-b last:border-b-0"}>
+                  <tr
+                    key={record.dateKey}
+                    className={
+                      styles.tableRow +
+                      " " +
+                      styles.divider +
+                      " border-b last:border-b-0"
+                    }
+                  >
                     <td className="px-5 py-3.5">
-                      <p className={styles.primary + " whitespace-nowrap font-semibold"}>
+                      <p
+                        className={
+                          styles.primary + " whitespace-nowrap font-semibold"
+                        }
+                      >
                         {formatDate(record.dateKey)}
                       </p>
-                      <p className={styles.muted + " mt-0.5 text-xs"}>{record.dayOfWeek || ""}</p>
+                      <p className={styles.muted + " mt-0.5 text-xs"}>
+                        {record.dayOfWeek || ""}
+                      </p>
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex flex-wrap items-center gap-2">
@@ -577,13 +650,27 @@ function PersonalHistory({
                         ) : null}
                       </div>
                     </td>
-                    <td className={styles.secondary + " px-5 py-3.5 font-medium tabular-nums"}>
+                    <td
+                      className={
+                        styles.secondary +
+                        " px-5 py-3.5 font-medium tabular-nums"
+                      }
+                    >
                       {record.inTime || "-"}
                     </td>
-                    <td className={styles.secondary + " px-5 py-3.5 font-medium tabular-nums"}>
+                    <td
+                      className={
+                        styles.secondary +
+                        " px-5 py-3.5 font-medium tabular-nums"
+                      }
+                    >
                       {record.outTime || "-"}
                     </td>
-                    <td className={styles.muted + " px-5 py-3.5 text-right tabular-nums"}>
+                    <td
+                      className={
+                        styles.muted + " px-5 py-3.5 text-right tabular-nums"
+                      }
+                    >
                       {record.workedLabel || "-"}
                     </td>
                   </tr>
@@ -594,11 +681,18 @@ function PersonalHistory({
 
           <ul className="md:hidden">
             {records.map((record) => (
-              <li key={record.dateKey} className={styles.divider + " border-b p-4 last:border-b-0"}>
+              <li
+                key={record.dateKey}
+                className={styles.divider + " border-b p-4 last:border-b-0"}
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className={styles.primary + " text-sm font-semibold"}>{formatDate(record.dateKey)}</p>
-                    <p className={styles.muted + " mt-0.5 text-xs"}>{record.dayOfWeek || ""}</p>
+                    <p className={styles.primary + " text-sm font-semibold"}>
+                      {formatDate(record.dateKey)}
+                    </p>
+                    <p className={styles.muted + " mt-0.5 text-xs"}>
+                      {record.dayOfWeek || ""}
+                    </p>
                   </div>
                   <StatusBadge status={record.status} />
                 </div>
@@ -609,8 +703,19 @@ function PersonalHistory({
                     ["Worked", record.workedLabel || "-"],
                   ].map(([label, value]) => (
                     <div key={label}>
-                      <dt className={styles.muted + " text-[0.7rem] font-medium"}>{label}</dt>
-                      <dd className={styles.primary + " mt-1 text-sm font-semibold tabular-nums"}>{value}</dd>
+                      <dt
+                        className={styles.muted + " text-[0.7rem] font-medium"}
+                      >
+                        {label}
+                      </dt>
+                      <dd
+                        className={
+                          styles.primary +
+                          " mt-1 text-sm font-semibold tabular-nums"
+                        }
+                      >
+                        {value}
+                      </dd>
                     </div>
                   ))}
                 </dl>
@@ -628,44 +733,97 @@ function PersonalHistory({
   );
 }
 
-function PersonalDashboard({ data, month }: { data: AttendancePayload; month: string }) {
+function PersonalDashboard({
+  data,
+  month,
+}: {
+  data: AttendancePayload;
+  month: string;
+}) {
   const today = toDateKey(new Date());
   const todayRecord = data.records.find((record) => record.dateKey === today);
   const summary = data.summary;
 
   return (
     <>
-      <section aria-labelledby="today-title" className={styles.glass + " mb-4 p-4 sm:p-5"}>
+      <section
+        aria-labelledby="today-title"
+        className={styles.glass + " mb-4 p-4 sm:p-5"}
+      >
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3.5">
-            <span aria-hidden="true" className={styles.metricIcon + " " + styles.metricAccent + " h-10 w-10"}>
+            <span
+              aria-hidden="true"
+              className={
+                styles.metricIcon + " " + styles.metricAccent + " h-10 w-10"
+              }
+            >
               <CalendarDays className="h-5 w-5" />
             </span>
             <div>
-              <h2 id="today-title" className={styles.primary + " text-sm font-bold"}>Today</h2>
-              <p className={styles.muted + " mt-0.5 text-xs"}>{formatDate(today)}</p>
+              <h2
+                id="today-title"
+                className={styles.primary + " text-sm font-bold"}
+              >
+                Today
+              </h2>
+              <p className={styles.muted + " mt-0.5 text-xs"}>
+                {formatDate(today)}
+              </p>
               <div className="mt-2">
                 {todayRecord ? (
                   <StatusBadge status={todayRecord.status} />
                 ) : (
-                  <span className={styles.secondary + " text-sm"}>No punch recorded yet</span>
+                  <span className={styles.secondary + " text-sm"}>
+                    No punch recorded yet
+                  </span>
                 )}
               </div>
             </div>
           </div>
 
-          <dl className={styles.divider + " grid grid-cols-3 border-t pt-4 lg:min-w-[31rem] lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0"}>
+          <dl
+            className={
+              styles.divider +
+              " grid grid-cols-3 border-t pt-4 lg:min-w-[31rem] lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0"
+            }
+          >
             {[
-              { icon: <LogIn className="h-4 w-4" />, label: "Check-in", value: todayRecord?.inTime },
-              { icon: <LogOut className="h-4 w-4" />, label: "Check-out", value: todayRecord?.outTime },
-              { icon: <Clock className="h-4 w-4" />, label: "Worked", value: todayRecord?.workedLabel },
+              {
+                icon: <LogIn className="h-4 w-4" />,
+                label: "Check-in",
+                value: todayRecord?.inTime,
+              },
+              {
+                icon: <LogOut className="h-4 w-4" />,
+                label: "Check-out",
+                value: todayRecord?.outTime,
+              },
+              {
+                icon: <Clock className="h-4 w-4" />,
+                label: "Worked",
+                value: todayRecord?.workedLabel,
+              },
             ].map((item) => (
-              <div key={item.label} className="min-w-0 px-2 first:pl-0 last:pr-0 sm:px-4">
-                <dt className={styles.muted + " flex items-center gap-1.5 text-[0.7rem] font-medium"}>
+              <div
+                key={item.label}
+                className="min-w-0 px-2 first:pl-0 last:pr-0 sm:px-4"
+              >
+                <dt
+                  className={
+                    styles.muted +
+                    " flex items-center gap-1.5 text-[0.7rem] font-medium"
+                  }
+                >
                   <span aria-hidden="true">{item.icon}</span>
                   {item.label}
                 </dt>
-                <dd className={styles.primary + " mt-1.5 truncate text-sm font-bold tabular-nums"}>
+                <dd
+                  className={
+                    styles.primary +
+                    " mt-1.5 truncate text-sm font-bold tabular-nums"
+                  }
+                >
                   {item.value || "-"}
                 </dd>
               </div>
@@ -674,7 +832,10 @@ function PersonalDashboard({ data, month }: { data: AttendancePayload; month: st
         </div>
       </section>
 
-      <section aria-label="Monthly attendance summary" className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <section
+        aria-label="Monthly attendance summary"
+        className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-5"
+      >
         <MetricCard
           icon={<CheckCircle2 className="h-4 w-4" />}
           label="Present"
@@ -708,7 +869,11 @@ function PersonalDashboard({ data, month }: { data: AttendancePayload; month: st
           icon={<Clock className="h-4 w-4" />}
           label="Total hours"
           value={summary.totalWorkedLabel || "-"}
-          hint={summary.averageWorkedLabel ? summary.averageWorkedLabel + " average" : "No worked hours"}
+          hint={
+            summary.averageWorkedLabel
+              ? summary.averageWorkedLabel + " average"
+              : "No worked hours"
+          }
           tone="neutral"
         />
       </section>
@@ -739,22 +904,25 @@ function StaffDetailView({
     <>
       <section className={styles.glass + " mb-4 overflow-hidden"}>
         <div className="flex items-start gap-4 px-4 py-4 sm:px-5">
-        <div className="flex min-w-0 items-center gap-3">
-          <span
-            aria-hidden="true"
-            className={styles.identityIcon + " flex h-10 w-10 shrink-0 items-center justify-center text-xs font-bold"}
-          >
-            {initials(data.staff.name)}
-          </span>
-          <div className="min-w-0">
-            <h3 className={styles.primary + " truncate text-sm font-bold"}>
-              {data.staff.name}
-            </h3>
-            <p className={styles.muted + " mt-0.5 text-xs"}>
-              Employee ID {data.staff.employeeId} | {formatMonth(month)}
-            </p>
+          <div className="flex min-w-0 items-center gap-3">
+            <span
+              aria-hidden="true"
+              className={
+                styles.identityIcon +
+                " flex h-10 w-10 shrink-0 items-center justify-center text-xs font-bold"
+              }
+            >
+              {initials(data.staff.name)}
+            </span>
+            <div className="min-w-0">
+              <h3 className={styles.primary + " truncate text-sm font-bold"}>
+                {data.staff.name}
+              </h3>
+              <p className={styles.muted + " mt-0.5 text-xs"}>
+                Employee ID {data.staff.employeeId} | {formatMonth(month)}
+              </p>
+            </div>
           </div>
-        </div>
         </div>
 
         <dl
@@ -768,10 +936,19 @@ function StaffDetailView({
           {facts.map((fact) => (
             <div
               key={fact.label}
-              className={styles.divider + " min-w-0 border-b px-4 py-3 last:border-b-0 sm:border-r sm:last:border-r-0 lg:border-b-0"}
+              className={
+                styles.divider +
+                " min-w-0 border-b px-4 py-3 last:border-b-0 sm:border-r sm:last:border-r-0 lg:border-b-0"
+              }
             >
-              <dt className={styles.muted + " text-xs font-medium"}>{fact.label}</dt>
-              <dd className={styles.primary + " mt-1 text-base font-bold tabular-nums"}>
+              <dt className={styles.muted + " text-xs font-medium"}>
+                {fact.label}
+              </dt>
+              <dd
+                className={
+                  styles.primary + " mt-1 text-base font-bold tabular-nums"
+                }
+              >
                 {fact.value}
               </dd>
             </div>
@@ -865,205 +1042,201 @@ function StaffSummaryTable({
               </thead>
               <tbody>
                 {staff.map((entry) => (
-                    <tr
-                      key={entry.employeeId}
-                      className={
-                        styles.tableRow +
-                        " " +
-                        styles.divider +
-                        " border-b last:border-b-0"
-                      }
-                    >
-                      <td className="px-4 py-3">
-                        <Link
-                          href={
-                            "/my-attendance/staff/" +
-                            entry.employeeId +
-                            "?month=" +
-                            encodeURIComponent(month)
-                          }
-                          className="group flex min-h-11 w-full items-center gap-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70"
-                        >
-                          <span
-                            aria-hidden="true"
-                            className={
-                              styles.identityIcon +
-                              " flex h-9 w-9 shrink-0 items-center justify-center text-[0.68rem] font-bold"
-                            }
-                          >
-                            {initials(entry.name)}
-                          </span>
-                          <span className="min-w-0">
-                            <span
-                              className={
-                                styles.primary +
-                                " block max-w-52 truncate font-semibold group-hover:underline"
-                              }
-                            >
-                              {entry.name}
-                            </span>
-                            <span
-                              className={
-                                styles.muted + " mt-0.5 block text-xs"
-                              }
-                            >
-                              ID {entry.employeeId}
-                            </span>
-                          </span>
-                          <ChevronRight
-                            aria-hidden="true"
-                            className={styles.muted + " ml-auto h-4 w-4 shrink-0"}
-                          />
-                        </Link>
-                      </td>
-                      <td
-                        className={
-                          styles.secondary +
-                          " px-4 py-3.5 font-semibold tabular-nums"
+                  <tr
+                    key={entry.employeeId}
+                    className={
+                      styles.tableRow +
+                      " " +
+                      styles.divider +
+                      " border-b last:border-b-0"
+                    }
+                  >
+                    <td className="px-4 py-3">
+                      <Link
+                        href={
+                          "/my-attendance/staff/" +
+                          entry.employeeId +
+                          "?month=" +
+                          encodeURIComponent(month)
                         }
+                        className="group flex min-h-11 w-full items-center gap-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70"
                       >
-                        {entry.recordedDays}
-                      </td>
-                      <td className="px-4 py-3.5 font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">
-                        {entry.summary.presentDays}
-                      </td>
-                      <td className="px-4 py-3.5 font-semibold tabular-nums text-amber-700 dark:text-amber-300">
-                        {entry.summary.halfDays}
-                      </td>
-                      <td className="px-4 py-3.5 font-semibold tabular-nums text-rose-700 dark:text-rose-300">
-                        {entry.summary.absentDays}
-                      </td>
-                      <td
-                        className={
-                          styles.muted + " px-4 py-3.5 tabular-nums"
-                        }
-                      >
-                        {entry.summary.leaveDays +
-                          entry.summary.weeklyOffDays}
-                      </td>
-                      <td className="min-w-36 px-4 py-3.5">
-                        <div
+                        <span
+                          aria-hidden="true"
                           className={
-                            styles.metricAccent +
-                            " flex items-center gap-2.5"
+                            styles.identityIcon +
+                            " flex h-9 w-9 shrink-0 items-center justify-center text-[0.68rem] font-bold"
                           }
                         >
-                          <ProgressBar
-                            value={entry.summary.attendancePercentage}
-                            label={entry.name + " attendance"}
-                          />
+                          {initials(entry.name)}
+                        </span>
+                        <span className="min-w-0">
                           <span
                             className={
                               styles.primary +
-                              " w-11 text-right text-xs font-semibold tabular-nums"
+                              " block max-w-52 truncate font-semibold group-hover:underline"
                             }
                           >
-                            {entry.summary.attendancePercentage}%
+                            {entry.name}
                           </span>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                          <span
+                            className={styles.muted + " mt-0.5 block text-xs"}
+                          >
+                            ID {entry.employeeId}
+                          </span>
+                        </span>
+                        <ChevronRight
+                          aria-hidden="true"
+                          className={styles.muted + " ml-auto h-4 w-4 shrink-0"}
+                        />
+                      </Link>
+                    </td>
+                    <td
+                      className={
+                        styles.secondary +
+                        " px-4 py-3.5 font-semibold tabular-nums"
+                      }
+                    >
+                      {entry.recordedDays}
+                    </td>
+                    <td className="px-4 py-3.5 font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">
+                      {entry.summary.presentDays}
+                    </td>
+                    <td className="px-4 py-3.5 font-semibold tabular-nums text-amber-700 dark:text-amber-300">
+                      {entry.summary.halfDays}
+                    </td>
+                    <td className="px-4 py-3.5 font-semibold tabular-nums text-rose-700 dark:text-rose-300">
+                      {entry.summary.absentDays}
+                    </td>
+                    <td className={styles.muted + " px-4 py-3.5 tabular-nums"}>
+                      {entry.summary.leaveDays + entry.summary.weeklyOffDays}
+                    </td>
+                    <td className="min-w-36 px-4 py-3.5">
+                      <div
+                        className={
+                          styles.metricAccent + " flex items-center gap-2.5"
+                        }
+                      >
+                        <ProgressBar
+                          value={entry.summary.attendancePercentage}
+                          label={entry.name + " attendance"}
+                        />
+                        <span
+                          className={
+                            styles.primary +
+                            " w-11 text-right text-xs font-semibold tabular-nums"
+                          }
+                        >
+                          {entry.summary.attendancePercentage}%
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
 
           <ul className="md:hidden">
             {staff.map((entry) => (
-                <li
-                  key={entry.employeeId}
-                  className={styles.divider + " border-b last:border-b-0"}
+              <li
+                key={entry.employeeId}
+                className={styles.divider + " border-b last:border-b-0"}
+              >
+                <Link
+                  href={
+                    "/my-attendance/staff/" +
+                    entry.employeeId +
+                    "?month=" +
+                    encodeURIComponent(month)
+                  }
+                  className="block w-full p-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400/70"
                 >
-                  <Link
-                    href={
-                      "/my-attendance/staff/" +
-                      entry.employeeId +
-                      "?month=" +
-                      encodeURIComponent(month)
-                    }
-                    className="block w-full p-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400/70"
-                  >
-                    <div className="flex items-start gap-3">
-                      <span
-                        aria-hidden="true"
+                  <div className="flex items-start gap-3">
+                    <span
+                      aria-hidden="true"
+                      className={
+                        styles.identityIcon +
+                        " flex h-9 w-9 shrink-0 items-center justify-center text-[0.68rem] font-bold"
+                      }
+                    >
+                      {initials(entry.name)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p
                         className={
-                          styles.identityIcon +
-                          " flex h-9 w-9 shrink-0 items-center justify-center text-[0.68rem] font-bold"
+                          styles.primary + " truncate text-sm font-semibold"
                         }
                       >
-                        {initials(entry.name)}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p
+                        {entry.name}
+                      </p>
+                      <p className={styles.muted + " mt-0.5 text-xs"}>
+                        ID {entry.employeeId} | {entry.recordedDays} days
+                        reported
+                      </p>
+                    </div>
+                    <span
+                      className={
+                        styles.accent +
+                        " shrink-0 text-sm font-bold tabular-nums"
+                      }
+                    >
+                      {entry.summary.attendancePercentage}%
+                    </span>
+                  </div>
+                  <div className={styles.metricAccent + " mt-3"}>
+                    <ProgressBar
+                      value={entry.summary.attendancePercentage}
+                      label={entry.name + " attendance"}
+                    />
+                  </div>
+                  <dl className="mt-3 grid grid-cols-4 gap-2">
+                    {[
+                      ["Present", entry.summary.presentDays],
+                      ["Half", entry.summary.halfDays],
+                      ["Absent", entry.summary.absentDays],
+                      [
+                        "Leave/off",
+                        entry.summary.leaveDays + entry.summary.weeklyOffDays,
+                      ],
+                    ].map(([label, value]) => (
+                      <div key={label} className="min-w-0">
+                        <dt
                           className={
-                            styles.primary + " truncate text-sm font-semibold"
+                            styles.muted +
+                            " truncate text-[0.68rem] font-medium"
                           }
                         >
-                          {entry.name}
-                        </p>
-                        <p className={styles.muted + " mt-0.5 text-xs"}>
-                          ID {entry.employeeId} | {entry.recordedDays} days
-                          reported
-                        </p>
+                          {label}
+                        </dt>
+                        <dd
+                          className={
+                            styles.primary +
+                            " mt-1 text-sm font-bold tabular-nums"
+                          }
+                        >
+                          {value}
+                        </dd>
                       </div>
-                      <span
-                        className={
-                          styles.accent +
-                          " shrink-0 text-sm font-bold tabular-nums"
-                        }
-                      >
-                        {entry.summary.attendancePercentage}%
-                      </span>
-                    </div>
-                    <div className={styles.metricAccent + " mt-3"}>
-                      <ProgressBar
-                        value={entry.summary.attendancePercentage}
-                        label={entry.name + " attendance"}
-                      />
-                    </div>
-                    <dl className="mt-3 grid grid-cols-4 gap-2">
-                      {[
-                        ["Present", entry.summary.presentDays],
-                        ["Half", entry.summary.halfDays],
-                        ["Absent", entry.summary.absentDays],
-                        [
-                          "Leave/off",
-                          entry.summary.leaveDays +
-                            entry.summary.weeklyOffDays,
-                        ],
-                      ].map(([label, value]) => (
-                        <div key={label} className="min-w-0">
-                          <dt
-                            className={
-                              styles.muted +
-                              " truncate text-[0.68rem] font-medium"
-                            }
-                          >
-                            {label}
-                          </dt>
-                          <dd
-                            className={
-                              styles.primary +
-                              " mt-1 text-sm font-bold tabular-nums"
-                            }
-                          >
-                            {value}
-                          </dd>
-                        </div>
-                      ))}
-                    </dl>
-                  </Link>
-                </li>
-              ))}
+                    ))}
+                  </dl>
+                </Link>
+              </li>
+            ))}
           </ul>
         </>
       )}
-
     </section>
   );
 }
 
-function AdminDashboard({ data, month }: { data: AttendanceOverviewPayload; month: string }) {
+function AdminDashboard({
+  data,
+  month,
+}: {
+  data: AttendanceOverviewPayload;
+  month: string;
+}) {
   const summary = data.overview;
   const exceptions = summary.halfDays + summary.absentDays;
   const reportingRate = summary.staffCount
@@ -1072,7 +1245,10 @@ function AdminDashboard({ data, month }: { data: AttendanceOverviewPayload; mont
 
   return (
     <>
-      <section aria-label="Overall staff attendance summary" className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <section
+        aria-label="Overall staff attendance summary"
+        className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-5"
+      >
         <MetricCard
           icon={<Users className="h-4 w-4" />}
           label="Active staff"
@@ -1122,10 +1298,18 @@ function UnauthorizedState({ adminOnly = false }: { adminOnly?: boolean }) {
     <main className={styles.page}>
       <div className="mx-auto flex min-h-screen max-w-xl items-center px-4 py-10">
         <section className={styles.glass + " w-full p-6 text-center"}>
-          <span aria-hidden="true" className={styles.identityIcon + " mx-auto flex h-12 w-12 items-center justify-center"}>
+          <span
+            aria-hidden="true"
+            className={
+              styles.identityIcon +
+              " mx-auto flex h-12 w-12 items-center justify-center"
+            }
+          >
             <ShieldCheck className="h-5 w-5" />
           </span>
-          <h1 className={styles.primary + " mt-4 text-xl font-bold"}>Attendance access unavailable</h1>
+          <h1 className={styles.primary + " mt-4 text-xl font-bold"}>
+            Attendance access unavailable
+          </h1>
           <p className={styles.secondary + " mt-2 text-sm leading-6"}>
             {adminOnly
               ? "Staff attendance details are available to the Attendance Admin role."
@@ -1147,7 +1331,7 @@ export function StaffAttendanceDetailPage({
   const { user, isLoaded } = useUser();
   const router = useRouter();
   const role = String(user?.publicMetadata?.role || "").toUpperCase();
-  const isAdmin = role === ATTENDANCE_ADMIN_ROLE;
+  const isAdmin = role === ATTENDANCE_ADMIN_ROLE || role === SUPER_ADMIN_ROLE;
   const validEmployeeId = /^\d+$/.test(employeeId) ? employeeId : "";
   const [month, setMonth] = useState(() =>
     /^\d{4}-(0[1-9]|1[0-2])$/.test(initialMonth || "")
@@ -1247,7 +1431,10 @@ export function StaffAttendanceDetailPage({
             <button
               type="button"
               onClick={() => router.back()}
-              className={styles.iconButton + " flex h-11 w-11 shrink-0 items-center justify-center"}
+              className={
+                styles.iconButton +
+                " flex h-11 w-11 shrink-0 items-center justify-center"
+              }
               aria-label="Back to staff attendance overview"
               title="Back to staff attendance overview"
             >
@@ -1255,7 +1442,12 @@ export function StaffAttendanceDetailPage({
             </button>
             <div className="min-w-0 pt-0.5">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className={styles.primary + " truncate text-2xl font-bold sm:text-[1.7rem]"}>
+                <h1
+                  className={
+                    styles.primary +
+                    " truncate text-2xl font-bold sm:text-[1.7rem]"
+                  }
+                >
                   {data?.staff.name || "Staff attendance details"}
                 </h1>
                 <span className="inline-flex min-h-7 items-center gap-1.5 rounded-full border border-indigo-300/60 bg-indigo-50/75 px-2.5 text-xs font-semibold text-indigo-800 dark:border-indigo-400/25 dark:bg-indigo-400/10 dark:text-indigo-300">
@@ -1265,7 +1457,9 @@ export function StaffAttendanceDetailPage({
               </div>
               <p className={styles.secondary + " mt-1 text-sm leading-5"}>
                 {data
-                  ? "Employee ID " + data.staff.employeeId + " | Individual attendance record"
+                  ? "Employee ID " +
+                    data.staff.employeeId +
+                    " | Individual attendance record"
                   : "Individual staff information and attendance record"}
               </p>
             </div>
@@ -1295,12 +1489,14 @@ export function StaffAttendanceDetailPage({
 export default function AttendanceDashboard() {
   const { user, isLoaded } = useUser();
   const role = String(user?.publicMetadata?.role || "").toUpperCase();
-  const isAdmin = role === ATTENDANCE_ADMIN_ROLE;
+  const isAdmin = role === ATTENDANCE_ADMIN_ROLE || role === SUPER_ADMIN_ROLE;
   const isAuthorized = role === ATTENDANCE_ROLE || isAdmin;
 
   const [month, setMonth] = useState(() => toMonthKey(new Date()));
   const [personal, setPersonal] = useState<AttendancePayload | null>(null);
-  const [overall, setOverall] = useState<AttendanceOverviewPayload | null>(null);
+  const [overall, setOverall] = useState<AttendanceOverviewPayload | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -1347,7 +1543,11 @@ export default function AttendanceDashboard() {
     } catch (caught) {
       if (requestId !== requestSequence.current) return;
       if (!silent) setPersonal(null);
-      setError(caught instanceof Error ? caught.message : "Could not load your attendance");
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Could not load your attendance",
+      );
     } finally {
       if (requestId === requestSequence.current) {
         setLoading(false);
@@ -1394,7 +1594,11 @@ export default function AttendanceDashboard() {
     } catch (caught) {
       if (requestId !== requestSequence.current) return;
       if (!silent) setOverall(null);
-      setError(caught instanceof Error ? caught.message : "Could not load the staff overview");
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Could not load the staff overview",
+      );
     } finally {
       if (requestId === requestSequence.current) {
         setLoading(false);
@@ -1445,7 +1649,9 @@ export default function AttendanceDashboard() {
     const options = new Set<string>([
       month,
       toMonthKey(new Date()),
-      ...(isAdmin ? overall?.availableMonths || [] : personal?.availableMonths || []),
+      ...(isAdmin
+        ? overall?.availableMonths || []
+        : personal?.availableMonths || []),
     ]);
     return [...options].sort((first, second) => second.localeCompare(first));
   }, [isAdmin, month, overall?.availableMonths, personal?.availableMonths]);
