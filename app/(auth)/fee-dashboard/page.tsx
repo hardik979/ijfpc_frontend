@@ -250,8 +250,9 @@ export default function FeeDashboardPage() {
     status: StatusFilter;
     zone: ZoneFilter;
   }>({ open: false, status: "ALL", zone: "ALL" });
-  const [selectedCourse, setSelectedCourse] =
-    useState<CourseBreakdown | null>(null);
+  const [selectedCourse, setSelectedCourse] = useState<CourseBreakdown | null>(
+    null,
+  );
 
   const loadSummary = useCallback(async () => {
     setLoading(true);
@@ -515,6 +516,20 @@ export default function FeeDashboardPage() {
                 </span>
                 <span className="text-sm font-semibold text-slate-200">
                   Want to know about a specific student? Check Student 360.
+                </span>
+              </span>
+              <ArrowRight className="h-5 w-5 shrink-0 text-sky-300 transition-transform group-hover:translate-x-1" />
+            </Link>
+            <Link
+              href="/my-attendance"
+              className="group mt-4 flex items-center justify-between gap-4 rounded-2xl border border-sky-400/25 bg-sky-400/[0.07] px-5 py-4 transition hover:border-sky-400/50 hover:bg-sky-400/10"
+            >
+              <span className="flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-sky-400/25 bg-sky-400/10 text-sky-200">
+                  <Search className="h-4 w-4" />
+                </span>
+                <span className="text-sm font-semibold text-slate-200">
+                  Check attendance report from here
                 </span>
               </span>
               <ArrowRight className="h-5 w-5 shrink-0 text-sky-300 transition-transform group-hover:translate-x-1" />
@@ -927,7 +942,6 @@ function StudentsModal({
   );
 }
 
-
 function CourseStudentsModal({
   course,
   onClose,
@@ -1009,7 +1023,12 @@ function CourseStudentsModal({
     count: number;
     color: string;
   }> = [
-    { value: "ALL", label: "All zones", count: students.length, color: "bg-slate-300" },
+    {
+      value: "ALL",
+      label: "All zones",
+      count: students.length,
+      color: "bg-slate-300",
+    },
     ...ZONES.map((item) => ({
       value: item.value,
       label: item.label,
@@ -1038,7 +1057,9 @@ function CourseStudentsModal({
               {course.courseName}
             </h2>
             <p className="mt-1 text-sm text-slate-400">
-              {loading ? "Loading students..." : `${students.length} active students`}
+              {loading
+                ? "Loading students..."
+                : `${students.length} active students`}
             </p>
           </div>
           <button
@@ -1103,7 +1124,10 @@ function CourseStudentsModal({
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {visibleStudents.map((student) => (
-                  <tr key={student._id} className="transition hover:bg-slate-800/55">
+                  <tr
+                    key={student._id}
+                    className="transition hover:bg-slate-800/55"
+                  >
                     <td className="px-6 py-4">
                       <p className="font-semibold text-white">{student.name}</p>
                       <p className="mt-1 text-xs text-slate-500">
