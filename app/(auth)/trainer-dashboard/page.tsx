@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { buildManualMockReportImage } from "./reportImage";
 import styles from "./TrainerDashboard.module.css";
+import { AttendanceLink } from "@/components/AttendanceLink";
 
 gsap.registerPlugin(useGSAP);
 
@@ -1169,6 +1170,7 @@ export default function TrainerDashboardPage() {
               <small>Scheduling access</small>
             </span>
           </div>
+          <AttendanceLink className="self-start" />
         </header>
 
         <div className={styles.workspace}>

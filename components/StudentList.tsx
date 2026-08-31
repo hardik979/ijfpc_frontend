@@ -17,7 +17,7 @@ import {
   Phone,
   CalendarCheck,
 } from "lucide-react";
-import { useAttendanceAccess } from "@/lib/hooks/useAttendanceAccess";
+import { useAttendanceEntry } from "@/components/AttendanceLink";
 import ZoneStudentAnalytics from "./ZoneStudentAnalytics";
 import {
   Bar,
@@ -140,7 +140,7 @@ const StudentsListPage = () => {
   const { theme } = useTheme();
   // Shown only to accounts that the staff directory links to an employee, which
   // is what grants attendance — there is no Clerk role to check for it.
-  const attendanceAccess = useAttendanceAccess();
+  const attendanceEntry = useAttendanceEntry();
   const COURSE_COLORS = theme === "dark" ? COURSE_COLORS_DARK : COURSE_COLORS_LIGHT;
   const searchBoxRef = useRef<HTMLDivElement | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
@@ -859,7 +859,7 @@ const StudentsListPage = () => {
                 <ChevronDown className="h-4 w-4" />
               </summary>
               <div className="absolute right-0 top-[calc(100%+6px)] z-30 w-72 rounded-xl border border-[var(--so-border)] bg-[var(--so-bg-card)] p-1.5 shadow-2xl">
-                {attendanceAccess.linked && (
+                {attendanceEntry.visible && (
                   <Link
                     href="/my-attendance"
                     className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-[var(--so-text-primary)] transition hover:bg-[var(--so-bg-hover)]"
@@ -867,9 +867,9 @@ const StudentsListPage = () => {
                     <CalendarCheck className="h-4 w-4 text-[var(--so-text-muted)]" />
                     <span className="flex flex-col">
                       Attendance
-                      {attendanceAccess.staff?.name ? (
+                      {attendanceEntry.staff?.name ? (
                         <span className="text-xs text-[var(--so-text-muted)]">
-                          {attendanceAccess.staff.name}
+                          {attendanceEntry.staff.name}
                         </span>
                       ) : null}
                     </span>

@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "@/context/ThemeContext";
 import styles from "./Student360Overview.module.css";
+import { AttendanceLink } from "@/components/AttendanceLink";
 
 gsap.registerPlugin(useGSAP);
 
@@ -385,6 +386,7 @@ export default function Student360Overview() {
           </div>
 
           <div className={`${styles.heroActions} flex items-center gap-2 self-start lg:self-auto`}>
+            <AttendanceLink className="min-h-11 rounded-xl" />
             <button
               type="button"
               onClick={() => setRefreshKey((key) => key + 1)}

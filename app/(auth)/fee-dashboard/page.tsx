@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { AttendanceGate } from "@/components/AttendanceLink";
 import {
   ArrowLeft,
   ArrowRight,
@@ -520,6 +521,9 @@ export default function FeeDashboardPage() {
               </span>
               <ArrowRight className="h-5 w-5 shrink-0 text-sky-300 transition-transform group-hover:translate-x-1" />
             </Link>
+            {/* Personal attendance only: hidden for Super Admin, who gets the
+                company-wide view, and for anyone with no employee record. */}
+            <AttendanceGate>
             <Link
               href="/my-attendance"
               className="group mt-4 flex items-center justify-between gap-4 rounded-2xl border border-sky-400/25 bg-sky-400/[0.07] px-5 py-4 transition hover:border-sky-400/50 hover:bg-sky-400/10"
@@ -534,6 +538,7 @@ export default function FeeDashboardPage() {
               </span>
               <ArrowRight className="h-5 w-5 shrink-0 text-sky-300 transition-transform group-hover:translate-x-1" />
             </Link>
+            </AttendanceGate>
           </article>
         </section>
 
