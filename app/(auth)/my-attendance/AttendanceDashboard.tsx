@@ -148,7 +148,14 @@ interface StaffSummaryRow {
 type MetricTone = "accent" | "teal" | "amber" | "rose" | "neutral";
 
 const ATTENDANCE_ADMIN_ROLE = "ATTENDANCE_ADMIN";
+const SUPER_ADMIN_ROLE = "SUPER_ADMIN";
 const REFRESH_INTERVAL_MS = 60_000;
+
+// Roles that get the admin views. SUPER_ADMIN is the platform-wide owner and
+// already holds the same attendance scopes server-side (see the LMS
+// lib/staffAttendancePolicy.js), so it sees the overview here too.
+const isAttendanceAdmin = (role: string) =>
+  role === ATTENDANCE_ADMIN_ROLE || role === SUPER_ADMIN_ROLE;
 
 const STATUS_LABEL: Record<AttendanceStatus, string> = {
   present: "Present",
@@ -873,7 +880,7 @@ function PersonalDashboard({ data, month }: { data: AttendancePayload; month: st
         </div>
       </section>
 
-      <section aria-label="Monthly attendance summary" className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <section aria-label="Monthly attendance summary" className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <MetricCard
           icon={<CheckCircle2 className="h-4 w-4" />}
           label="Present"
@@ -888,11 +895,13 @@ function PersonalDashboard({ data, month }: { data: AttendancePayload; month: st
           hint={summary.missingPunchOutDays + " missing punch-out"}
           tone="amber"
         />
+        {/* Days off that no approved leave covers — approved leave inside the
+            allowance is counted separately and is not a loss of pay. */}
         <MetricCard
           icon={<XCircle className="h-4 w-4" />}
-          label="Absent"
+          label="Loss of Pay"
           value={String(summary.absentDays)}
-          hint={summary.weeklyOffDays + " weekly off"}
+          hint={summary.leaveDays + " approved leave"}
           tone="rose"
         />
         <MetricCard
@@ -902,13 +911,6 @@ function PersonalDashboard({ data, month }: { data: AttendancePayload; month: st
           hint="Half days count as 0.5"
           tone="accent"
           progress={summary.attendancePercentage}
-        />
-        <MetricCard
-          icon={<Clock className="h-4 w-4" />}
-          label="Total hours"
-          value={summary.totalWorkedLabel || "-"}
-          hint={summary.averageWorkedLabel ? summary.averageWorkedLabel + " average" : "No worked hours"}
-          tone="neutral"
         />
       </section>
 
@@ -1331,7 +1333,7 @@ function UnauthorizedState({ adminOnly = true }: { adminOnly?: boolean }) {
           <h1 className={styles.primary + " mt-4 text-xl font-bold"}>Attendance access unavailable</h1>
           <p className={styles.secondary + " mt-2 text-sm leading-6"}>
             {adminOnly
-              ? "Staff attendance details are available to the Attendance Admin role."
+              ? "Staff attendance details are available to the Attendance Admin and Super Admin roles."
               : "This page is available to Attendance and Attendance Admin roles."}
           </p>
         </section>
@@ -1350,7 +1352,7 @@ export function StaffAttendanceDetailPage({
   const { user, isLoaded } = useUser();
   const router = useRouter();
   const role = String(user?.publicMetadata?.role || "").toUpperCase();
-  const isAdmin = role === ATTENDANCE_ADMIN_ROLE;
+  const isAdmin = isAttendanceAdmin(role);
   const validEmployeeId = /^\d+$/.test(employeeId) ? employeeId : "";
   const [month, setMonth] = useState(() =>
     /^\d{4}-(0[1-9]|1[0-2])$/.test(initialMonth || "")
@@ -1543,7 +1545,7 @@ export default function AttendanceDashboard() {
   const role = String(user?.publicMetadata?.role || "").toUpperCase();
   // The admin overview is still role-gated; the personal view is not, because
   // the staff directory row decides that one (see the LMS /me route).
-  const isAdmin = role === ATTENDANCE_ADMIN_ROLE;
+  const isAdmin = isAttendanceAdmin(role);
 
   const [month, setMonth] = useState(() => toMonthKey(new Date()));
   const [personal, setPersonal] = useState<AttendancePayload | null>(null);
