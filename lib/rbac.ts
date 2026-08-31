@@ -39,6 +39,9 @@ export const ACCESS: Record<string, readonly Role[]> = {
   "/studentOverview":[ROLES.STUDENT_MANAGEMENT, ROLES?.ADMIN],
   "/student_360": [ROLES.MANAGERS],
   "/trainer-dashboard": [ROLES.TRAINER],
+  // Personal attendance is granted by the staff directory, not by a role, so
+  // this lists only the roles that get the admin views. Any signed-in account
+  // may open the page; the LMS decides whether it has a row to show.
   "/my-attendance": [ROLES.ATTENDANCE, ROLES.ATTENDANCE_ADMIN],
   "/student-full-info":[ROLES.STUDENT_MANAGEMENT, ROLES?.ADMIN],
   "/academic-results":[ROLES.STUDENT_MANAGEMENT, ROLES.ADMIN, ROLES.SUPER_ADMIN],

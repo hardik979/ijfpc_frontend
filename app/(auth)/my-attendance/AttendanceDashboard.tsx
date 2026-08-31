@@ -147,7 +147,6 @@ interface StaffSummaryRow {
 
 type MetricTone = "accent" | "teal" | "amber" | "rose" | "neutral";
 
-const ATTENDANCE_ROLE = "ATTENDANCE";
 const ATTENDANCE_ADMIN_ROLE = "ATTENDANCE_ADMIN";
 const REFRESH_INTERVAL_MS = 60_000;
 
@@ -1319,7 +1318,9 @@ function AdminDashboard({ data, month }: { data: AttendanceOverviewPayload; mont
   );
 }
 
-function UnauthorizedState({ adminOnly = false }: { adminOnly?: boolean }) {
+// Only the admin views are role-gated now, so this is the only message left:
+// a personal view that cannot be shown reports the LMS's own reason instead.
+function UnauthorizedState({ adminOnly = true }: { adminOnly?: boolean }) {
   return (
     <main className={styles.page}>
       <div className="mx-auto flex min-h-screen max-w-xl items-center px-4 py-10">
@@ -1540,8 +1541,9 @@ export function StaffAttendanceDetailPage({
 export default function AttendanceDashboard() {
   const { user, isLoaded } = useUser();
   const role = String(user?.publicMetadata?.role || "").toUpperCase();
+  // The admin overview is still role-gated; the personal view is not, because
+  // the staff directory row decides that one (see the LMS /me route).
   const isAdmin = role === ATTENDANCE_ADMIN_ROLE;
-  const isAuthorized = role === ATTENDANCE_ROLE || isAdmin;
 
   const [month, setMonth] = useState(() => toMonthKey(new Date()));
   const [personal, setPersonal] = useState<AttendancePayload | null>(null);
@@ -1651,23 +1653,16 @@ export default function AttendanceDashboard() {
   useEffect(() => {
     if (!isLoaded) return;
 
-    if (!isAuthorized) {
-      requestSequence.current += 1;
-      setLoading(false);
-      setRefreshing(false);
-      return;
-    }
-
     if (isAdmin) loadOverall(month);
     else loadPersonal(month);
-  }, [isAdmin, isAuthorized, isLoaded, loadOverall, loadPersonal, month]);
+  }, [isAdmin, isLoaded, loadOverall, loadPersonal, month]);
 
   useEffect(() => {
     autoJumped.current = false;
   }, [isAdmin]);
 
   useEffect(() => {
-    if (!isLoaded || !isAuthorized) return;
+    if (!isLoaded) return;
 
     const refresh = () => {
       if (document.visibilityState !== "visible") return;
@@ -1684,7 +1679,7 @@ export default function AttendanceDashboard() {
       document.removeEventListener("visibilitychange", refresh);
       window.removeEventListener("focus", refresh);
     };
-  }, [isAdmin, isAuthorized, isLoaded, loadOverall, loadPersonal, month]);
+  }, [isAdmin, isLoaded, loadOverall, loadPersonal, month]);
 
   const monthOptions = useMemo(() => {
     const options = new Set<string>([
@@ -1700,8 +1695,9 @@ export default function AttendanceDashboard() {
     else loadPersonal(month, true);
   };
 
-  if (isLoaded && !isAuthorized) return <UnauthorizedState />;
-
+  // No role check for the personal view: whether this account is linked to an
+  // employee record is the LMS's decision, and it answers /me with a 403 and a
+  // NOT_LINKED code when it is not. ErrorBanner renders that answer.
   return (
     <main className={styles.page}>
       <div className="mx-auto max-w-7xl px-4 py-7 sm:px-6 sm:py-9 lg:px-8">
