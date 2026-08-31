@@ -888,11 +888,17 @@ function PersonalDashboard({ data, month }: { data: AttendancePayload; month: st
           hint={summary.totalDays + " recorded working days"}
           tone="teal"
         />
+        {/* The rule the backend applies: under 8h 30m worked is a half day
+            (7h on Saturday), as is a day punched in but never out. */}
         <MetricCard
           icon={<MinusCircle className="h-4 w-4" />}
           label="Half days"
           value={String(summary.halfDays)}
-          hint={summary.missingPunchOutDays + " missing punch-out"}
+          hint={
+            "Under 8h 30m worked (7h Sat) · " +
+            summary.missingPunchOutDays +
+            " missing punch-out"
+          }
           tone="amber"
         />
         {/* Days off that no approved leave covers — approved leave inside the
