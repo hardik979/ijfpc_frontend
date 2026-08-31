@@ -5,8 +5,9 @@ import { useUser } from "@clerk/nextjs";
 import { CalendarCheck } from "lucide-react";
 import { useAttendanceAccess } from "@/lib/hooks/useAttendanceAccess";
 
-const ATTENDANCE_ADMIN_ROLE = "ATTENDANCE_ADMIN";
-const SUPER_ADMIN_ROLE = "SUPER_ADMIN";
+// Roles that open the attendance admin section instead of a personal record,
+// so they are never offered the personal entry.
+const ADMIN_ROLES = ["ATTENDANCE_ADMIN", "SUPER_ADMIN", "ADMIN"];
 
 /**
  * Whether this account should be offered a personal attendance entry.
@@ -14,8 +15,9 @@ const SUPER_ADMIN_ROLE = "SUPER_ADMIN";
  * Two conditions, and the server owns the important one:
  *   * the LMS says the account is linked to an employee record, so the link
  *     only appears when there is attendance behind it;
- *   * the role is not Attendance Admin or Super Admin — /my-attendance opens
- *     the company-wide overview for them, not a personal record.
+ *   * the role is not an admin one — /my-attendance opens the company-wide
+ *     overview for Attendance Admin, Super Admin and Admin, not a personal
+ *     record.
  *
  * `staff` names the matched employee, for dashboards that want to show whose
  * attendance the entry opens.
@@ -25,7 +27,7 @@ export function useAttendanceEntry() {
   const { linked, staff, checking } = useAttendanceAccess();
 
   const role = String(user?.publicMetadata?.role || "").toUpperCase();
-  const isAdmin = role === ATTENDANCE_ADMIN_ROLE || role === SUPER_ADMIN_ROLE;
+  const isAdmin = ADMIN_ROLES.includes(role);
 
   return { visible: isLoaded && linked && !isAdmin, staff, checking };
 }
