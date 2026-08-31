@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { API_HR_URL } from "@/lib/api";
+import { AttendanceLink } from "@/components/AttendanceLink";
 type DashboardTotals = {
   scheduledInRange: number;
   completedInRange: number;
@@ -162,6 +163,7 @@ export default function StaffInterviewsDashboardPage() {
                 Track upcoming interviews and collect feedback
               </p>
             </div>
+            <AttendanceLink className="ml-auto" />
           </div>
 
           {/* Filters */}

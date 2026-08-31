@@ -10,6 +10,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { ROLES, type Role } from "@/lib/rbac"
+import { AttendanceLink } from "@/components/AttendanceLink"
 
 interface AdminModule {
   label: string
@@ -84,6 +85,9 @@ export default function AdminAccessPage() {
             Select a module below to manage placement operations and review
             student analytics.
           </p>
+          <div className="mt-5">
+            <AttendanceLink />
+          </div>
         </header>
 
         <div className="grid gap-5 sm:grid-cols-2">

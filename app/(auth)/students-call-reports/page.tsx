@@ -19,6 +19,7 @@ import DailyCallReport from "@/components/reports/DailyCallReport";
 import CallAnalysis from "@/components/reports/CallAnalysis";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import InterviewSummaryPanel, { type ExternalInterviewRaw, type GroupSummary } from "@/components/reports/Interviewsummarypanel.js";
+import { AttendanceLink } from "@/components/AttendanceLink";
  
 
 interface RecordingReport {
@@ -239,6 +240,8 @@ export default function StudentsCallReports() {
             <FileText className="resume-builder-icon w-4 h-4 text-[#D2B48C] group-hover:text-[#8B4513] transition-colors" />
             <span>Resume Builder</span>
           </Link>
+
+          <AttendanceLink className="px-6 py-4 rounded-3xl" />
         </header>
 
         {/* Sticky Filter Bar */}

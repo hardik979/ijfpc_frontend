@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import type { Variants } from "framer-motion";
 import Link from "next/link";
+import { AttendanceLink } from "@/components/AttendanceLink";
 
 export default function ITJobsFactoryDashboard() {
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
@@ -160,6 +161,10 @@ export default function ITJobsFactoryDashboard() {
             performance metrics
           </p>
         </motion.div>
+
+        <div className="mb-12 flex justify-center">
+          <AttendanceLink />
+        </div>
 
         {/* Report Cards Grid */}
         <motion.div
