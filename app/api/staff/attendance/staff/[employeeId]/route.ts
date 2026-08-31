@@ -138,6 +138,8 @@ export async function PATCH(
       body: JSON.stringify({
         exception: input.exception,
         approvedLeave: input.approvedLeave,
+        // Mandatory for an exception; the LMS rejects the call without it.
+        reason: String(input?.reason || ""),
       }),
       cache: "no-store",
     });

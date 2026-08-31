@@ -18,6 +18,7 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock,
@@ -28,9 +29,11 @@ import {
   MinusCircle,
   Percent,
   RefreshCw,
+  ScrollText,
   ShieldCheck,
   UserRound,
   Users,
+  X,
   XCircle,
 } from "lucide-react";
 import styles from "./attendance.module.css";
@@ -62,6 +65,7 @@ interface AttendanceRecord {
     exception: boolean;
     approvedLeave: boolean;
     leaveLimitExceeded: boolean;
+    reason?: string;
   };
 }
 
@@ -482,15 +486,18 @@ function PageHeader({
         </div>
       </div>
 
-      <MonthControls
-        month={month}
-        options={monthOptions}
-        loading={loading}
-        refreshing={refreshing}
-        lastUpdated={lastUpdated}
-        onMonthChange={onMonthChange}
-        onRefresh={onRefresh}
-      />
+      <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
+        <MonthControls
+          month={month}
+          options={monthOptions}
+          loading={loading}
+          refreshing={refreshing}
+          lastUpdated={lastUpdated}
+          onMonthChange={onMonthChange}
+          onRefresh={onRefresh}
+        />
+        <PolicyButton />
+      </div>
     </header>
   );
 }
@@ -542,14 +549,163 @@ function EmptyState({ title, detail }: { title: string; detail: string }) {
   );
 }
 
+const ATTENDANCE_POLICIES = [
+  {
+    title: "Under 8h 30m worked",
+    detail:
+      "A working day with less than the full 8h 30m of recorded work counts as a half day.",
+  },
+  {
+    title: "Saturday under 7h",
+    detail:
+      "Saturday has a shorter full day: less than 7 hours worked counts as a half day.",
+  },
+  {
+    title: "A single punch",
+    detail:
+      "A day with only one punch recorded — punched in but never out — counts as a half day.",
+  },
+  {
+    title: "Approved leave allowance",
+    detail:
+      "The first 15 approved leaves are counted as leave. Every approved leave beyond that allowance is counted as absent.",
+  },
+  {
+    title: "Saturday or Monday leave",
+    detail:
+      "Leave taken on a Saturday or a Monday counts as 2 absences.",
+  },
+  {
+    title: "An admin exception overrides all of the above",
+    detail:
+      "Where an administrator has applied an exception to a day, that decision stands and the rules above do not apply to it. Every exception carries the reason it was given.",
+  },
+];
+
+/** The attendance rules, in the words the office uses. */
+function PolicyDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="policy-title"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-sm sm:items-center"
+      onClick={onClose}
+    >
+      <div
+        className={styles.glass + " w-full max-w-2xl overflow-hidden"}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div
+          className={
+            styles.divider +
+            " flex items-start justify-between gap-4 border-b px-5 py-4"
+          }
+        >
+          <div className="flex items-center gap-3">
+            <span
+              aria-hidden="true"
+              className={styles.metricIcon + " " + styles.metricAccent + " h-10 w-10"}
+            >
+              <ScrollText className="h-5 w-5" />
+            </span>
+            <div>
+              <h2 id="policy-title" className={styles.primary + " text-base font-bold"}>
+                Attendance policy
+              </h2>
+              <p className={styles.muted + " mt-0.5 text-xs"}>
+                How each day is counted
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className={styles.iconButton + " flex h-9 w-9 shrink-0 items-center justify-center"}
+            aria-label="Close the attendance policy"
+          >
+            <X aria-hidden="true" className="h-4 w-4" />
+          </button>
+        </div>
+
+        <ol className="px-5 py-4">
+          {ATTENDANCE_POLICIES.map((policy, index) => (
+            <li
+              key={policy.title}
+              className={
+                styles.divider +
+                " flex gap-3.5 border-b py-3.5 first:pt-1 last:border-b-0 last:pb-1"
+              }
+            >
+              <span
+                aria-hidden="true"
+                className={
+                  styles.control +
+                  " flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums"
+                }
+              >
+                {index + 1}
+              </span>
+              <div className="min-w-0">
+                <p className={styles.primary + " text-sm font-semibold"}>
+                  {policy.title}
+                </p>
+                <p className={styles.secondary + " mt-1 text-xs leading-5"}>
+                  {policy.detail}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </div>
+  );
+}
+
+/** The button that opens the policy, with the dialog it owns. */
+function PolicyButton({ className = "" }: { className?: string }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={
+          styles.control +
+          " inline-flex min-h-11 shrink-0 cursor-pointer items-center gap-2 rounded-xl px-3.5 text-sm font-semibold transition-colors " +
+          className
+        }
+      >
+        <ScrollText aria-hidden="true" className="h-4 w-4" />
+        View policy
+      </button>
+      <PolicyDialog open={open} onClose={() => setOpen(false)} />
+    </>
+  );
+}
+
 type AttendanceAdjustmentInput = {
   exception: boolean;
   approvedLeave: boolean;
+  reason?: string;
 };
 
 const adjustmentFor = (record: AttendanceRecord): AttendanceAdjustmentInput => ({
   exception: record.adjustment?.exception === true,
   approvedLeave: record.adjustment?.approvedLeave === true,
+  reason: record.adjustment?.reason || "",
 });
 
 function AttendanceAdjustmentMenu({
@@ -566,18 +722,35 @@ function AttendanceAdjustmentMenu({
   onChange: (dateKey: string, adjustment: AttendanceAdjustmentInput) => void;
 }) {
   const adjustment = adjustmentFor(record);
-  const options = [
-    {
-      label: "Exceptions",
-      checked: adjustment.exception,
-      next: { ...adjustment, exception: !adjustment.exception },
-    },
-    {
-      label: "Approved Leave",
-      checked: adjustment.approvedLeave,
-      next: { ...adjustment, approvedLeave: !adjustment.approvedLeave },
-    },
-  ];
+  // Applying an exception asks for a reason first; clearing one does not, and
+  // approved leave is a plain toggle.
+  const [reasonOpen, setReasonOpen] = useState(false);
+  const [reason, setReason] = useState(adjustment.reason || "");
+  const [reasonError, setReasonError] = useState("");
+
+  const applyException = () => {
+    const trimmed = reason.trim();
+    if (!trimmed) {
+      setReasonError("A reason is required");
+      return;
+    }
+    setReasonError("");
+    setReasonOpen(false);
+    onChange(record.dateKey, {
+      ...adjustment,
+      exception: true,
+      reason: trimmed,
+    });
+  };
+
+  const toggleException = () => {
+    if (adjustment.exception) {
+      onChange(record.dateKey, { ...adjustment, exception: false, reason: "" });
+      return;
+    }
+    setReasonError("");
+    setReasonOpen((open) => !open);
+  };
 
   return (
     <details className="relative shrink-0">
@@ -603,47 +776,126 @@ function AttendanceAdjustmentMenu({
           styles.surfaceMuted +
           " " +
           styles.divider +
-          " w-48 overflow-hidden rounded-md border " +
+          " w-64 overflow-hidden rounded-md border " +
           (floating ? "absolute right-0 top-9 z-30" : "mt-2")
         }
       >
-        {options.map((option) => (
-          <button
-            key={option.label}
-            type="button"
-            disabled={disabled}
-            aria-pressed={option.checked}
-            onClick={() => onChange(record.dateKey, option.next)}
+        <button
+          type="button"
+          disabled={disabled}
+          aria-pressed={adjustment.exception}
+          aria-expanded={reasonOpen}
+          onClick={toggleException}
+          className={
+            styles.divider +
+            " flex min-h-10 w-full items-center gap-2 border-b px-3 text-left text-xs font-semibold outline-none hover:bg-indigo-500/[0.06] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400/70 disabled:cursor-wait disabled:opacity-60"
+          }
+        >
+          <span
+            aria-hidden="true"
             className={
-              styles.divider +
-              " flex min-h-10 w-full items-center gap-2 border-b px-3 text-left text-xs font-semibold outline-none last:border-b-0 hover:bg-indigo-500/[0.06] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400/70 disabled:cursor-wait disabled:opacity-60"
+              "flex h-4 w-4 shrink-0 items-center justify-center rounded border " +
+              (adjustment.exception
+                ? "border-indigo-500 bg-indigo-500 text-white"
+                : "border-slate-400/60")
             }
           >
-            <span
-              aria-hidden="true"
-              className={
-                "flex h-4 w-4 shrink-0 items-center justify-center rounded border " +
-                (option.checked
-                  ? "border-indigo-500 bg-indigo-500 text-white"
-                  : "border-slate-400/60")
-              }
+            {adjustment.exception ? <Check className="h-3 w-3" /> : null}
+          </span>
+          <span className={styles.primary}>Exceptions</span>
+        </button>
+
+        {reasonOpen && !adjustment.exception ? (
+          <div className={styles.divider + " border-b px-3 py-2.5"}>
+            <label
+              htmlFor={"exception-reason-" + record.dateKey}
+              className={styles.secondary + " block text-[0.7rem] font-semibold"}
             >
-              {option.checked ? <Check className="h-3 w-3" /> : null}
-            </span>
-            <span className={styles.primary}>{option.label}</span>
-          </button>
-        ))}
+              Reason <span className="text-rose-500">*</span>
+            </label>
+            <textarea
+              id={"exception-reason-" + record.dateKey}
+              rows={2}
+              value={reason}
+              maxLength={300}
+              onChange={(event) => setReason(event.target.value)}
+              placeholder="Why is this day excused?"
+              className={
+                styles.control +
+                " mt-1.5 w-full resize-none px-2 py-1.5 text-xs outline-none"
+              }
+            />
+            {reasonError ? (
+              <p className="mt-1 text-[0.7rem] font-semibold text-rose-500">
+                {reasonError}
+              </p>
+            ) : null}
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={applyException}
+                className="inline-flex min-h-8 items-center rounded-md bg-indigo-600 px-3 text-xs font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-wait disabled:opacity-60"
+              >
+                Apply exception
+              </button>
+              <button
+                type="button"
+                onClick={() => setReasonOpen(false)}
+                className={
+                  styles.secondary +
+                  " inline-flex min-h-8 items-center rounded-md px-2 text-xs font-semibold"
+                }
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        <button
+          type="button"
+          disabled={disabled}
+          aria-pressed={adjustment.approvedLeave}
+          onClick={() =>
+            onChange(record.dateKey, {
+              ...adjustment,
+              approvedLeave: !adjustment.approvedLeave,
+            })
+          }
+          className={
+            styles.divider +
+            " flex min-h-10 w-full items-center gap-2 px-3 text-left text-xs font-semibold outline-none hover:bg-indigo-500/[0.06] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400/70 disabled:cursor-wait disabled:opacity-60"
+          }
+        >
+          <span
+            aria-hidden="true"
+            className={
+              "flex h-4 w-4 shrink-0 items-center justify-center rounded border " +
+              (adjustment.approvedLeave
+                ? "border-indigo-500 bg-indigo-500 text-white"
+                : "border-slate-400/60")
+            }
+          >
+            {adjustment.approvedLeave ? <Check className="h-3 w-3" /> : null}
+          </span>
+          <span className={styles.primary}>Approved Leave</span>
+        </button>
       </div>
     </details>
   );
 }
 
 const adjustmentNote = (record: AttendanceRecord) => {
+  // An exception outranks every other rule, so its reason is what the row has
+  // to explain — the leave note only matters when no exception was applied.
+  if (record.adjustment?.exception) {
+    return record.adjustment.reason
+      ? "Exception: " + record.adjustment.reason
+      : "Exception applied";
+  }
   if (record.adjustment?.leaveLimitExceeded) {
     return "Approved leave limit exceeded";
-  }
-  if (record.adjustment?.approvedLeave && record.adjustment?.exception) {
-    return "Exception also applied";
   }
   return null;
 };
@@ -1289,7 +1541,194 @@ function StaffSummaryTable({
   );
 }
 
-function AdminDashboard({ data, month }: { data: AttendanceOverviewPayload; month: string }) {
+/**
+ * One exception applied to every active staff member for a single date — the
+ * office was shut, the device was down, the team was off site.
+ *
+ * The reason is mandatory here for the same purpose as on a single day: the
+ * record has to say why a whole day was excused. The LMS enforces it too.
+ */
+function BulkExceptionPanel({ onApplied }: { onApplied: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [dateKey, setDateKey] = useState(() => toDateKey(new Date()));
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState("");
+
+  const apply = async () => {
+    const trimmedReason = reason.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+      setError("Choose the date the exception applies to");
+      return;
+    }
+    if (!trimmedReason) {
+      setError("A reason is required");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    setResult("");
+
+    try {
+      const response = await fetch("/api/staff/attendance/exceptions-all", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dateKey, reason: trimmedReason }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.error || "Could not apply the exception");
+      }
+      setResult(
+        "Exception applied to " +
+          payload.staffCount +
+          " staff for " +
+          formatDate(dateKey) +
+          ".",
+      );
+      setReason("");
+      onApplied();
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Could not apply the exception",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className={styles.glass + " mb-4 overflow-hidden"}>
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5 sm:px-5">
+        <div className="flex items-center gap-3">
+          <span
+            aria-hidden="true"
+            className={styles.metricIcon + " " + styles.metricAccent + " h-10 w-10"}
+          >
+            <Users className="h-5 w-5" />
+          </span>
+          <div>
+            <h2 className={styles.primary + " text-sm font-bold"}>
+              Exceptions for all staff
+            </h2>
+            <p className={styles.muted + " mt-0.5 text-xs"}>
+              Excuse one date for everyone — an office closure, a device outage,
+              a team day out.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          aria-expanded={open}
+          className={
+            styles.control +
+            " inline-flex min-h-10 items-center gap-2 rounded-xl px-3.5 text-sm font-semibold"
+          }
+        >
+          {open ? "Close" : "Apply an exception"}
+          <ChevronDown
+            aria-hidden="true"
+            className={"h-4 w-4 transition-transform " + (open ? "rotate-180" : "")}
+          />
+        </button>
+      </div>
+
+      {open ? (
+        <div className={styles.divider + " border-t px-4 py-4 sm:px-5"}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+            <div className="sm:w-52">
+              <label
+                htmlFor="bulk-exception-date"
+                className={styles.secondary + " block text-xs font-semibold"}
+              >
+                Date <span className="text-rose-500">*</span>
+              </label>
+              <input
+                id="bulk-exception-date"
+                type="date"
+                value={dateKey}
+                onChange={(event) => setDateKey(event.target.value)}
+                className={
+                  styles.control +
+                  " mt-1.5 h-11 w-full px-3 text-sm font-semibold outline-none"
+                }
+              />
+            </div>
+            <div className="flex-1">
+              <label
+                htmlFor="bulk-exception-reason"
+                className={styles.secondary + " block text-xs font-semibold"}
+              >
+                Reason <span className="text-rose-500">*</span>
+              </label>
+              <input
+                id="bulk-exception-reason"
+                type="text"
+                value={reason}
+                maxLength={300}
+                onChange={(event) => setReason(event.target.value)}
+                placeholder="Why is this date excused for everyone?"
+                className={
+                  styles.control + " mt-1.5 h-11 w-full px-3 text-sm outline-none"
+                }
+              />
+            </div>
+            <button
+              type="button"
+              onClick={apply}
+              disabled={saving}
+              className="mt-0 inline-flex h-11 shrink-0 items-center gap-2 self-end rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-wait disabled:opacity-60"
+            >
+              {saving ? (
+                <LoaderCircle
+                  aria-hidden="true"
+                  className="h-4 w-4 animate-spin motion-reduce:animate-none"
+                />
+              ) : (
+                <Check aria-hidden="true" className="h-4 w-4" />
+              )}
+              Apply to all staff
+            </button>
+          </div>
+
+          {error ? (
+            <p className="mt-3 text-xs font-semibold text-rose-500" role="alert">
+              {error}
+            </p>
+          ) : null}
+          {result ? (
+            <p
+              className="mt-3 text-xs font-semibold text-emerald-600 dark:text-emerald-400"
+              role="status"
+            >
+              {result}
+            </p>
+          ) : null}
+          <p className={styles.muted + " mt-3 text-xs leading-5"}>
+            An exception overrides the normal rules for that day. Existing
+            entries for the date are updated rather than duplicated, and the
+            reason is stored against every staff member it touches.
+          </p>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function AdminDashboard({
+  data,
+  month,
+  onRefresh,
+}: {
+  data: AttendanceOverviewPayload;
+  month: string;
+  onRefresh: () => void;
+}) {
   const summary = data.overview;
   const reportingRate = summary.staffCount
     ? Math.round((summary.staffWithRecords / summary.staffCount) * 100)
@@ -1322,6 +1761,8 @@ function AdminDashboard({ data, month }: { data: AttendanceOverviewPayload; mont
           progress={summary.attendancePercentage}
         />
       </section>
+
+      <BulkExceptionPanel onApplied={onRefresh} />
 
       <StaffSummaryTable staff={data.staff || []} month={month} />
     </>
@@ -1430,7 +1871,12 @@ export function StaffAttendanceDetailPage({
           {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ dateKey, ...adjustment }),
+            body: JSON.stringify({
+              dateKey,
+              exception: adjustment.exception,
+              approvedLeave: adjustment.approvedLeave,
+              reason: adjustment.reason || "",
+            }),
           },
         );
         const payload = await response.json();
@@ -1522,15 +1968,18 @@ export function StaffAttendanceDetailPage({
             </div>
           </div>
 
-          <MonthControls
-            month={month}
-            options={monthOptions}
-            loading={!isLoaded || loading}
-            refreshing={refreshing}
-            lastUpdated={lastUpdated}
-            onMonthChange={changeMonth}
-            onRefresh={() => loadStaff(month, true)}
-          />
+          <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
+            <MonthControls
+              month={month}
+              options={monthOptions}
+              loading={!isLoaded || loading}
+              refreshing={refreshing}
+              lastUpdated={lastUpdated}
+              onMonthChange={changeMonth}
+              onRefresh={() => loadStaff(month, true)}
+            />
+            <PolicyButton />
+          </div>
         </header>
 
         <ErrorBanner error={error} code="" />
@@ -1730,7 +2179,11 @@ export default function AttendanceDashboard() {
           <PersonalDashboard data={personal} month={month} />
         ) : null}
         {isLoaded && !loading && isAdmin && overall ? (
-          <AdminDashboard data={overall} month={month} />
+          <AdminDashboard
+            data={overall}
+            month={month}
+            onRefresh={() => loadOverall(month, true)}
+          />
         ) : null}
       </div>
     </main>
