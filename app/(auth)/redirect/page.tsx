@@ -20,6 +20,20 @@ export default function RedirectAfterLogin() {
 
     const role = (user?.publicMetadata as any)?.role as string | undefined;
 
+    // No dashboard role, but the person may still be in the staff directory —
+    // that alone entitles them to their own attendance, with no role assigned.
+    // The LMS is the only thing that can answer, so ask it before giving up.
+    const fallback = async () => {
+      try {
+        const response = await fetch("/api/staff/attendance", {
+          cache: "no-store",
+        });
+        router.replace(response.ok ? "/my-attendance" : "/unauthorized");
+      } catch {
+        router.replace("/unauthorized");
+      }
+    };
+
     switch (role) {
       case ROLES.SUPER_ADMIN:
         router.replace("/fee-dashboard");
@@ -56,7 +70,7 @@ export default function RedirectAfterLogin() {
           router.replace("/my-attendance")
           break;
       default:
-        router.replace("/unauthorized");
+        void fallback();
     }
   }, [isLoaded, isSignedIn, user, router]);
 
