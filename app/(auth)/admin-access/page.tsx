@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   BarChart3,
   ArrowRight,
+  CalendarCheck,
   ShieldCheck,
   type LucideIcon,
 } from "lucide-react"
@@ -49,6 +50,16 @@ const ADMIN_MODULES: AdminModule[] = [
     icon: BarChart3,
     accent: "from-emerald-500 to-emerald-600",
     tag: "Analytics",
+  },
+  {
+    label: "Attendance Admin",
+    description:
+      "Open the staff attendance overview, review any employee's month, and mark exceptions or approved leave.",
+    href: "/my-attendance",
+    icon: CalendarCheck,
+    accent: "from-sky-500 to-sky-600",
+    tag: "Attendance",
+    roles: [ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.ATTENDANCE_ADMIN],
   },
   {
     label: "Feedback Management",

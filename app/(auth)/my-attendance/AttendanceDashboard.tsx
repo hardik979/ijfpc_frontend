@@ -149,13 +149,15 @@ type MetricTone = "accent" | "teal" | "amber" | "rose" | "neutral";
 
 const ATTENDANCE_ADMIN_ROLE = "ATTENDANCE_ADMIN";
 const SUPER_ADMIN_ROLE = "SUPER_ADMIN";
+const ADMIN_ROLE = "ADMIN";
 const REFRESH_INTERVAL_MS = 60_000;
 
-// Roles that get the admin views. SUPER_ADMIN is the platform-wide owner and
-// already holds the same attendance scopes server-side (see the LMS
-// lib/staffAttendancePolicy.js), so it sees the overview here too.
-const isAttendanceAdmin = (role: string) =>
-  role === ATTENDANCE_ADMIN_ROLE || role === SUPER_ADMIN_ROLE;
+// Roles that get the admin views. SUPER_ADMIN and ADMIN are console roles that
+// open the attendance admin section from their own dashboards, and hold the
+// same attendance scopes server-side (see the LMS lib/staffAttendancePolicy.js).
+const ADMIN_ROLES = [ATTENDANCE_ADMIN_ROLE, SUPER_ADMIN_ROLE, ADMIN_ROLE];
+
+const isAttendanceAdmin = (role: string) => ADMIN_ROLES.includes(role);
 
 const STATUS_LABEL: Record<AttendanceStatus, string> = {
   present: "Present",
