@@ -1862,6 +1862,9 @@ function BulkExceptionPanel({ onChanged }: { onChanged: () => void }) {
   const [pendingAction, setPendingAction] = useState<
     "apply" | "remove" | null
   >(null);
+  // Off by default: a removal undoes the bulk run and leaves individual
+  // decisions alone, unless the admin says otherwise.
+  const [removeEveryException, setRemoveEveryException] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState("");
 
@@ -1936,9 +1939,13 @@ function BulkExceptionPanel({ onChanged }: { onChanged: () => void }) {
     if (!dateIsValid()) return;
     if (
       !window.confirm(
-        "Remove bulk-applied exceptions for " +
-          formatDate(dateKey) +
-          "? Approved leave and earlier individual exceptions will be kept.",
+        removeEveryException
+          ? "Remove every exception recorded for " +
+              formatDate(dateKey) +
+              ", including ones applied to individual staff? Approved leave will be kept."
+          : "Remove bulk-applied exceptions for " +
+              formatDate(dateKey) +
+              "? Approved leave and earlier individual exceptions will be kept.",
       )
     ) {
       return;
@@ -1951,6 +1958,9 @@ function BulkExceptionPanel({ onChanged }: { onChanged: () => void }) {
     const requestRemoval = async (confirmLegacy: boolean) => {
       const params = new URLSearchParams({ dateKey });
       if (confirmLegacy) params.set("confirmLegacy", "true");
+      // scope=all covers individual exceptions too, so the server never has to
+      // ask about older ones it cannot tell apart.
+      if (removeEveryException) params.set("scope", "all");
       const response = await fetch(
         "/api/staff/attendance/exceptions-all?" + params.toString(),
         { method: "DELETE" },
@@ -1985,15 +1995,15 @@ function BulkExceptionPanel({ onChanged }: { onChanged: () => void }) {
       }
 
       const removed = Number(removal.payload?.removed) || 0;
+      const noun = removeEveryException ? " exception" : " bulk exception";
       setResult(
         removed
           ? String(removed) +
-              (removed === 1
-                ? " bulk exception was removed for "
-                : " bulk exceptions were removed for ") +
+              noun +
+              (removed === 1 ? " was removed for " : "s were removed for ") +
               formatDate(dateKey) +
               "."
-          : "No bulk exceptions were found for " + formatDate(dateKey) + ".",
+          : "No" + noun + "s were found for " + formatDate(dateKey) + ".",
       );
       onChanged();
     } catch (caught) {
@@ -2113,6 +2123,23 @@ function BulkExceptionPanel({ onChanged }: { onChanged: () => void }) {
           </div>
 
           <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+            <label
+              className={
+                styles.secondary +
+                " mr-auto inline-flex cursor-pointer items-center gap-2 text-xs font-semibold"
+              }
+            >
+              <input
+                type="checkbox"
+                checked={removeEveryException}
+                disabled={pendingAction !== null}
+                onChange={(event) =>
+                  setRemoveEveryException(event.target.checked)
+                }
+                className="h-4 w-4 cursor-pointer accent-indigo-600"
+              />
+              Also remove exceptions applied to individual staff
+            </label>
             <button
               type="button"
               onClick={remove}
