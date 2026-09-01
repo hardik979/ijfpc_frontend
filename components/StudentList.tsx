@@ -434,37 +434,14 @@ const StudentsListPage = () => {
   );
 
   // ────────────────────────────────────────────
-  // Fetch: general student list / course students
-  // (only used when NOT in "ALL" view)
+  // Fetch: general student list — the only branch that hits the network.
+  // Course-specific and "ALL" lists are derived client-side from
+  // allEnrolledStudents instead (see the effect below and filteredAllStudents).
   // ────────────────────────────────────────────
-  const getStudentList = async () => {
-    if (isAllView) {
-      setLoading(false);
-      return;
-    }
-
+  const getGeneralStudentList = async () => {
     try {
       setLoading(true);
 
-      if (selectedCourseId && selectedCourseId !== "ALL") {
-        let filtered = courseStudents;
-        if (appliedSearch.trim()) {
-          const q = appliedSearch.trim().toLowerCase();
-          filtered = courseStudents.filter(
-            (s) =>
-              (s.fullName || "").toLowerCase().includes(q) ||
-              (s.email || "").toLowerCase().includes(q)
-          );
-        }
-
-        const sorted = sortByZone(filtered);
-        const start = (page - 1) * limit;
-        setStudents(sorted.slice(start, start + limit));
-        setTotal(sorted.length);
-        return;
-      }
-
-      // General list (no course selected, no "ALL")
       const params = new URLSearchParams();
       params.set("page", String(page));
       params.set("limit", String(limit));
@@ -488,7 +465,7 @@ const StudentsListPage = () => {
       setStudents(filteredData);
       setTotal(Number(json.total || 0) - (dataList.length - filteredData.length));
     } catch (error) {
-      console.error("getStudentList error:", error);
+      console.error("getGeneralStudentList error:", error);
       setStudents([]);
       setTotal(0);
     } finally {
@@ -659,9 +636,35 @@ const StudentsListPage = () => {
 
   // ── Effects ──────────────────────────────────
 
+  // Deliberately does NOT depend on allEnrolledStudents/activeStudentsBase —
+  // this branch never reads them, and including them re-fires this network
+  // call a second time as soon as fetchAllEnrolledStudents resolves (the
+  // page's reference changes even though nothing relevant changed), which is
+  // what caused the student list to visibly load twice on every page open.
   useEffect(() => {
-    getStudentList();
-  }, [page, limit, appliedSearch, selectedCourseId, activeStudentsBase]);
+    if (selectedCourseId) return; // course-specific and "ALL" views are derived below, not fetched
+    getGeneralStudentList();
+  }, [page, limit, appliedSearch, selectedCourseId]);
+
+  // Course-specific pagination — a pure client-side slice of the already-fetched
+  // allEnrolledStudents (via courseStudents), so it never touches the network.
+  useEffect(() => {
+    if (!selectedCourseId || selectedCourseId === "ALL") return;
+    let filtered = courseStudents;
+    if (appliedSearch.trim()) {
+      const q = appliedSearch.trim().toLowerCase();
+      filtered = courseStudents.filter(
+        (s) =>
+          (s.fullName || "").toLowerCase().includes(q) ||
+          (s.email || "").toLowerCase().includes(q)
+      );
+    }
+    const sorted = sortByZone(filtered);
+    const start = (page - 1) * limit;
+    setStudents(sorted.slice(start, start + limit));
+    setTotal(sorted.length);
+    setLoading(false);
+  }, [selectedCourseId, courseStudents, appliedSearch, page, limit]);
 
   useEffect(() => {
     try {
