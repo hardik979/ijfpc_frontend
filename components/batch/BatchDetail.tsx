@@ -25,7 +25,6 @@ import {
   Clock,
   Plus,
   Link2,
-  Sparkles,
 } from "lucide-react";
 
 type Course = { _id: string; title?: string };
@@ -50,6 +49,9 @@ type Batch = {
   sessions?: Session[];
   course?: Course | string | null;
   students?: Student[];
+  // Other batches this one runs jointly with as a whole (e.g. DS-2 combined
+  // with DA-1) — set via the "Combine Batch" toolbar action.
+  combinedWith?: LinkedBatchRef[];
 };
 
 // A batch this class session is shared with (e.g. DS + DA both attending one
@@ -120,7 +122,7 @@ export default function BatchDetail({ batchId }: { batchId: string }) {
   const [removingBulk, setRemovingBulk] = useState(false);
 
   // which modal is open
-  const [modal, setModal] = useState<null | "add" | "rename" | "status" | "topic" | "details" | "sessions" | "delete">(null);
+  const [modal, setModal] = useState<null | "add" | "rename" | "status" | "topic" | "details" | "sessions" | "combine" | "delete">(null);
 
   const loadBatch = useCallback(async () => {
     try {
@@ -304,6 +306,14 @@ export default function BatchDetail({ batchId }: { batchId: string }) {
                         {batch.classTime || "No time"}
                       </span>
                     </div>
+                    {batch.combinedWith && batch.combinedWith.length > 0 && (
+                      <div className="mt-3">
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-fuchsia-500/15 px-2.5 py-1 text-xs font-semibold text-fuchsia-700 ring-1 ring-fuchsia-500/30">
+                          <Link2 className="h-3.5 w-3.5" />
+                          Combined with {batch.combinedWith.map((b) => b.batch || "batch").join(", ")}
+                        </span>
+                      </div>
+                    )}
                     {batch.sessions && batch.sessions.length > 0 && (
                       <div className="mt-3 flex flex-wrap gap-2">
                         {batch.sessions.map((s, i) => (
@@ -372,6 +382,11 @@ export default function BatchDetail({ batchId }: { batchId: string }) {
                     onClick={() => setModal("sessions")}
                     icon={<Clock className="h-4 w-4" />}
                     label="Timetable"
+                  />
+                  <ToolbarButton
+                    onClick={() => setModal("combine")}
+                    icon={<Link2 className="h-4 w-4" />}
+                    label="Combine Batch"
                   />
                   <ToolbarButton
                     onClick={() => setModal("delete")}
@@ -575,6 +590,17 @@ export default function BatchDetail({ batchId }: { batchId: string }) {
           onClose={() => setModal(null)}
           onDone={(sessions) => {
             setBatch((prev) => (prev ? { ...prev, sessions } : prev));
+            setModal(null);
+          }}
+        />
+      )}
+      {modal === "combine" && batch && (
+        <CombineBatchModal
+          batchId={batchId}
+          current={batch.combinedWith || []}
+          onClose={() => setModal(null)}
+          onDone={(combinedWith) => {
+            setBatch((prev) => (prev ? { ...prev, combinedWith } : prev));
             setModal(null);
           }}
         />
@@ -1261,206 +1287,150 @@ function DetailsModal({
   );
 }
 
-/* ---------------- Combine-with-batch picker ---------------- */
+/* ---------------- Combine batch modal ---------------- */
 
-function CombineBatchPicker({
-  ownBatchId,
-  value,
-  onChange,
+function CombineBatchModal({
+  batchId,
+  current,
+  onClose,
+  onDone,
 }: {
-  ownBatchId: string;
-  value: LinkedBatchRef[];
-  onChange: (next: LinkedBatchRef[]) => void;
+  batchId: string;
+  current: LinkedBatchRef[];
+  onClose: () => void;
+  onDone: (combinedWith: LinkedBatchRef[]) => void;
 }) {
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<LinkedBatchRef[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [open, setOpen] = useState(false);
+  const [candidates, setCandidates] = useState<(LinkedBatchRef & { topic?: string })[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<Set<string>>(new Set(current.map((b) => b._id)));
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const q = query.trim();
-    if (!q) {
-      setResults([]);
-      return;
-    }
-    let cancelled = false;
-    const t = setTimeout(async () => {
+    (async () => {
       try {
-        setSearching(true);
+        setLoading(true);
         const res = await fetch(
-          `${API_LMS_URL}/api/batches/get-batches?search=${encodeURIComponent(q)}&limit=8`,
+          `${API_LMS_URL}/api/batches/get-batches?status=Active&limit=100`,
           { headers: { "Content-Type": "application/json" } }
         );
         const json = await res.json();
-        if (cancelled) return;
-        const list: LinkedBatchRef[] = Array.isArray(json?.data)
-          ? json.data
-              .filter((b: any) => b._id !== ownBatchId && !value.some((v) => v._id === b._id))
-              .map((b: any) => ({ _id: b._id, batch: b.batch }))
-          : [];
-        setResults(list);
-      } catch {
-        if (!cancelled) setResults([]);
+        if (!res.ok) throw new Error(json?.message || "Failed to load batches");
+        const list = Array.isArray(json?.data) ? json.data : [];
+        setCandidates(list.filter((b: any) => b._id !== batchId));
+      } catch (e: any) {
+        toast.error(e?.message || "Failed to load running batches");
+        setCandidates([]);
       } finally {
-        if (!cancelled) setSearching(false);
+        setLoading(false);
       }
-    }, 300);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
-  }, [query, ownBatchId, value]);
+    })();
+  }, [batchId]);
 
-  const add = (b: LinkedBatchRef) => {
-    onChange([...value, b]);
-    setQuery("");
-    setResults([]);
-    setOpen(false);
+  const toggle = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  const save = async () => {
+    try {
+      setSaving(true);
+      const res = await fetch(
+        `${API_LMS_URL}/api/batches/combine-batch/${encodeURIComponent(batchId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ combinedWith: Array.from(selected) }),
+        }
+      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.message || "Failed to combine batches");
+      toast.success("Combined batches updated");
+      onDone(Array.isArray(json?.data?.combinedWith) ? json.data.combinedWith : []);
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to combine batches");
+    } finally {
+      setSaving(false);
+    }
   };
-  const remove = (id: string) => onChange(value.filter((v) => v._id !== id));
 
   return (
-    <div className="flex-1">
-      <div className="flex flex-wrap items-center gap-1.5">
-        {value.map((b) => (
-          <span
-            key={b._id}
-            className="inline-flex items-center gap-1 rounded-full bg-fuchsia-500/15 px-2 py-1 text-xs font-medium text-fuchsia-700 ring-1 ring-fuchsia-500/30"
-          >
-            {b.batch || "Batch"}
-            <button
-              onClick={() => remove(b._id)}
-              title="Remove from combined class"
-              className="text-fuchsia-700/70 hover:text-fuchsia-900"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </span>
-        ))}
-        <div className="relative min-w-[180px] flex-1">
-          <input
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setOpen(true);
-            }}
-            onFocus={() => setOpen(true)}
-            onBlur={() => setTimeout(() => setOpen(false), 150)}
-            placeholder="+ Combine with another batch…"
-            className="w-full rounded-lg border border-[var(--panel-border)] bg-[var(--panel-card)] px-2.5 py-1.5 text-xs text-[var(--panel-text-primary)] outline-none focus:border-fuchsia-500/50"
-          />
-          {open && query.trim() && (
-            <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-40 overflow-y-auto rounded-xl border border-[var(--panel-border)] bg-[var(--panel-bg-900)] shadow-xl">
-              {searching ? (
-                <div className="px-3 py-2 text-xs text-[var(--panel-text-muted)]">Searching…</div>
-              ) : results.length === 0 ? (
-                <div className="px-3 py-2 text-xs text-[var(--panel-text-faint)]">No matching batches</div>
-              ) : (
-                results.map((b) => (
-                  <button
-                    key={b._id}
-                    onClick={() => add(b)}
-                    className="block w-full px-3 py-2 text-left text-xs text-[var(--panel-text-primary)] hover:bg-[var(--panel-card)]"
-                  >
-                    {b.batch || "Untitled batch"}
-                  </button>
-                ))
-              )}
+    <ModalShell
+      title="Combine Batch"
+      subtitle="Pick the currently running batches this one shares classes with"
+      onClose={onClose}
+      maxW="max-w-lg"
+    >
+      <div className="space-y-3 p-5">
+        <div className="max-h-80 overflow-y-auto rounded-2xl border border-[var(--panel-border)]">
+          {loading ? (
+            <div className="flex items-center justify-center gap-3 px-4 py-10 text-sm text-[var(--panel-text-muted)]">
+              <span className="h-5 w-5 animate-spin rounded-full border-b-2 border-fuchsia-500" />
+              Loading running batches...
             </div>
+          ) : candidates.length === 0 ? (
+            <div className="px-4 py-10 text-center text-sm text-[var(--panel-text-faint)]">
+              No other running batches to combine with.
+            </div>
+          ) : (
+            <ul className="divide-y divide-[var(--panel-border)]">
+              {candidates.map((b) => {
+                const checked = selected.has(b._id);
+                return (
+                  <li
+                    key={b._id}
+                    onClick={() => toggle(b._id)}
+                    className={`flex cursor-pointer items-center gap-3 px-4 py-3 transition ${
+                      checked ? "bg-fuchsia-500/10" : "hover:bg-[var(--panel-card)]"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggle(b._id)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="h-4 w-4 cursor-pointer rounded border-[var(--panel-border)] bg-[var(--panel-card)] accent-fuchsia-500"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold text-[var(--panel-text-primary)]">
+                        {b.batch || "Untitled batch"}
+                      </div>
+                    </div>
+                    {b.topic ? (
+                      <span className="shrink-0 rounded-full bg-fuchsia-500/15 px-2.5 py-1 text-[10px] font-semibold text-fuchsia-700 ring-1 ring-fuchsia-500/30">
+                        {topicLabel(b.topic)}
+                      </span>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </div>
-      </div>
-    </div>
-  );
-}
 
-/* ---------------- Auto-suggested combined classes ---------------- */
-
-type SuggestedMatch = {
-  _id: string;
-  batch?: string;
-  course?: { title?: string } | null;
-  matchedOn: string[];
-};
-
-function CombinedClassSuggestions({
-  ownBatchId,
-  classRoom,
-  topic,
-  time,
-  trainerName,
-  linked,
-  onAdd,
-}: {
-  ownBatchId: string;
-  classRoom?: string;
-  topic?: string;
-  time?: string;
-  trainerName?: string;
-  linked: LinkedBatchRef[];
-  onAdd: (b: LinkedBatchRef) => void;
-}) {
-  const [suggestions, setSuggestions] = useState<SuggestedMatch[]>([]);
-
-  useEffect(() => {
-    const t = (time || "").trim();
-    if (!t) {
-      setSuggestions([]);
-      return;
-    }
-    let cancelled = false;
-    const timer = setTimeout(async () => {
-      try {
-        const params = new URLSearchParams({
-          excludeBatchId: ownBatchId,
-          time: t,
-          topic: topic || "",
-          trainerName: trainerName || "",
-          classRoom: classRoom || "",
-        });
-        const res = await fetch(`${API_LMS_URL}/api/batches/suggest-links?${params.toString()}`, {
-          headers: { "Content-Type": "application/json" },
-        });
-        const json = await res.json();
-        if (cancelled) return;
-        const linkedIds = new Set(linked.map((l) => l._id));
-        setSuggestions(Array.isArray(json?.data) ? json.data.filter((s: SuggestedMatch) => !linkedIds.has(s._id)) : []);
-      } catch {
-        if (!cancelled) setSuggestions([]);
-      }
-    }, 500);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [ownBatchId, classRoom, topic, time, trainerName, linked]);
-
-  if (suggestions.length === 0) return null;
-
-  return (
-    <div className="space-y-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5">
-      <p className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-700">
-        <Sparkles className="h-3.5 w-3.5" />
-        Same time — this might be the same class as:
-      </p>
-      {suggestions.map((s) => (
-        <div
-          key={s._id}
-          className="flex items-center justify-between gap-2 rounded-lg bg-[var(--panel-card)] px-2.5 py-1.5 text-xs"
-        >
-          <span className="text-[var(--panel-text-secondary)]">
-            <span className="font-semibold text-[var(--panel-text-primary)]">{s.batch || "Batch"}</span>
-            {s.course?.title ? ` · ${s.course.title}` : ""} · matches on {s.matchedOn.join(", ")}
-          </span>
+        <div className="flex justify-end gap-2 pt-1">
           <button
-            onClick={() => onAdd({ _id: s._id, batch: s.batch })}
-            className="shrink-0 rounded-lg border border-amber-500/40 bg-amber-500/15 px-2 py-1 text-[10px] font-semibold text-amber-700 transition hover:bg-amber-500/25"
+            onClick={onClose}
+            className="rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-4 py-2.5 text-sm font-medium text-[var(--panel-text-secondary)] transition hover:bg-[var(--panel-border)]"
           >
-            + Combine
+            Cancel
+          </button>
+          <button
+            onClick={save}
+            disabled={saving}
+            className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-gradient-to-r from-fuchsia-500 to-purple-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-fuchsia-500/25 transition hover:shadow-xl disabled:opacity-50"
+          >
+            {saving ? (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+            ) : (
+              <Check className="h-4 w-4" />
+            )}
+            Combine
           </button>
         </div>
-      ))}
-    </div>
+      </div>
+    </ModalShell>
   );
 }
 
@@ -1497,8 +1467,6 @@ function SessionsModal({
   const removeRow = (i: number) => setRows((prev) => prev.filter((_, idx) => idx !== i));
   const updateRow = (i: number, field: "topic" | "time" | "trainerName" | "classRoom", value: string) =>
     setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, [field]: value } : r)));
-  const updateLinked = (i: number, next: LinkedBatchRef[]) =>
-    setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, linkedBatchIds: next } : r)));
 
   const save = async () => {
     try {
@@ -1589,30 +1557,11 @@ function SessionsModal({
                 className="w-full rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-3 py-2 text-xs text-[var(--panel-text-primary)] outline-none focus:border-rose-500/50"
               />
             </div>
-            <div className="flex items-start gap-2">
-              <Link2 className="mt-2 h-3.5 w-3.5 shrink-0 text-fuchsia-400" />
-              <CombineBatchPicker
-                ownBatchId={batchId}
-                value={r.linkedBatchIds || []}
-                onChange={(next) => updateLinked(i, next)}
-              />
-            </div>
-            <CombinedClassSuggestions
-              ownBatchId={batchId}
-              classRoom={r.classRoom || classRoom}
-              topic={r.topic}
-              time={r.time}
-              trainerName={r.trainerName}
-              linked={r.linkedBatchIds || []}
-              onAdd={(b) => updateLinked(i, [...(r.linkedBatchIds || []), b])}
-            />
           </div>
         ))}
         <p className="text-xs text-[var(--panel-text-faint)]">
-          Leave the trainer blank to use the batch trainer. If this class runs together with another
-          batch (e.g. one Excel session both DS and DA attend), pick that batch under "Combine with" —
-          or fill in the time and we'll suggest it automatically if another batch has a class at the
-          same time with a matching topic, trainer, or venue.
+          Leave the trainer blank to use the batch trainer. To share a class with another batch
+          (e.g. one Excel session both DS and DA attend), use "Combine Batch" from the batch page instead.
         </p>
 
         <button

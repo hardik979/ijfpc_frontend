@@ -47,6 +47,10 @@ type Batch = {
   course?: Course | string | null;
   students?: Student[];
   createdAt?: string;
+  // Other batches this one runs jointly with as a whole, set via the
+  // "Combine Batch" action — folds their rows together below same as
+  // session-level linkedBatchIds does.
+  combinedWith?: LinkedBatchRef[];
 };
 
 const ZONES = ["blue", "yellow", "green"] as const;
@@ -281,10 +285,21 @@ export default function BatchOverview() {
       }
     }
 
+    // Whole-batch combine links (set via "Combine Batch"), keyed by batch id —
+    // folds in rows the same way per-session linkedBatchIds does below, just
+    // seeded from the batch-level relationship instead of a per-class one.
+    const combinedWithByBatch = new Map<string, Set<string>>();
+    for (const b of batches) {
+      if (b.combinedWith?.length) {
+        combinedWithByBatch.set(b._id, new Set(b.combinedWith.map((c) => c._id)));
+      }
+    }
+
     // Fold combined-class rows together: if batch A's session links to batch
-    // B (and they're the same topic), show them as ONE row with both batch
-    // numbers and both rosters, instead of two separate rows a viewer has to
-    // notice are related. Union-find over row indices, connected by that link.
+    // B (and they're the same topic), or batch A and B were combined as a
+    // whole via "Combine Batch", show them as ONE row with both batch numbers
+    // and both rosters, instead of two separate rows a viewer has to notice
+    // are related. Union-find over row indices, connected by that link.
     const parent = out.map((_, i) => i);
     const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
     const union = (a: number, b: number) => {
@@ -293,10 +308,10 @@ export default function BatchOverview() {
       if (ra !== rb) parent[rb] = ra;
     };
     out.forEach((g, i) => {
-      if (!g.linkedBatchIds?.length) return;
       out.forEach((h, j) => {
         if (i === j || g.topic !== h.topic) return;
-        if (g.linkedBatchIds!.includes(h.batchId)) union(i, j);
+        if (g.linkedBatchIds?.includes(h.batchId)) union(i, j);
+        else if (combinedWithByBatch.get(g.batchId)?.has(h.batchId)) union(i, j);
       });
     });
 
@@ -316,15 +331,21 @@ export default function BatchOverview() {
       const members = idxs.map((i) => out[i]).sort((a, b) => a.batchNo.localeCompare(b.batchNo));
       const zones = new Set(members.map((m) => m.zone).filter(Boolean));
       const multiBatch = members.length > 1;
+      // It's one physical class shared by every combined batch, so show its
+      // trainer/venue once — each batch may spell the same person/room
+      // slightly differently, so pick the first filled-in value rather than
+      // joining every variant.
+      const firstFilled = (get: (m: (typeof members)[number]) => string) =>
+        members.map(get).find((v) => v && v !== "—") || "—";
       merged.push({
         key: members.map((m) => m.key).join("+"),
         batchId: members[0].batchId,
         time: members[0].time,
         date: members[0].date,
-        trainer: Array.from(new Set(members.map((m) => m.trainer))).join(" / "),
+        trainer: firstFilled((m) => m.trainer),
         batchNo: members.map((m) => m.batchNo).join(" + "),
         topic: members[0].topic,
-        classRoom: Array.from(new Set(members.map((m) => m.classRoom))).join(" / "),
+        classRoom: firstFilled((m) => m.classRoom),
         zone: zones.size === 1 ? members[0].zone : undefined,
         count: members.reduce((n, m) => n + m.count, 0),
         students: members.flatMap((m) =>
