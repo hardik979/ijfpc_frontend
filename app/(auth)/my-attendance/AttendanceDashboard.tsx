@@ -151,6 +151,18 @@ interface StaffSummaryRow {
   >;
 }
 
+/** The statuses a history can be narrowed to from a count in the overview. */
+type FilterableStatus = "present" | "half" | "absent";
+
+const STATUS_FILTER_LABEL: Record<FilterableStatus, string> = {
+  present: "Present",
+  half: "Half day",
+  absent: "Absent",
+};
+
+const readFilterableStatus = (value: string | undefined): FilterableStatus | "" =>
+  value === "present" || value === "half" || value === "absent" ? value : "";
+
 type MetricTone = "accent" | "teal" | "amber" | "rose" | "neutral";
 type BulkExceptionTarget = "all" | "half" | "absent";
 
@@ -1186,22 +1198,32 @@ function StaffDetailView({
   data,
   month,
   savingDate,
+  statusFilter,
+  onStatusFilterChange,
   onAdjustmentChange,
 }: {
   data: AttendancePayload;
   month: string;
   savingDate: string;
+  statusFilter: FilterableStatus | "";
+  onStatusFilterChange: (status: FilterableStatus | "") => void;
   onAdjustmentChange: (
     dateKey: string,
     adjustment: AttendanceAdjustmentInput,
   ) => void;
 }) {
   const summary = data.summary;
-  const facts = [
+  // The counts always describe the whole month; only the history below is
+  // narrowed, so the totals stay stable while a filter is on.
+  const facts: {
+    label: string;
+    value: string | number;
+    status?: FilterableStatus;
+  }[] = [
     { label: "Recorded", value: data.records.length },
-    { label: "Present", value: summary.presentDays },
-    { label: "Half day", value: summary.halfDays },
-    { label: "Absent", value: summary.absentDays },
+    { label: "Present", value: summary.presentDays, status: "present" },
+    { label: "Half day", value: summary.halfDays, status: "half" },
+    { label: "Absent", value: summary.absentDays, status: "absent" },
     {
       label: "Leave / off",
       value:
@@ -1212,6 +1234,10 @@ function StaffDetailView({
     { label: "Exceptions", value: summary.exceptionDays || 0 },
     { label: "Attendance", value: summary.attendancePercentage + "%" },
   ];
+
+  const visibleRecords = statusFilter
+    ? data.records.filter((record) => record.status === statusFilter)
+    : data.records;
 
   return (
     <>
@@ -1243,29 +1269,156 @@ function StaffDetailView({
             " grid grid-cols-2 border-t sm:grid-cols-3 lg:grid-cols-7"
           }
         >
-          {facts.map((fact) => (
-            <div
-              key={fact.label}
-              className={styles.divider + " min-w-0 border-b px-4 py-3 last:border-b-0 sm:border-r sm:last:border-r-0 lg:border-b-0"}
-            >
-              <dt className={styles.muted + " text-xs font-medium"}>{fact.label}</dt>
-              <dd className={styles.primary + " mt-1 text-base font-bold tabular-nums"}>
-                {fact.value}
-              </dd>
-            </div>
-          ))}
+          {facts.map((fact) => {
+            const selected = Boolean(fact.status) && fact.status === statusFilter;
+            const clickable = Boolean(fact.status) && Number(fact.value) > 0;
+
+            return (
+              <div
+                key={fact.label}
+                className={
+                  styles.divider +
+                  " min-w-0 border-b px-4 py-3 last:border-b-0 sm:border-r sm:last:border-r-0 lg:border-b-0 " +
+                  (selected ? "bg-indigo-500/[0.08]" : "")
+                }
+              >
+                {clickable ? (
+                  <button
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() =>
+                      onStatusFilterChange(selected ? "" : fact.status || "")
+                    }
+                    title={
+                      selected
+                        ? "Show every day again"
+                        : "Show only the " + fact.label.toLowerCase() + " days"
+                    }
+                    className="w-full text-left outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70"
+                  >
+                    <dt
+                      className={
+                        (selected ? styles.accent : styles.muted) +
+                        " flex items-center gap-1 text-xs font-medium"
+                      }
+                    >
+                      {fact.label}
+                      <ChevronRight aria-hidden="true" className="h-3 w-3" />
+                    </dt>
+                    <dd
+                      className={
+                        styles.primary +
+                        " mt-1 text-base font-bold tabular-nums underline-offset-4 hover:underline"
+                      }
+                    >
+                      {fact.value}
+                    </dd>
+                  </button>
+                ) : (
+                  <>
+                    <dt className={styles.muted + " text-xs font-medium"}>
+                      {fact.label}
+                    </dt>
+                    <dd
+                      className={
+                        styles.primary + " mt-1 text-base font-bold tabular-nums"
+                      }
+                    >
+                      {fact.value}
+                    </dd>
+                  </>
+                )}
+              </div>
+            );
+          })}
         </dl>
       </section>
 
+      {statusFilter ? (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span
+            className={
+              styles.control +
+              " inline-flex min-h-9 items-center gap-2 rounded-full px-3 text-xs font-semibold"
+            }
+          >
+            Showing {STATUS_FILTER_LABEL[statusFilter].toLowerCase()} days only
+            <button
+              type="button"
+              onClick={() => onStatusFilterChange("")}
+              aria-label="Show every day again"
+              className="inline-flex h-5 w-5 items-center justify-center rounded-full hover:bg-indigo-500/20"
+            >
+              <X aria-hidden="true" className="h-3 w-3" />
+            </button>
+          </span>
+          <span className={styles.muted + " text-xs"}>
+            {visibleRecords.length} of {data.records.length} recorded days
+          </span>
+        </div>
+      ) : null}
+
       <PersonalHistory
-        records={data.records}
+        records={visibleRecords}
         month={month}
-        title="Individual attendance details"
+        title={
+          statusFilter
+            ? STATUS_FILTER_LABEL[statusFilter] + " days"
+            : "Individual attendance details"
+        }
         canAdjust
         savingDate={savingDate}
         onAdjustmentChange={onAdjustmentChange}
       />
     </>
+  );
+}
+
+/**
+ * One count in the staff table, as a link into that employee's history filtered
+ * to the days behind the number — clicking "3" under Half day opens their three
+ * half days. A zero is not a link: there is nothing to open.
+ */
+function StatusCountCell({
+  employeeId,
+  name,
+  month,
+  status,
+  count,
+  className,
+}: {
+  employeeId: number;
+  name: string;
+  month: string;
+  status: FilterableStatus;
+  count: number;
+  className: string;
+}) {
+  return (
+    <td className={"px-4 py-3.5 font-semibold tabular-nums " + className}>
+      {count > 0 ? (
+        <Link
+          href={
+            "/my-attendance/staff/" +
+            employeeId +
+            "?month=" +
+            encodeURIComponent(month) +
+            "&status=" +
+            status
+          }
+          title={
+            "Show " + name + "'s " + STATUS_FILTER_LABEL[status] + " days"
+          }
+          className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-md px-1.5 underline-offset-4 outline-none transition hover:bg-indigo-500/[0.08] hover:underline focus-visible:ring-2 focus-visible:ring-indigo-400/70"
+        >
+          {count}
+        </Link>
+      ) : (
+        <span className="inline-flex min-h-8 min-w-8 items-center justify-center px-1.5 opacity-60">
+          {count}
+        </span>
+      )}
+    </td>
   );
 }
 
@@ -1284,7 +1437,7 @@ function StaffSummaryTable({
     const query = searchQuery.trim().toLocaleLowerCase();
     const categoryFilterActive = halfDayOnly || absentOnly;
 
-    return staff.filter((entry) => {
+    const matching = staff.filter((entry) => {
       const matchesSearch =
         !query ||
         entry.name.toLocaleLowerCase().includes(query) ||
@@ -1296,6 +1449,21 @@ function StaffSummaryTable({
 
       return matchesSearch && matchesCategory;
     });
+
+    if (!categoryFilterActive) return matching;
+
+    // A category filter is also a ranking: the point of asking for half days is
+    // to see who has the most of them. With both filters on, the two counts are
+    // added so the worst attendance overall comes first; ties fall back to the
+    // name so the order never jitters between refreshes.
+    const rank = (entry: StaffSummaryRow) =>
+      (halfDayOnly ? entry.summary.halfDays : 0) +
+      (absentOnly ? entry.summary.absentDays : 0);
+
+    return [...matching].sort(
+      (first, second) =>
+        rank(second) - rank(first) || first.name.localeCompare(second.name),
+    );
   }, [absentOnly, halfDayOnly, searchQuery, staff]);
 
   const filtersActive = Boolean(searchQuery.trim()) || halfDayOnly || absentOnly;
@@ -1524,15 +1692,30 @@ function StaffSummaryTable({
                       >
                         {entry.recordedDays}
                       </td>
-                      <td className="px-4 py-3.5 font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">
-                        {entry.summary.presentDays}
-                      </td>
-                      <td className="px-4 py-3.5 font-semibold tabular-nums text-amber-700 dark:text-amber-300">
-                        {entry.summary.halfDays}
-                      </td>
-                      <td className="px-4 py-3.5 font-semibold tabular-nums text-rose-700 dark:text-rose-300">
-                        {entry.summary.absentDays}
-                      </td>
+                      <StatusCountCell
+                        employeeId={entry.employeeId}
+                        name={entry.name}
+                        month={month}
+                        status="present"
+                        count={entry.summary.presentDays}
+                        className="text-emerald-700 dark:text-emerald-300"
+                      />
+                      <StatusCountCell
+                        employeeId={entry.employeeId}
+                        name={entry.name}
+                        month={month}
+                        status="half"
+                        count={entry.summary.halfDays}
+                        className="text-amber-700 dark:text-amber-300"
+                      />
+                      <StatusCountCell
+                        employeeId={entry.employeeId}
+                        name={entry.name}
+                        month={month}
+                        status="absent"
+                        count={entry.summary.absentDays}
+                        className="text-rose-700 dark:text-rose-300"
+                      />
                       <td
                         className={
                           styles.muted + " px-4 py-3.5 tabular-nums"
@@ -2066,9 +2249,11 @@ function UnauthorizedState({ adminOnly = true }: { adminOnly?: boolean }) {
 export function StaffAttendanceDetailPage({
   employeeId,
   initialMonth,
+  initialStatus,
 }: {
   employeeId: string;
   initialMonth?: string;
+  initialStatus?: string;
 }) {
   const { user, isLoaded } = useUser();
   const router = useRouter();
@@ -2079,6 +2264,11 @@ export function StaffAttendanceDetailPage({
     /^\d{4}-(0[1-9]|1[0-2])$/.test(initialMonth || "")
       ? String(initialMonth)
       : toMonthKey(new Date()),
+  );
+  // Set when the admin arrived by clicking a Present / Half day / Absent count
+  // in the overview; the URL keeps it so the filtered view can be shared.
+  const [statusFilter, setStatusFilter] = useState<FilterableStatus | "">(() =>
+    readFilterableStatus(initialStatus),
   );
   const [data, setData] = useState<AttendancePayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -2196,14 +2386,21 @@ export function StaffAttendanceDetailPage({
     return [...options].sort((first, second) => second.localeCompare(first));
   }, [data?.availableMonths, month]);
 
+  const detailHref = (nextMonth: string, nextStatus: FilterableStatus | "") =>
+    "/my-attendance/staff/" +
+    validEmployeeId +
+    "?month=" +
+    encodeURIComponent(nextMonth) +
+    (nextStatus ? "&status=" + nextStatus : "");
+
   const changeMonth = (nextMonth: string) => {
     setMonth(nextMonth);
-    router.replace(
-      "/my-attendance/staff/" +
-        validEmployeeId +
-        "?month=" +
-        encodeURIComponent(nextMonth),
-    );
+    router.replace(detailHref(nextMonth, statusFilter));
+  };
+
+  const changeStatusFilter = (nextStatus: FilterableStatus | "") => {
+    setStatusFilter(nextStatus);
+    router.replace(detailHref(month, nextStatus));
   };
 
   if (isLoaded && !isAdmin) return <UnauthorizedState adminOnly />;
@@ -2261,6 +2458,8 @@ export function StaffAttendanceDetailPage({
             data={data}
             month={month}
             savingDate={savingDate}
+            statusFilter={statusFilter}
+            onStatusFilterChange={changeStatusFilter}
             onAdjustmentChange={updateAdjustment}
           />
         ) : null}
