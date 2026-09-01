@@ -29,8 +29,10 @@ import {
   MinusCircle,
   Percent,
   RefreshCw,
+  Search,
   ScrollText,
   ShieldCheck,
+  Trash2,
   UserRound,
   Users,
   X,
@@ -150,6 +152,7 @@ interface StaffSummaryRow {
 }
 
 type MetricTone = "accent" | "teal" | "amber" | "rose" | "neutral";
+type BulkExceptionTarget = "all" | "half" | "absent";
 
 const ATTENDANCE_ADMIN_ROLE = "ATTENDANCE_ADMIN";
 const SUPER_ADMIN_ROLE = "SUPER_ADMIN";
@@ -1273,6 +1276,30 @@ function StaffSummaryTable({
   staff: StaffSummaryRow[];
   month: string;
 }) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [halfDayOnly, setHalfDayOnly] = useState(false);
+  const [absentOnly, setAbsentOnly] = useState(false);
+
+  const visibleStaff = useMemo(() => {
+    const query = searchQuery.trim().toLocaleLowerCase();
+    const categoryFilterActive = halfDayOnly || absentOnly;
+
+    return staff.filter((entry) => {
+      const matchesSearch =
+        !query ||
+        entry.name.toLocaleLowerCase().includes(query) ||
+        String(entry.employeeId).includes(query);
+      const matchesCategory =
+        !categoryFilterActive ||
+        (halfDayOnly && entry.summary.halfDays > 0) ||
+        (absentOnly && entry.summary.absentDays > 0);
+
+      return matchesSearch && matchesCategory;
+    });
+  }, [absentOnly, halfDayOnly, searchQuery, staff]);
+
+  const filtersActive = Boolean(searchQuery.trim()) || halfDayOnly || absentOnly;
+
   return (
     <section
       aria-labelledby="daily-overview-title"
@@ -1301,14 +1328,109 @@ function StaffSummaryTable({
             " inline-flex min-h-8 items-center px-2.5 text-xs font-semibold"
           }
         >
+          {filtersActive ? visibleStaff.length + " of " : ""}
           {staff.length} {staff.length === 1 ? "staff member" : "staff"}
         </span>
       </div>
+
+      {staff.length ? (
+        <div
+          className={
+            styles.divider +
+            " flex flex-col gap-3 border-b px-4 py-3 sm:px-5 lg:flex-row lg:items-center"
+          }
+        >
+          <div className="relative min-w-0 flex-1">
+            <Search
+              aria-hidden="true"
+              className={styles.muted + " pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2"}
+            />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search staff by name or ID"
+              aria-label="Search staff by name or employee ID"
+              className={
+                styles.control +
+                " h-10 w-full pl-9 pr-9 text-sm outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70"
+              }
+            />
+            {searchQuery ? (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                aria-label="Clear staff search"
+                title="Clear search"
+                className={
+                  styles.muted +
+                  " absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md hover:bg-slate-500/10"
+                }
+              >
+                <X aria-hidden="true" className="h-4 w-4" />
+              </button>
+            ) : null}
+          </div>
+
+          <fieldset className="flex flex-wrap items-center gap-2">
+            <legend className="sr-only">Filter staff by attendance category</legend>
+            <label
+              className={
+                styles.control +
+                " inline-flex h-10 cursor-pointer items-center gap-2 px-3 text-sm font-semibold"
+              }
+            >
+              <input
+                type="checkbox"
+                checked={halfDayOnly}
+                onChange={(event) => setHalfDayOnly(event.target.checked)}
+                className="h-4 w-4 accent-amber-600"
+              />
+              Half Day
+            </label>
+            <label
+              className={
+                styles.control +
+                " inline-flex h-10 cursor-pointer items-center gap-2 px-3 text-sm font-semibold"
+              }
+            >
+              <input
+                type="checkbox"
+                checked={absentOnly}
+                onChange={(event) => setAbsentOnly(event.target.checked)}
+                className="h-4 w-4 accent-rose-600"
+              />
+              Absent
+            </label>
+            {filtersActive ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("");
+                  setHalfDayOnly(false);
+                  setAbsentOnly(false);
+                }}
+                className={
+                  styles.secondary +
+                  " inline-flex h-10 items-center px-2 text-xs font-semibold hover:underline"
+                }
+              >
+                Clear filters
+              </button>
+            ) : null}
+          </fieldset>
+        </div>
+      ) : null}
 
       {!staff.length ? (
         <EmptyState
           title="No staff attendance recorded"
           detail="Staff summaries will appear here after attendance records are imported."
+        />
+      ) : !visibleStaff.length ? (
+        <EmptyState
+          title="No matching staff"
+          detail="Try another search or clear the selected attendance filters."
         />
       ) : (
         <>
@@ -1342,7 +1464,7 @@ function StaffSummaryTable({
                 </tr>
               </thead>
               <tbody>
-                {staff.map((entry) => (
+                {visibleStaff.map((entry) => (
                     <tr
                       key={entry.employeeId}
                       className={
@@ -1447,7 +1569,7 @@ function StaffSummaryTable({
           </div>
 
           <ul className="md:hidden">
-            {staff.map((entry) => (
+            {visibleStaff.map((entry) => (
                 <li
                   key={entry.employeeId}
                   className={styles.divider + " border-b last:border-b-0"}
@@ -1548,26 +1670,42 @@ function StaffSummaryTable({
  * The reason is mandatory here for the same purpose as on a single day: the
  * record has to say why a whole day was excused. The LMS enforces it too.
  */
-function BulkExceptionPanel({ onApplied }: { onApplied: () => void }) {
+function BulkExceptionPanel({ onChanged }: { onChanged: () => void }) {
   const [open, setOpen] = useState(false);
   const [dateKey, setDateKey] = useState(() => toDateKey(new Date()));
+  const [targetStatus, setTargetStatus] =
+    useState<BulkExceptionTarget>("all");
   const [reason, setReason] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [pendingAction, setPendingAction] = useState<
+    "apply" | "remove" | null
+  >(null);
   const [error, setError] = useState("");
   const [result, setResult] = useState("");
 
+  const targetLabel =
+    targetStatus === "all"
+      ? "all staff"
+      : targetStatus === "half"
+        ? "Half Day staff"
+        : "Absent staff";
+
+  const dateIsValid = () => {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return true;
+    setError("Choose the date the exception applies to");
+    setResult("");
+    return false;
+  };
+
   const apply = async () => {
     const trimmedReason = reason.trim();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
-      setError("Choose the date the exception applies to");
-      return;
-    }
+    if (!dateIsValid()) return;
     if (!trimmedReason) {
       setError("A reason is required");
+      setResult("");
       return;
     }
 
-    setSaving(true);
+    setPendingAction("apply");
     setError("");
     setResult("");
 
@@ -1575,7 +1713,11 @@ function BulkExceptionPanel({ onApplied }: { onApplied: () => void }) {
       const response = await fetch("/api/staff/attendance/exceptions-all", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dateKey, reason: trimmedReason }),
+        body: JSON.stringify({
+          dateKey,
+          reason: trimmedReason,
+          targetStatus,
+        }),
       });
       const payload = await response.json();
       if (!response.ok) {
@@ -1584,12 +1726,18 @@ function BulkExceptionPanel({ onApplied }: { onApplied: () => void }) {
       setResult(
         "Exception applied to " +
           payload.staffCount +
-          " staff for " +
+          " " +
+          (targetStatus === "all"
+            ? payload.staffCount === 1
+              ? "staff member"
+              : "staff"
+            : targetLabel) +
+          " for " +
           formatDate(dateKey) +
           ".",
       );
       setReason("");
-      onApplied();
+      onChanged();
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -1597,7 +1745,82 @@ function BulkExceptionPanel({ onApplied }: { onApplied: () => void }) {
           : "Could not apply the exception",
       );
     } finally {
-      setSaving(false);
+      setPendingAction(null);
+    }
+  };
+
+  const remove = async () => {
+    if (!dateIsValid()) return;
+    if (
+      !window.confirm(
+        "Remove bulk-applied exceptions for " +
+          formatDate(dateKey) +
+          "? Approved leave and earlier individual exceptions will be kept.",
+      )
+    ) {
+      return;
+    }
+
+    setPendingAction("remove");
+    setError("");
+    setResult("");
+
+    const requestRemoval = async (confirmLegacy: boolean) => {
+      const params = new URLSearchParams({ dateKey });
+      if (confirmLegacy) params.set("confirmLegacy", "true");
+      const response = await fetch(
+        "/api/staff/attendance/exceptions-all?" + params.toString(),
+        { method: "DELETE" },
+      );
+      const payload = await response.json();
+      return { response, payload };
+    };
+
+    try {
+      let removal = await requestRemoval(false);
+      if (
+        removal.response.status === 409 &&
+        removal.payload?.code === "LEGACY_EXCEPTION_CONFIRMATION_REQUIRED"
+      ) {
+        const legacyCount = Number(removal.payload?.exceptionCount) || 0;
+        const confirmed = window.confirm(
+          (removal.payload?.error ||
+            "These older exceptions cannot be distinguished from individual exceptions.") +
+            "\n\nContinue and clear " +
+            legacyCount +
+            (legacyCount === 1 ? " exception" : " exceptions") +
+            " for this date? Approved leave will still be kept.",
+        );
+        if (!confirmed) return;
+        removal = await requestRemoval(true);
+      }
+
+      if (!removal.response.ok) {
+        throw new Error(
+          removal.payload?.error || "Could not remove the exceptions",
+        );
+      }
+
+      const removed = Number(removal.payload?.removed) || 0;
+      setResult(
+        removed
+          ? String(removed) +
+              (removed === 1
+                ? " bulk exception was removed for "
+                : " bulk exceptions were removed for ") +
+              formatDate(dateKey) +
+              "."
+          : "No bulk exceptions were found for " + formatDate(dateKey) + ".",
+      );
+      onChanged();
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Could not remove the exceptions",
+      );
+    } finally {
+      setPendingAction(null);
     }
   };
 
@@ -1616,8 +1839,7 @@ function BulkExceptionPanel({ onApplied }: { onApplied: () => void }) {
               Exceptions for all staff
             </h2>
             <p className={styles.muted + " mt-0.5 text-xs"}>
-              Excuse one date for everyone — an office closure, a device outage,
-              a team day out.
+              Excuse one date for everyone, Half Day staff, or Absent staff.
             </p>
           </div>
         </div>
@@ -1640,8 +1862,8 @@ function BulkExceptionPanel({ onApplied }: { onApplied: () => void }) {
 
       {open ? (
         <div className={styles.divider + " border-t px-4 py-4 sm:px-5"}>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-            <div className="sm:w-52">
+          <div className="grid gap-3 lg:grid-cols-[13rem_14rem_minmax(0,1fr)]">
+            <div>
               <label
                 htmlFor="bulk-exception-date"
                 className={styles.secondary + " block text-xs font-semibold"}
@@ -1653,13 +1875,38 @@ function BulkExceptionPanel({ onApplied }: { onApplied: () => void }) {
                 type="date"
                 value={dateKey}
                 onChange={(event) => setDateKey(event.target.value)}
+                disabled={pendingAction !== null}
                 className={
                   styles.control +
-                  " mt-1.5 h-11 w-full px-3 text-sm font-semibold outline-none"
+                  " mt-1.5 h-11 w-full px-3 text-sm font-semibold outline-none disabled:cursor-wait disabled:opacity-60"
                 }
               />
             </div>
-            <div className="flex-1">
+            <div>
+              <label
+                htmlFor="bulk-exception-target"
+                className={styles.secondary + " block text-xs font-semibold"}
+              >
+                Apply to
+              </label>
+              <select
+                id="bulk-exception-target"
+                value={targetStatus}
+                onChange={(event) =>
+                  setTargetStatus(event.target.value as BulkExceptionTarget)
+                }
+                disabled={pendingAction !== null}
+                className={
+                  styles.control +
+                  " mt-1.5 h-11 w-full px-3 text-sm font-semibold outline-none disabled:cursor-wait disabled:opacity-60"
+                }
+              >
+                <option value="all">All staff</option>
+                <option value="half">Half Day only</option>
+                <option value="absent">Absent only</option>
+              </select>
+            </div>
+            <div>
               <label
                 htmlFor="bulk-exception-reason"
                 className={styles.secondary + " block text-xs font-semibold"}
@@ -1672,19 +1919,43 @@ function BulkExceptionPanel({ onApplied }: { onApplied: () => void }) {
                 value={reason}
                 maxLength={300}
                 onChange={(event) => setReason(event.target.value)}
-                placeholder="Why is this date excused for everyone?"
+                disabled={pendingAction !== null}
+                placeholder="Why is this date excused for the selected staff?"
                 className={
-                  styles.control + " mt-1.5 h-11 w-full px-3 text-sm outline-none"
+                  styles.control +
+                  " mt-1.5 h-11 w-full px-3 text-sm outline-none disabled:cursor-wait disabled:opacity-60"
                 }
               />
             </div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={remove}
+              disabled={pendingAction !== null}
+              className={
+                styles.control +
+                " inline-flex h-11 shrink-0 items-center gap-2 px-4 text-sm font-semibold text-rose-600 transition hover:bg-rose-500/10 disabled:cursor-wait disabled:opacity-60 dark:text-rose-300"
+              }
+            >
+              {pendingAction === "remove" ? (
+                <LoaderCircle
+                  aria-hidden="true"
+                  className="h-4 w-4 animate-spin motion-reduce:animate-none"
+                />
+              ) : (
+                <Trash2 aria-hidden="true" className="h-4 w-4" />
+              )}
+              Remove for this date
+            </button>
             <button
               type="button"
               onClick={apply}
-              disabled={saving}
-              className="mt-0 inline-flex h-11 shrink-0 items-center gap-2 self-end rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-wait disabled:opacity-60"
+              disabled={pendingAction !== null}
+              className="inline-flex h-11 shrink-0 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-wait disabled:opacity-60"
             >
-              {saving ? (
+              {pendingAction === "apply" ? (
                 <LoaderCircle
                   aria-hidden="true"
                   className="h-4 w-4 animate-spin motion-reduce:animate-none"
@@ -1692,7 +1963,7 @@ function BulkExceptionPanel({ onApplied }: { onApplied: () => void }) {
               ) : (
                 <Check aria-hidden="true" className="h-4 w-4" />
               )}
-              Apply to all staff
+              Apply to {targetLabel}
             </button>
           </div>
 
@@ -1710,9 +1981,10 @@ function BulkExceptionPanel({ onApplied }: { onApplied: () => void }) {
             </p>
           ) : null}
           <p className={styles.muted + " mt-3 text-xs leading-5"}>
-            An exception overrides the normal rules for that day. Existing
-            entries for the date are updated rather than duplicated, and the
-            reason is stored against every staff member it touches.
+            Category matching uses each staff member&apos;s attendance for the
+            selected date. Removing reverses bulk-applied exceptions while
+            preserving approved leave and any individual exception that existed
+            beforehand.
           </p>
         </div>
       ) : null}
@@ -1762,7 +2034,7 @@ function AdminDashboard({
         />
       </section>
 
-      <BulkExceptionPanel onApplied={onRefresh} />
+      <BulkExceptionPanel onChanged={onRefresh} />
 
       <StaffSummaryTable staff={data.staff || []} month={month} />
     </>
