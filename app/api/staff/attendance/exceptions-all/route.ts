@@ -132,6 +132,10 @@ export async function DELETE(request: NextRequest) {
   if (request.nextUrl.searchParams.get("confirmLegacy") === "true") {
     params.set("confirmLegacy", "true");
   }
+  // Clears every exception on the date, individually applied ones included.
+  if (request.nextUrl.searchParams.get("scope") === "all") {
+    params.set("scope", "all");
+  }
 
   try {
     const response = await fetch(endpoint + "?" + params.toString(), {
