@@ -14,13 +14,7 @@ import {
   Activity,
   Sparkles,
   AlertCircle,
-  Tag,
-  GraduationCap,
-  MapPin,
   Calendar,
-  Clock,
-  Plus,
-  Trash2,
 } from "lucide-react";
 
 type Course = { _id: string; title?: string };
@@ -36,30 +30,6 @@ type Student = {
 
 const STATUS_OPTIONS = ["Upcoming", "Active", "Completed"] as const;
 type Status = (typeof STATUS_OPTIONS)[number];
-
-// Keep in sync with the `topic` enum in lms-backend/models/Batches.js
-const TOPIC_OPTIONS = [
-  "SQL",
-  "Linux",
-  "Grafana",
-  "Dynatrace",
-  "ITIL",
-  "Python",
-  "Excel",
-  "MySQL",
-  "Capstone_Projects",
-  "ML",
-  "Communication",
-  "DS Projects",
-  "Recorded Lectures",
-  "Mock Interviews",
-  "HR Calling",
-] as const;
-type Topic = (typeof TOPIC_OPTIONS)[number];
-const topicLabel = (t: string) => t.replace(/_/g, " ");
-
-// trainerName is per-class — blank means "use the batch-level trainer"
-type Session = { topic: string; time: string; trainerName: string };
 
 const zoneBadge = (zone?: string) => {
   const z = (zone || "").toLowerCase();
@@ -77,17 +47,7 @@ export default function CreateBatch() {
 
   const [courseId, setCourseId] = useState("");
   const [status, setStatus] = useState<Status>("Upcoming");
-  const [topic, setTopic] = useState<Topic | "">("");
-  const [trainerName, setTrainerName] = useState("");
-  const [classRoom, setClassRoom] = useState("");
   const [classDate, setClassDate] = useState("");
-  const [classTime, setClassTime] = useState("");
-  const [sessions, setSessions] = useState<Session[]>([]);
-
-  const addSession = () => setSessions((prev) => [...prev, { topic: "", time: "", trainerName: "" }]);
-  const removeSession = (i: number) => setSessions((prev) => prev.filter((_, idx) => idx !== i));
-  const updateSession = (i: number, field: keyof Session, value: string) =>
-    setSessions((prev) => prev.map((s, idx) => (idx === i ? { ...s, [field]: value } : s)));
 
   const [students, setStudents] = useState<Student[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
@@ -183,6 +143,10 @@ export default function CreateBatch() {
     });
 
   const handleSubmit = async () => {
+    if (!courseName.trim()) {
+      toast.error("Please enter a batch name");
+      return;
+    }
     if (!courseId) {
       toast.error("Please select a course");
       return;
@@ -197,18 +161,7 @@ export default function CreateBatch() {
           status,
           students: Array.from(selected),
           batchName: courseName.trim() || undefined,
-          topic: topic || undefined,
-          trainerName: trainerName.trim() || undefined,
-          classRoom: classRoom.trim() || undefined,
           classDate: classDate || undefined,
-          classTime: classTime.trim() || undefined,
-          sessions: sessions
-            .map((s) => ({
-              topic: s.topic,
-              time: s.time.trim(),
-              trainerName: (s.trainerName || "").trim(),
-            }))
-            .filter((s) => s.topic || s.time || s.trainerName),
         }),
       });
       const json = await res.json();
@@ -259,8 +212,8 @@ export default function CreateBatch() {
               Create New Batch
             </h1>
             <p className="text-base text-[var(--panel-text-muted)]">
-              Pick a course and status. The batch name is generated automatically. You can
-              optionally add students for that course now.
+              Enter a name, pick a course and status, then optionally add students for that
+              course now.
             </p>
           </div>
         </div>
@@ -286,7 +239,7 @@ export default function CreateBatch() {
                 <div>
                   <label className="mb-2.5 flex items-center gap-2 text-sm font-semibold text-[var(--panel-text-secondary)]">
                     <CheckCircle className="h-4 w-4 text-emerald-400" />
-                    Batch Name
+                    Batch Name <span className="text-red-700">*</span>
                   </label>
                   <div className="rounded-2xl border-2 border-[var(--panel-border)] bg-[var(--panel-card-soft)] transition-all focus-within:border-emerald-500/50 hover:border-[var(--panel-border)]">
                     <input
@@ -345,64 +298,6 @@ export default function CreateBatch() {
 
                 <div>
                   <label className="mb-2.5 flex items-center gap-2 text-sm font-semibold text-[var(--panel-text-secondary)]">
-                    <Tag className="h-4 w-4 text-fuchsia-400" />
-                    Topic{" "}
-                    <span className="text-xs font-normal text-[var(--panel-text-faint)]">(optional)</span>
-                  </label>
-                  <div className="rounded-2xl border-2 border-[var(--panel-border)] bg-[var(--panel-card-soft)] transition-all focus-within:border-fuchsia-500/50 hover:border-[var(--panel-border)]">
-                    <select
-                      value={topic}
-                      onChange={(e) => setTopic(e.target.value as Topic | "")}
-                      className="w-full appearance-none bg-transparent px-4 py-3.5 text-sm text-[var(--panel-text-primary)] outline-none"
-                    >
-                      <option value="" className="bg-[var(--panel-bg-900)]">
-                        No topic
-                      </option>
-                      {TOPIC_OPTIONS.map((t) => (
-                        <option key={t} value={t} className="bg-[var(--panel-bg-900)]">
-                          {topicLabel(t)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="mb-2.5 flex items-center gap-2 text-sm font-semibold text-[var(--panel-text-secondary)]">
-                    <GraduationCap className="h-4 w-4 text-amber-400" />
-                    Trainer Name{" "}
-                    <span className="text-xs font-normal text-[var(--panel-text-faint)]">(optional)</span>
-                  </label>
-                  <div className="rounded-2xl border-2 border-[var(--panel-border)] bg-[var(--panel-card-soft)] transition-all focus-within:border-amber-500/50 hover:border-[var(--panel-border)]">
-                    <input
-                      type="text"
-                      value={trainerName}
-                      onChange={(e) => setTrainerName(e.target.value)}
-                      placeholder="Enter trainer name"
-                      className="w-full bg-transparent px-4 py-3.5 text-sm text-[var(--panel-text-primary)] outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="mb-2.5 flex items-center gap-2 text-sm font-semibold text-[var(--panel-text-secondary)]">
-                    <MapPin className="h-4 w-4 text-rose-400" />
-                    Venue{" "}
-                    <span className="text-xs font-normal text-[var(--panel-text-faint)]">(optional)</span>
-                  </label>
-                  <div className="rounded-2xl border-2 border-[var(--panel-border)] bg-[var(--panel-card-soft)] transition-all focus-within:border-rose-500/50 hover:border-[var(--panel-border)]">
-                    <input
-                      type="text"
-                      value={classRoom}
-                      onChange={(e) => setClassRoom(e.target.value)}
-                      placeholder="e.g. Ground Floor [Learning Lab-1]"
-                      className="w-full bg-transparent px-4 py-3.5 text-sm text-[var(--panel-text-primary)] outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="mb-2.5 flex items-center gap-2 text-sm font-semibold text-[var(--panel-text-secondary)]">
                     <Calendar className="h-4 w-4 text-sky-400" />
                     Batch Date{" "}
                     <span className="text-xs font-normal text-[var(--panel-text-faint)]">(optional)</span>
@@ -416,102 +311,6 @@ export default function CreateBatch() {
                     />
                   </div>
                 </div>
-
-                <div>
-                  <label className="mb-2.5 flex items-center gap-2 text-sm font-semibold text-[var(--panel-text-secondary)]">
-                    <Clock className="h-4 w-4 text-teal-400" />
-                    Class Time{" "}
-                    <span className="text-xs font-normal text-[var(--panel-text-faint)]">(optional)</span>
-                  </label>
-                  <div className="rounded-2xl border-2 border-[var(--panel-border)] bg-[var(--panel-card-soft)] transition-all focus-within:border-teal-500/50 hover:border-[var(--panel-border)]">
-                    <input
-                      type="text"
-                      value={classTime}
-                      onChange={(e) => setClassTime(e.target.value)}
-                      placeholder="e.g. 10:00 AM - 12:00 PM"
-                      className="w-full bg-transparent px-4 py-3.5 text-sm text-[var(--panel-text-primary)] outline-none"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Daily timetable / sessions */}
-              <div>
-                <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
-                  <label className="flex items-center gap-2 text-sm font-semibold text-[var(--panel-text-secondary)]">
-                    <Clock className="h-4 w-4 text-teal-400" />
-                    Daily Timetable{" "}
-                    <span className="text-xs font-normal text-[var(--panel-text-faint)]">(classes in a day)</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={addSession}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-teal-500/30 bg-teal-500/10 px-3 py-1.5 text-xs font-semibold text-teal-700 transition hover:bg-teal-500/20"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Add class
-                  </button>
-                </div>
-
-                {sessions.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-[var(--panel-border)] bg-[var(--panel-card-soft)] px-4 py-6 text-center text-sm text-[var(--panel-text-faint)]">
-                    No classes added. Click &ldquo;Add class&rdquo; to build the day&rsquo;s timetable
-                    (e.g. Python 10:30&ndash;12:00, then SQL 12:00&ndash;1:30). Leave a class&rsquo;s
-                    trainer blank to use the batch trainer.
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {sessions.map((s, i) => (
-                      <div
-                        key={i}
-                        className="flex flex-col gap-2 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] p-3 sm:flex-row sm:items-center"
-                      >
-                        <div className="flex-1 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)]">
-                          <select
-                            value={s.topic}
-                            onChange={(e) => updateSession(i, "topic", e.target.value)}
-                            className="w-full appearance-none bg-transparent px-3 py-2.5 text-sm text-[var(--panel-text-primary)] outline-none"
-                          >
-                            <option value="" className="bg-[var(--panel-bg-900)]">
-                              Select topic
-                            </option>
-                            {TOPIC_OPTIONS.map((t) => (
-                              <option key={t} value={t} className="bg-[var(--panel-bg-900)]">
-                                {topicLabel(t)}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="flex-1 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)]">
-                          <input
-                            type="text"
-                            value={s.time}
-                            onChange={(e) => updateSession(i, "time", e.target.value)}
-                            placeholder="e.g. 10:30 AM - 12:00 PM"
-                            className="w-full bg-transparent px-3 py-2.5 text-sm text-[var(--panel-text-primary)] outline-none"
-                          />
-                        </div>
-                        <div className="flex-1 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)]">
-                          <input
-                            type="text"
-                            value={s.trainerName}
-                            onChange={(e) => updateSession(i, "trainerName", e.target.value)}
-                            placeholder="Trainer for this class"
-                            className="w-full bg-transparent px-3 py-2.5 text-sm text-[var(--panel-text-primary)] outline-none"
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removeSession(i)}
-                          title="Remove class"
-                          className="inline-flex h-9 w-9 shrink-0 items-center justify-center self-end rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-700 transition hover:bg-rose-500/20 sm:self-auto"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
 
               {/* Students */}
@@ -623,7 +422,7 @@ export default function CreateBatch() {
                 <button
                   type="button"
                   onClick={handleSubmit}
-                  disabled={submitting || !courseId}
+                  disabled={submitting || !courseId || !courseName.trim()}
                   className="group relative w-full overflow-hidden rounded-2xl border border-white/20 bg-gradient-to-r from-cyan-500 to-blue-600 px-6 py-4 font-semibold text-white shadow-lg shadow-cyan-500/25 transition-all hover:shadow-xl hover:shadow-cyan-500/40 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <div className="relative flex items-center justify-center gap-2.5">
@@ -645,7 +444,7 @@ export default function CreateBatch() {
                 </button>
                 <p className="mt-3 flex items-center justify-center gap-2 text-xs text-[var(--panel-text-faint)]">
                   <AlertCircle className="h-3.5 w-3.5" />
-                  The batch name is auto-generated from the course title.
+                  Trainer, venue, and the daily class timetable can be added from the batch page after it's created.
                 </p>
               </div>
             </div>
