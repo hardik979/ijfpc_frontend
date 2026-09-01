@@ -13,6 +13,8 @@ const lmsUrl = (path: string) => {
   return base ? base.replace(/\/$/, "") + path : null;
 };
 
+const BULK_EXCEPTION_TARGETS = new Set(["all", "half", "absent"]);
+
 export async function POST(request: NextRequest) {
   const { userId, getToken } = await auth();
   if (!userId) {
@@ -25,6 +27,7 @@ export async function POST(request: NextRequest) {
   const input = await request.json().catch(() => null);
   const dateKey = String(input?.dateKey || "").trim();
   const reason = String(input?.reason || "").trim();
+  const targetStatus = String(input?.targetStatus || "all").trim();
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
     return NextResponse.json(
@@ -35,6 +38,12 @@ export async function POST(request: NextRequest) {
   if (!reason) {
     return NextResponse.json(
       { error: "A reason is required", code: "REASON_REQUIRED" },
+      { status: 400 },
+    );
+  }
+  if (!BULK_EXCEPTION_TARGETS.has(targetStatus)) {
+    return NextResponse.json(
+      { error: "Invalid exception target" },
       { status: 400 },
     );
   }
@@ -62,7 +71,7 @@ export async function POST(request: NextRequest) {
         Authorization: "Bearer " + token,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ dateKey, reason }),
+      body: JSON.stringify({ dateKey, reason, targetStatus }),
       cache: "no-store",
     });
     const body = await response.text();
@@ -76,6 +85,71 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("[staff-attendance] bulk exception proxy failed:", error);
+    return NextResponse.json(
+      { error: "Could not reach the attendance service" },
+      { status: 502 },
+    );
+  }
+}
+
+/** Remove bulk-applied exceptions for one date, preserving all other decisions. */
+export async function DELETE(request: NextRequest) {
+  const { userId, getToken } = await auth();
+  if (!userId) {
+    return NextResponse.json(
+      { error: "You are not signed in", code: "NO_SESSION" },
+      { status: 401 },
+    );
+  }
+
+  const dateKey = String(
+    request.nextUrl.searchParams.get("dateKey") || "",
+  ).trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+    return NextResponse.json(
+      { error: "Invalid attendance date" },
+      { status: 400 },
+    );
+  }
+
+  const endpoint = lmsUrl("/api/staff-attendance/exceptions/all");
+  if (!endpoint) {
+    return NextResponse.json(
+      { error: "LMS API is not configured" },
+      { status: 503 },
+    );
+  }
+
+  const token = await getToken();
+  if (!token) {
+    return NextResponse.json(
+      { error: "Could not read your session" },
+      { status: 401 },
+    );
+  }
+
+  const params = new URLSearchParams({ dateKey });
+  if (request.nextUrl.searchParams.get("confirmLegacy") === "true") {
+    params.set("confirmLegacy", "true");
+  }
+
+  try {
+    const response = await fetch(endpoint + "?" + params.toString(), {
+      method: "DELETE",
+      headers: { Authorization: "Bearer " + token },
+      cache: "no-store",
+    });
+    const body = await response.text();
+    return new NextResponse(body, {
+      status: response.status,
+      headers: {
+        "Content-Type":
+          response.headers.get("content-type") || "application/json",
+        "Cache-Control": "no-store",
+      },
+    });
+  } catch (error) {
+    console.error("[staff-attendance] bulk exception removal proxy failed:", error);
     return NextResponse.json(
       { error: "Could not reach the attendance service" },
       { status: 502 },
