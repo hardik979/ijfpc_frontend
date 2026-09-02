@@ -97,12 +97,21 @@ interface AttendanceSummary {
   averageWorkedLabel: string | null;
 }
 
+interface LeaveAllowance {
+  year: number;
+  allowance: number;
+  used: number;
+  remaining: number;
+}
+
 interface AttendancePayload {
   staff: { employeeId: number; name: string };
   month: string | null;
   records: AttendanceRecord[];
   summary: AttendanceSummary;
   availableMonths: string[];
+  /** The year's leave allowance, not the month's. */
+  leaveAllowance?: LeaveAllowance;
 }
 
 interface OverallSummary {
@@ -596,7 +605,7 @@ const ATTENDANCE_POLICIES = [
   {
     title: "Approved leave allowance",
     detail:
-      "The first 15 approved leaves are counted as leave. Every approved leave beyond that allowance is counted as absent.",
+      "Every staff member has 15 approved leaves a year. The allowance refills each January, and any approved leave beyond it is counted as absent. Public holidays and weekly offs never come out of it.",
   },
   {
     title: "Saturday or Monday leave",
@@ -1245,7 +1254,15 @@ function StaffDetailView({
         (summary.publicHolidayDays || 0),
     },
     { label: "Exceptions", value: summary.exceptionDays || 0 },
-    { label: "Attendance", value: summary.attendancePercentage + "%" },
+    {
+      // The allowance runs over the year, so this figure does not change with
+      // the month being viewed.
+      label: "Leave remaining",
+      value:
+        data.leaveAllowance
+          ? data.leaveAllowance.remaining + " / " + data.leaveAllowance.allowance
+          : "—",
+    },
   ];
 
   const visibleRecords = statusFilter
