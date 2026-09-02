@@ -26,6 +26,7 @@ import {
   LogIn,
   LogOut,
   LoaderCircle,
+  MessageSquarePlus,
   MinusCircle,
   Percent,
   RefreshCw,
@@ -39,6 +40,13 @@ import {
   XCircle,
 } from "lucide-react";
 import styles from "./attendance.module.css";
+import {
+  LeaveRequestDialog,
+  MyLeaveConversation,
+  MyLeaveRequests,
+} from "./LeaveRequests";
+import { LeaveNotificationBell } from "./LeaveNotifications";
+import { useMyLeaveRequests } from "@/lib/hooks/useLeaveRequests";
 
 type AttendanceStatus =
   | "present"
@@ -453,6 +461,7 @@ function PageHeader({
   lastUpdated,
   onMonthChange,
   onRefresh,
+  actions,
 }: {
   isAdmin: boolean;
   personal: AttendancePayload | null;
@@ -463,6 +472,7 @@ function PageHeader({
   lastUpdated: Date | null;
   onMonthChange: (month: string) => void;
   onRefresh: () => void;
+  actions?: ReactNode;
 }) {
   return (
     <header className="mb-6 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
@@ -502,15 +512,18 @@ function PageHeader({
       </div>
 
       <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
-        <MonthControls
-          month={month}
-          options={monthOptions}
-          loading={loading}
-          refreshing={refreshing}
-          lastUpdated={lastUpdated}
-          onMonthChange={onMonthChange}
-          onRefresh={onRefresh}
-        />
+        <div className="flex items-start gap-2">
+          {actions}
+          <MonthControls
+            month={month}
+            options={monthOptions}
+            loading={loading}
+            refreshing={refreshing}
+            lastUpdated={lastUpdated}
+            onMonthChange={onMonthChange}
+            onRefresh={onRefresh}
+          />
+        </div>
         <PolicyButton />
       </div>
     </header>
@@ -2652,6 +2665,14 @@ export default function AttendanceDashboard() {
     else loadPersonal(month, true);
   };
 
+  // Staff-side leave. Loaded for anyone on the personal view; an account with
+  // no employee record simply gets an empty list, and the panel hides itself.
+  const myLeave = useMyLeaveRequests();
+  const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
+  // Bumped whenever the person sends something, so the conversation below
+  // re-reads the thread rather than guessing what the server stored.
+  const [leaveThreadKey, setLeaveThreadKey] = useState(0);
+
   // No role check for the personal view: whether this account is linked to an
   // employee record is the LMS's decision, and it answers /me with a 403 and a
   // NOT_LINKED code when it is not. ErrorBanner renders that answer.
@@ -2668,13 +2689,42 @@ export default function AttendanceDashboard() {
           lastUpdated={lastUpdated}
           onMonthChange={setMonth}
           onRefresh={refresh}
+          actions={
+            isAdmin ? (
+              <LeaveNotificationBell
+                enabled={isLoaded && isAdmin}
+                intervalMs={REFRESH_INTERVAL_MS}
+              />
+            ) : personal ? (
+              <button
+                type="button"
+                onClick={() => setLeaveDialogOpen(true)}
+                className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl bg-indigo-600 px-3.5 text-sm font-semibold text-white transition hover:bg-indigo-500"
+              >
+                <MessageSquarePlus aria-hidden="true" className="h-4 w-4" />
+                Apply for leave
+              </button>
+            ) : null
+          }
         />
 
         <ErrorBanner error={error} code={errorCode} />
 
         {!isLoaded || loading ? <LoadingState /> : null}
         {isLoaded && !loading && !isAdmin && personal ? (
-          <PersonalDashboard data={personal} month={month} />
+          <>
+            <PersonalDashboard data={personal} month={month} />
+            <MyLeaveRequests
+              requests={myLeave.requests}
+              loading={myLeave.loading}
+              error={myLeave.error}
+              onChanged={() => {
+                myLeave.reload();
+                setLeaveThreadKey((key) => key + 1);
+              }}
+            />
+            <MyLeaveConversation reloadKey={leaveThreadKey} />
+          </>
         ) : null}
         {isLoaded && !loading && isAdmin && overall ? (
           <AdminDashboard
@@ -2684,6 +2734,15 @@ export default function AttendanceDashboard() {
           />
         ) : null}
       </div>
+
+      <LeaveRequestDialog
+        open={leaveDialogOpen}
+        onClose={() => setLeaveDialogOpen(false)}
+        onSubmitted={() => {
+          myLeave.reload();
+          setLeaveThreadKey((key) => key + 1);
+        }}
+      />
     </main>
   );
 }
