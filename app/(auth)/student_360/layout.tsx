@@ -1,6 +1,6 @@
 import { currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { ROLES, type Role } from "@/lib/rbac";
+import { canAccessStudent360, type Role } from "@/lib/rbac";
 
 export default async function Student360Layout({
   children,
@@ -15,7 +15,7 @@ export default async function Student360Layout({
 
   const role = user.publicMetadata?.role as Role | undefined;
 
-  if (role !== ROLES.MANAGERS) {
+  if (!canAccessStudent360(role)) {
     redirect("/unauthorized");
   }
 

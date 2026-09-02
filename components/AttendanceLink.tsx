@@ -32,6 +32,20 @@ export function useAttendanceEntry() {
   return { visible: isLoaded && linked && !isAdmin, staff, checking };
 }
 
+/**
+ * Renders its children only for the roles that open the attendance admin
+ * views — the mirror image of AttendanceGate. Unlike the personal entry this
+ * needs no directory row: an admin reads other people's attendance, not their
+ * own, so there is nothing to link them to.
+ */
+export function AttendanceAdminGate({ children }: { children: React.ReactNode }) {
+  const { user, isLoaded } = useUser();
+  const role = String(user?.publicMetadata?.role || "").toUpperCase();
+
+  if (!isLoaded || !ADMIN_ROLES.includes(role)) return null;
+  return <>{children}</>;
+}
+
 /** Renders its children only for an account that gets a personal attendance entry. */
 export function AttendanceGate({ children }: { children: React.ReactNode }) {
   const { visible } = useAttendanceEntry();
