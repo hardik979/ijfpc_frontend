@@ -30,6 +30,8 @@ const STATUS_STYLE: Record<LeaveRequestStatus, string> = {
     "border-rose-300/70 bg-rose-50/80 text-rose-800 dark:border-rose-400/25 dark:bg-rose-400/10 dark:text-rose-300",
   cancelled:
     "border-slate-300/70 bg-slate-50/80 text-slate-600 dark:border-slate-400/25 dark:bg-slate-400/10 dark:text-slate-300",
+  closed:
+    "border-sky-300/70 bg-sky-50/80 text-sky-800 dark:border-sky-400/25 dark:bg-sky-400/10 dark:text-sky-300",
 };
 
 const STATUS_LABEL: Record<LeaveRequestStatus, string> = {
@@ -37,6 +39,7 @@ const STATUS_LABEL: Record<LeaveRequestStatus, string> = {
   approved: "Approved",
   declined: "Declined",
   cancelled: "Withdrawn",
+  closed: "Sent",
 };
 
 const DAY_PART_LABEL: Record<string, string> = {
