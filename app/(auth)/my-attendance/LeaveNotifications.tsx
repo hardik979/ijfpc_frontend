@@ -8,6 +8,7 @@ import {
   Check,
   ChevronRight,
   LoaderCircle,
+  Trash2,
   MessagesSquare,
   RefreshCw,
   Send,
@@ -77,6 +78,7 @@ const STATUS_TEXT: Record<string, string> = {
   approved: "Approved",
   declined: "Declined",
   cancelled: "Withdrawn",
+  closed: "Message",
 };
 
 /** The list of people, most recent conversation first. */
@@ -165,10 +167,12 @@ function ThreadList({
 function ThreadBubble({
   entry,
   onDecide,
+  onDelete,
   deciding,
 }: {
   entry: LeaveThreadEntry;
   onDecide: (request: LeaveRequest, status: "approved" | "declined") => void;
+  onDelete: (request: LeaveRequest) => void;
   deciding: string;
 }) {
   const fromAdmin = entry.author === "admin";
@@ -208,6 +212,29 @@ function ThreadBubble({
           {fromAdmin ? entry.authorName || "Admin" : entry.authorName} ·{" "}
           {formatWhen(entry.createdAt)}
         </p>
+
+        {request && request.status !== "pending" ? (
+          <button
+            type="button"
+            onClick={() => onDelete(request)}
+            disabled={Boolean(deciding)}
+            className={
+              styles.muted +
+              " mt-1.5 inline-flex min-h-7 items-center gap-1.5 rounded-lg px-2 text-[0.68rem] font-semibold transition hover:text-rose-500 disabled:opacity-50"
+            }
+            title="Delete this request and everything said about it"
+          >
+            {deciding === request.id + ":delete" ? (
+              <LoaderCircle
+                aria-hidden="true"
+                className="h-3 w-3 animate-spin motion-reduce:animate-none"
+              />
+            ) : (
+              <Trash2 aria-hidden="true" className="h-3 w-3" />
+            )}
+            Delete
+          </button>
+        ) : null}
 
         {request && request.status === "pending" ? (
           <div className="mt-1.5 flex gap-2">
@@ -323,6 +350,36 @@ function ThreadView({
     }
   };
 
+  const remove = async (request: LeaveRequest) => {
+    if (
+      !window.confirm(
+        "Delete this request and the whole conversation on it? This cannot be undone.",
+      )
+    ) {
+      return;
+    }
+
+    setDeciding(request.id + ":delete");
+    setActionError("");
+    try {
+      const response = await fetch("/api/staff/leave-requests/" + request.id, {
+        method: "DELETE",
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error || "Could not delete that request");
+      }
+      refresh();
+      onChanged();
+    } catch (caught) {
+      setActionError(
+        caught instanceof Error ? caught.message : "Could not delete that request",
+      );
+    } finally {
+      setDeciding("");
+    }
+  };
+
   const decide = async (
     request: LeaveRequest,
     status: "approved" | "declined",
@@ -414,6 +471,7 @@ function ThreadView({
                 key={entry.id}
                 entry={entry}
                 onDecide={decide}
+                onDelete={remove}
                 deciding={deciding}
               />
             ))}

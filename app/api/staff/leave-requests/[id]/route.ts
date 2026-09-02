@@ -21,3 +21,18 @@ export async function PATCH(
     },
   });
 }
+
+/** Delete one request and the conversation on it. */
+export async function DELETE(
+  _request: NextRequest,
+  context: { params: Promise<{ id: string }> },
+) {
+  const { id } = await context.params;
+
+  return forwardToLms({
+    path:
+      "/api/staff-attendance/leave-requests/" +
+      encodeURIComponent(String(id || "")),
+    method: "DELETE",
+  });
+}

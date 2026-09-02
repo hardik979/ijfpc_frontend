@@ -7,7 +7,9 @@ export type LeaveRequestStatus =
   | "pending"
   | "approved"
   | "declined"
-  | "cancelled";
+  | "cancelled"
+  // A conversation that needs no decision.
+  | "closed";
 
 export type LeaveRequest = {
   id: string;
