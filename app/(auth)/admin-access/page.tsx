@@ -8,6 +8,7 @@ import {
   ArrowRight,
   CalendarCheck,
   ShieldCheck,
+  UserSearch,
   type LucideIcon,
 } from "lucide-react"
 import { ROLES, type Role } from "@/lib/rbac"
@@ -60,6 +61,16 @@ const ADMIN_MODULES: AdminModule[] = [
     accent: "from-sky-500 to-sky-600",
     tag: "Attendance",
     roles: [ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.ATTENDANCE_ADMIN],
+  },
+  {
+    label: "Student 360 Dashboard",
+    description:
+      "Open one student's full picture: identity, fees, interviews and academic performance.",
+    href: "/student_360",
+    icon: UserSearch,
+    accent: "from-violet-500 to-violet-600",
+    tag: "Insights",
+    roles: [ROLES.ADMIN, ROLES.SUPER_ADMIN],
   },
   {
     label: "Feedback Management",

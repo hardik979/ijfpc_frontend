@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { AttendanceGate } from "@/components/AttendanceLink";
+import { AttendanceAdminGate, AttendanceGate } from "@/components/AttendanceLink";
 import {
   ArrowLeft,
   ArrowRight,
   BarChart3,
   BookOpen,
+  CalendarCheck,
   Clock3,
   Loader2,
   Mail,
@@ -521,6 +522,24 @@ export default function FeeDashboardPage() {
               </span>
               <ArrowRight className="h-5 w-5 shrink-0 text-sky-300 transition-transform group-hover:translate-x-1" />
             </Link>
+            {/* The company-wide attendance dashboard, for the roles that hold
+                the admin scopes. */}
+            <AttendanceAdminGate>
+              <Link
+                href="/my-attendance"
+                className="group mt-4 flex items-center justify-between gap-4 rounded-2xl border border-indigo-400/25 bg-indigo-400/[0.07] px-5 py-4 transition hover:border-indigo-400/50 hover:bg-indigo-400/10"
+              >
+                <span className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-indigo-400/25 bg-indigo-400/10 text-indigo-200">
+                    <CalendarCheck className="h-4 w-4" />
+                  </span>
+                  <span className="text-sm font-semibold text-slate-200">
+                    Attendance Admin — staff attendance, exceptions and leave.
+                  </span>
+                </span>
+                <ArrowRight className="h-5 w-5 shrink-0 text-indigo-300 transition-transform group-hover:translate-x-1" />
+              </Link>
+            </AttendanceAdminGate>
             {/* Personal attendance only: hidden for Super Admin, who gets the
                 company-wide view, and for anyone with no employee record. */}
             <AttendanceGate>

@@ -1,6 +1,6 @@
 import { currentUser } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { ROLES } from "@/lib/rbac";
+import { canAccessStudent360 } from "@/lib/rbac";
 
 interface CourseRecord {
   _id?: unknown;
@@ -147,7 +147,7 @@ export async function GET(
   if (!manager) {
     return NextResponse.json({ message: "Unauthenticated" }, { status: 401 });
   }
-  if (role !== ROLES.MANAGERS) {
+  if (!canAccessStudent360(role)) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
 

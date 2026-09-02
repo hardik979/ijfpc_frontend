@@ -15,6 +15,23 @@ export const ROLES = {
 
 export type Role = (typeof ROLES)[keyof typeof ROLES];
 
+/**
+ * Roles that may open Student 360.
+ *
+ * MANAGERS keeps exactly the access it has always had; the console roles are
+ * added so the Admin Console can offer the same dashboard. This is the single
+ * list the page layout and both Student 360 API routes check, so the three
+ * cannot drift apart.
+ */
+export const STUDENT_360_ROLES: readonly Role[] = [
+  ROLES.MANAGERS,
+  ROLES.ADMIN,
+  ROLES.SUPER_ADMIN,
+];
+
+export const canAccessStudent360 = (role?: unknown) =>
+  STUDENT_360_ROLES.includes(String(role ?? "") as Role);
+
 export const ACCESS: Record<string, readonly Role[]> = {
   // REAL URL PATHS (no /(auth))
   "/fee-dashboard": [ROLES.SUPER_ADMIN, ROLES.FOUNDER, ROLES.INTERVIEWER,ROLES.ADMIN],
@@ -37,7 +54,7 @@ export const ACCESS: Record<string, readonly Role[]> = {
   ],
   "/resume-builder": [ROLES.SUPER_ADMIN, ROLES.CALLING_STAFF],
   "/studentOverview":[ROLES.STUDENT_MANAGEMENT, ROLES?.ADMIN],
-  "/student_360": [ROLES.MANAGERS],
+  "/student_360": STUDENT_360_ROLES,
   "/trainer-dashboard": [ROLES.TRAINER],
   "/student-full-info":[ROLES.STUDENT_MANAGEMENT, ROLES?.ADMIN],
   "/academic-results":[ROLES.STUDENT_MANAGEMENT, ROLES.ADMIN, ROLES.SUPER_ADMIN],
