@@ -10,7 +10,8 @@ export const ROLES = {
   MANAGERS: "MANAGERS",
   TRAINER: "TRAINER",
   ATTENDANCE: "ATTENDANCE",
-  ATTENDANCE_ADMIN: "ATTENDANCE_ADMIN"
+  ATTENDANCE_ADMIN: "ATTENDANCE_ADMIN",
+  PREEPLACEMENT_STAFF : "PREEPLACEMENT_STAFF"
 } as const;
 
 export type Role = (typeof ROLES)[keyof typeof ROLES];
@@ -39,10 +40,11 @@ export const ACCESS: Record<string, readonly Role[]> = {
   "/post-placement-student-creation": [
     ROLES.SUPER_ADMIN,
     ROLES.PLACEMENT_STAFF,
-    ROLES?.ADMIN
+    ROLES?.ADMIN,
+    ROLES?.PREEPLACEMENT_STAFF
   ],
   "/fee-dashboard/student-full-info": [ROLES.SUPER_ADMIN, ROLES.FOUNDER],
-  "/fee-dashboard/studentOverview": [ROLES.SUPER_ADMIN, ROLES.FOUNDER],
+  "/fee-dashboard/studentOverview": [ROLES.SUPER_ADMIN, ROLES.FOUNDER,ROLES?.PREEPLACEMENT_STAFF],
   "/remaining-notification": [ROLES.SUPER_ADMIN, ROLES.FEE_STAFF], // adjust as needed
   "/founder": [ROLES.SUPER_ADMIN, ROLES.FOUNDER],
   "/admin": [ROLES.SUPER_ADMIN],
@@ -51,13 +53,14 @@ export const ACCESS: Record<string, readonly Role[]> = {
     ROLES.CALLING_STAFF,
     ROLES.FEE_STAFF,
     ROLES.STUDENT_MANAGEMENT,
+    ROLES?.PREEPLACEMENT_STAFF
   ],
-  "/resume-builder": [ROLES.SUPER_ADMIN, ROLES.CALLING_STAFF],
-  "/studentOverview":[ROLES.STUDENT_MANAGEMENT, ROLES?.ADMIN],
+  "/resume-builder": [ROLES.SUPER_ADMIN, ROLES.CALLING_STAFF, ROLES?.PREEPLACEMENT_STAFF],
+  "/studentOverview":[ROLES.STUDENT_MANAGEMENT, ROLES?.ADMIN, ROLES?.PREEPLACEMENT_STAFF],
   "/student_360": STUDENT_360_ROLES,
   "/trainer-dashboard": [ROLES.TRAINER],
   "/student-full-info":[ROLES.STUDENT_MANAGEMENT, ROLES?.ADMIN],
-  "/academic-results":[ROLES.STUDENT_MANAGEMENT, ROLES.ADMIN, ROLES.SUPER_ADMIN],
+  "/academic-results":[ROLES.STUDENT_MANAGEMENT, ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES?.PREEPLACEMENT_STAFF],
   "/feedback-dash" : [ROLES?.FOUNDER, ROLES?.SUPER_ADMIN]
 } as const;
 

@@ -10,10 +10,14 @@ import {
 } from "lucide-react";
 import type { Variants } from "framer-motion";
 import Link from "next/link";
+import { useUser } from "@clerk/nextjs";
 import { AttendanceLink } from "@/components/AttendanceLink";
+import { ROLES } from "@/lib/rbac";
 
 export default function ITJobsFactoryDashboard() {
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
+  const { user, isLoaded } = useUser();
+  const role = (user?.publicMetadata as { role?: string })?.role;
 
   const reportCards = [
     {
@@ -43,6 +47,13 @@ export default function ITJobsFactoryDashboard() {
       path: "/students-call-reports",
     },
   ];
+
+  // PREEPLACEMENT_STAFF works only the pre-placement side of the cell, so the
+  // post-placement and HR call cards are dropped rather than shown and refused.
+  const visibleCards =
+    role === ROLES.PREEPLACEMENT_STAFF
+      ? reportCards.filter((card) => card.id === "preplacement-data")
+      : reportCards;
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -171,7 +182,7 @@ export default function ITJobsFactoryDashboard() {
           className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto"
           variants={containerVariants}
         >
-          {reportCards.map((card) => {
+          {(isLoaded ? visibleCards : []).map((card) => {
             const IconComponent = card.icon;
             return (
               <motion.div

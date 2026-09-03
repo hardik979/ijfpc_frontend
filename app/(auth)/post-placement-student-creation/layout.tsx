@@ -16,6 +16,7 @@ export default async function Layout({
     ROLES.PLACEMENT_STAFF,
     ROLES.SUPER_ADMIN,
     ROLES.ADMIN,
+    ROLES?.PREEPLACEMENT_STAFF
   ];
 
   if (!role || !ALLOWED_ROLES.includes(role)) {

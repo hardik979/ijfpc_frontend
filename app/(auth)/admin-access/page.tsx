@@ -28,22 +28,14 @@ const ADMIN_MODULES: AdminModule[] = [
   {
     label: "Placement Dashboard",
     description:
-      "Create, review, and manage pre-placement student records and onboarding data.",
+      "Create, review, and manage post-placement student records and onboarding data.",
     href: "/post-placement-student-creation",
     icon: LayoutDashboard,
     accent: "from-indigo-500 to-indigo-600",
     tag: "Management",
-  },
+  },  
   {
-    label: "Student Overview Analysis",
-    description:
-      "Track aggregated student performance, placement metrics, and analytics.",
-    href: "/studentOverview",
-    icon: BarChart3,
-    accent: "from-emerald-500 to-emerald-600",
-    tag: "Analytics",
-  },
-  {
+    
     label: "Daily Calling Report",
     description:
       "Review daily calling activities and performance metrics.",
@@ -51,6 +43,21 @@ const ADMIN_MODULES: AdminModule[] = [
     icon: BarChart3,
     accent: "from-emerald-500 to-emerald-600",
     tag: "Analytics",
+  },
+  {
+    label: "Student Overview",
+    description:
+      "Track aggregated student performance and open your own attendance from the More menu.",
+    href: "/studentOverview",
+    icon: BarChart3,
+    accent: "from-emerald-500 to-emerald-600",
+    tag: "Analytics",
+    roles: [
+      ROLES.STUDENT_MANAGEMENT,
+      ROLES.PREEPLACEMENT_STAFF,
+      ROLES.ADMIN,
+      ROLES.SUPER_ADMIN,
+    ],
   },
   {
     label: "Attendance Admin",
