@@ -47,6 +47,9 @@ export default function RedirectAfterLogin() {
       case ROLES.PLACEMENT_STAFF:
         router.replace("/post-placement-student-creation");
         break;
+      case ROLES.PREEPLACEMENT_STAFF:
+        router.replace("/admin-access");
+        break;
       case ROLES.INTERVIEWER:
         router.replace("/interview-reporting");
         break;
