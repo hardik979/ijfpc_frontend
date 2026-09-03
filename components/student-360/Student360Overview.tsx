@@ -103,7 +103,7 @@ export default function Student360Overview() {
     }
 
     const response = await fetch(
-      `${API_LMS_URL}/api/users/active-placement-students?status=all&includeWithoutCourse=true`,
+      `${API_LMS_URL}/api/users/active-placement-students?status=all`,
       {
         headers: {
           "Content-Type": "application/json",
@@ -151,7 +151,18 @@ export default function Student360Overview() {
     return () => controller.abort();
   }, [loadDashboard, refreshKey]);
 
-  const searchableStudents = students;
+  // The lookup lists only students placement actually tracks: anyone already
+  // placed (purchasedCourses are cleared on placement, so they hold no course
+  // id) plus anyone still holding a purchased course. A student with neither —
+  // no course id and not placed — is a recent joiner, duplicate or abandoned
+  // signup, and was the noise showing up in every search.
+  const searchableStudents = useMemo(
+    () =>
+      students.filter(
+        (student) => student.isPlaced === true || isEnrolled(student),
+      ),
+    [students],
+  );
 
   const dashboardStats = useMemo(() => {
     const active = students.filter(
