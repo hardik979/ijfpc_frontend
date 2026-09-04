@@ -6,7 +6,7 @@ import {
   ChevronRight,
   CheckCircle,
   ArrowLeft,
-  ScrollTextIcon,
+  Users,
 } from "lucide-react";
 import type { Variants } from "framer-motion";
 import Link from "next/link";
@@ -39,17 +39,19 @@ export default function ITJobsFactoryDashboard() {
       path: "/post-placement-student-creation/post-placement-records",
     },
     {
-      id: "Daily HR Call Report",
-      title: "Daily HR Call Report",
-      description: "Daily Hr calls report",
-      icon: ScrollTextIcon,
+      id: "student-overview",
+      title: "Student Overview",
+      description:
+        "Track aggregated student performance, placement metrics, and analytics",
+      icon: Users,
       gradient: "from-pink-400 to-red-500",
-      path: "/students-call-reports",
+      path: "/studentOverview",
     },
   ];
 
   // PREEPLACEMENT_STAFF works only the pre-placement side of the cell, so the
-  // post-placement and HR call cards are dropped rather than shown and refused.
+  // post-placement and student overview cards are dropped rather than shown and
+  // refused.
   const visibleCards =
     role === ROLES.PREEPLACEMENT_STAFF
       ? reportCards.filter((card) => card.id === "preplacement-data")
