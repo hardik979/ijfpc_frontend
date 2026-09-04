@@ -150,10 +150,19 @@ interface AttendanceOverviewPayload {
   availableMonths: string[];
 }
 
+interface YesterdayWork {
+  dateKey: string;
+  status: AttendanceStatus | null;
+  workedMinutes: number | null;
+  workedLabel: string | null;
+}
+
 interface StaffSummaryRow {
   employeeId: number;
   name: string;
   recordedDays: number;
+  /** Yesterday's worked hours, whichever month the table is showing. */
+  yesterday: YesterdayWork | null;
   summary: Pick<
     AttendanceSummary,
     | "totalDays"
@@ -305,6 +314,31 @@ function StatusBadge({
         className={"h-1.5 w-1.5 rounded-full " + STATUS_DOT[status]}
       />
       {label || STATUS_LABEL[status]}
+    </span>
+  );
+}
+
+/**
+ * Yesterday's worked hours for one staff member, in the same "10h 45m" form the
+ * history's Hours column uses. No hours is not always a missing person — a
+ * weekly off or an approved leave has no punches at all — so the status stands
+ * in for the duration when there is one.
+ */
+function YesterdayHours({ yesterday }: { yesterday: YesterdayWork | null }) {
+  if (yesterday?.workedLabel) {
+    return (
+      <span
+        className={styles.primary + " text-sm font-semibold tabular-nums"}
+        title={formatDate(yesterday.dateKey)}
+      >
+        {yesterday.workedLabel}
+      </span>
+    );
+  }
+
+  return (
+    <span className={styles.muted + " text-xs"}>
+      {yesterday?.status ? STATUS_LABEL[yesterday.status] : "No hours"}
     </span>
   );
 }
@@ -1646,14 +1680,15 @@ function StaffSummaryTable({
                     "Half day",
                     "Absent",
                     "Leave / off",
-                    "Attendance",
+                    "Yesterday hours",
                   ].map((heading) => (
                     <th
                       key={heading}
                       scope="col"
                       className={
                         styles.secondary +
-                        " whitespace-nowrap px-4 py-3 text-xs font-semibold"
+                        " whitespace-nowrap px-4 py-3 text-xs font-semibold " +
+                        (heading === "Yesterday hours" ? "text-right" : "")
                       }
                     >
                       {heading}
@@ -1754,26 +1789,8 @@ function StaffSummaryTable({
                         {entry.summary.leaveDays +
                           entry.summary.weeklyOffDays}
                       </td>
-                      <td className="min-w-36 px-4 py-3.5">
-                        <div
-                          className={
-                            styles.metricAccent +
-                            " flex items-center gap-2.5"
-                          }
-                        >
-                          <ProgressBar
-                            value={entry.summary.attendancePercentage}
-                            label={entry.name + " attendance"}
-                          />
-                          <span
-                            className={
-                              styles.primary +
-                              " w-11 text-right text-xs font-semibold tabular-nums"
-                            }
-                          >
-                            {entry.summary.attendancePercentage}%
-                          </span>
-                        </div>
+                      <td className="whitespace-nowrap px-4 py-3.5 text-right">
+                        <YesterdayHours yesterday={entry.yesterday} />
                       </td>
                     </tr>
                   ))}
@@ -1819,20 +1836,16 @@ function StaffSummaryTable({
                           reported
                         </p>
                       </div>
-                      <span
-                        className={
-                          styles.accent +
-                          " shrink-0 text-sm font-bold tabular-nums"
-                        }
-                      >
-                        {entry.summary.attendancePercentage}%
+                      <span className="shrink-0 text-right">
+                        <span
+                          className={
+                            styles.muted + " block text-[0.68rem] font-medium"
+                          }
+                        >
+                          Yesterday hours
+                        </span>
+                        <YesterdayHours yesterday={entry.yesterday} />
                       </span>
-                    </div>
-                    <div className={styles.metricAccent + " mt-3"}>
-                      <ProgressBar
-                        value={entry.summary.attendancePercentage}
-                        label={entry.name + " attendance"}
-                      />
                     </div>
                     <dl className="mt-3 grid grid-cols-4 gap-2">
                       {[
