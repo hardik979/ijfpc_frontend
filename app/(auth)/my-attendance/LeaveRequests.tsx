@@ -5,6 +5,7 @@ import {
   AlertCircle,
   CalendarDays,
   CheckCircle2,
+  ImagePlus,
   LoaderCircle,
   MessageSquarePlus,
   MessagesSquare,
@@ -14,12 +15,59 @@ import {
 import styles from "./attendance.module.css";
 import {
   useMyLeaveRequests,
+  type LeaveAttachment,
   type LeaveRequest,
   type LeaveRequestStatus,
 } from "@/lib/hooks/useLeaveRequests";
 import { LIVE_STAFF_THREAD_MS, useLiveThread } from "@/lib/hooks/useLiveThread";
 
 const MAX_MESSAGE_LENGTH = 2000;
+const MAX_ATTACHMENTS = 3;
+const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+
+const formatSize = (bytes: number) =>
+  bytes >= 1024 * 1024
+    ? (bytes / (1024 * 1024)).toFixed(1) + " MB"
+    : Math.max(1, Math.round(bytes / 1024)) + " KB";
+
+/**
+ * The images on a request or a message.
+ *
+ * Rendered as thumbnails that open the full image in a new tab, so the admin
+ * can read a medical note without leaving the conversation.
+ */
+export function AttachmentStrip({
+  attachments,
+  className = "",
+}: {
+  attachments?: LeaveAttachment[];
+  className?: string;
+}) {
+  if (!attachments?.length) return null;
+
+  return (
+    <div className={"mt-2 flex flex-wrap gap-2 " + className}>
+      {attachments.map((attachment) => (
+        <a
+          key={attachment.id}
+          href={attachment.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={attachment.name || "Attached image"}
+          className="group relative block h-20 w-20 overflow-hidden rounded-xl border border-white/25 bg-black/10 outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={attachment.url}
+            alt={attachment.name || "Attached image"}
+            loading="lazy"
+            className="h-full w-full object-cover transition group-hover:scale-105"
+          />
+        </a>
+      ))}
+    </div>
+  );
+}
 
 const STATUS_STYLE: Record<LeaveRequestStatus, string> = {
   pending:
@@ -100,6 +148,9 @@ export function LeaveRequestDialog({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
+  const [attachments, setAttachments] = useState<LeaveAttachment[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement | null>(null);
   // Held for the life of one open dialog, so a double-click or a retry after a
   // dropped response cannot create two requests.
   const requestKey = useRef(newRequestKey());
@@ -113,6 +164,7 @@ export function LeaveRequestDialog({
     requestKey.current = newRequestKey();
     setError("");
     setDone(false);
+    setAttachments([]);
     const focusTimer = window.setTimeout(() => messageRef.current?.focus(), 60);
 
     const onKey = (event: KeyboardEvent) => {
@@ -128,6 +180,46 @@ export function LeaveRequestDialog({
   }, [open, onClose, saving]);
 
   if (!open) return null;
+
+  const addImage = async (file: File | null) => {
+    if (!file) return;
+
+    if (attachments.length >= MAX_ATTACHMENTS) {
+      setError("You can attach up to " + MAX_ATTACHMENTS + " images.");
+      return;
+    }
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      setError("That image is larger than 5 MB.");
+      return;
+    }
+
+    setUploading(true);
+    setError("");
+
+    try {
+      const body = new FormData();
+      body.append("file", file, file.name);
+
+      const response = await fetch("/api/staff/leave-requests/attachments", {
+        method: "POST",
+        body,
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error || "Could not upload that image");
+      }
+
+      setAttachments((current) => [...current, payload.attachment]);
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : "Could not upload that image",
+      );
+    } finally {
+      setUploading(false);
+      // Let the same file be chosen again after a failure.
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
 
   const submit = async () => {
     const trimmed = message.trim();
@@ -152,6 +244,7 @@ export function LeaveRequestDialog({
           kind,
           message: trimmed,
           requestKey: requestKey.current,
+          attachments,
           ...(kind === "leave"
             ? {
                 startDate,
@@ -169,6 +262,7 @@ export function LeaveRequestDialog({
 
       setDone(true);
       setMessage("");
+      setAttachments([]);
       onSubmitted();
       window.setTimeout(onClose, 900);
     } catch (caught) {
@@ -371,6 +465,73 @@ export function LeaveRequestDialog({
             />
           </div>
 
+          <div className="mt-3">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={(event) => addImage(event.target.files?.[0] || null)}
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                disabled={uploading || attachments.length >= MAX_ATTACHMENTS}
+                className={
+                  styles.glassChip +
+                  " inline-flex min-h-9 items-center gap-2 px-3 text-xs font-semibold disabled:opacity-50"
+                }
+              >
+                {uploading ? (
+                  <LoaderCircle
+                    aria-hidden="true"
+                    className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none"
+                  />
+                ) : (
+                  <ImagePlus aria-hidden="true" className="h-3.5 w-3.5" />
+                )}
+                {uploading ? "Uploading…" : "Attach an image"}
+              </button>
+              <span className={styles.muted + " text-[0.7rem]"}>
+                Optional · up to {MAX_ATTACHMENTS} images, 5 MB each
+              </span>
+            </div>
+
+            {attachments.length ? (
+              <ul className="mt-2.5 flex flex-wrap gap-2">
+                {attachments.map((attachment, index) => (
+                  <li
+                    key={attachment.url}
+                    className="relative h-20 w-20 overflow-hidden rounded-xl border border-white/25"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={attachment.url}
+                      alt={attachment.name || "Attached image"}
+                      className="h-full w-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAttachments((current) =>
+                          current.filter((_, position) => position !== index),
+                        )
+                      }
+                      className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-slate-900/75 text-white transition hover:bg-rose-500"
+                      aria-label={"Remove " + (attachment.name || "image")}
+                    >
+                      <X aria-hidden="true" className="h-3 w-3" />
+                    </button>
+                    <span className="absolute inset-x-0 bottom-0 bg-slate-900/70 px-1 py-0.5 text-center text-[0.6rem] text-white">
+                      {formatSize(attachment.size)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+
           {error ? (
             <p
               role="alert"
@@ -411,7 +572,7 @@ export function LeaveRequestDialog({
           <button
             type="button"
             onClick={submit}
-            disabled={saving || done}
+            disabled={saving || done || uploading}
             className={
               styles.glassPrimary +
               " inline-flex min-h-11 items-center gap-2 px-5 text-sm font-semibold"
@@ -475,6 +636,8 @@ function LeaveRequestRow({
       <p className={styles.secondary + " mt-2 whitespace-pre-line text-sm leading-6"}>
         {request.message}
       </p>
+
+      <AttachmentStrip attachments={request.attachments} />
 
       {request.decision ? (
         <div className={styles.surfaceMuted + " mt-3 rounded-lg px-3 py-2"}>
@@ -722,6 +885,7 @@ export function MyLeaveConversation({ reloadKey }: { reloadKey: number }) {
                   }
                 >
                   <p className="whitespace-pre-line break-words">{entry.body}</p>
+                  <AttachmentStrip attachments={entry.attachments} />
                 </div>
                 <p
                   className={

@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import styles from "./attendance.module.css";
+import { AttachmentStrip } from "./LeaveRequests";
 import {
   useLeaveNotifications,
   type LeaveRequest,
@@ -200,6 +201,7 @@ function ThreadBubble({
             </p>
           ) : null}
           <p className="whitespace-pre-line break-words">{entry.body}</p>
+          <AttachmentStrip attachments={entry.attachments} />
         </div>
 
         <p
