@@ -17,6 +17,8 @@ export async function POST(request: NextRequest) {
       dayPart: input?.dayPart,
       message: input?.message,
       requestKey: input?.requestKey,
+      // Checked against the LMS's own R2 bucket before anything is stored.
+      attachments: Array.isArray(input?.attachments) ? input.attachments : [],
     },
   });
 }

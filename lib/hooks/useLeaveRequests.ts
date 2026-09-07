@@ -11,6 +11,14 @@ export type LeaveRequestStatus =
   // A conversation that needs no decision.
   | "closed";
 
+export type LeaveAttachment = {
+  id: string;
+  url: string;
+  name: string;
+  contentType: string;
+  size: number;
+};
+
 export type LeaveRequest = {
   id: string;
   employeeId: number;
@@ -24,6 +32,7 @@ export type LeaveRequest = {
   status: LeaveRequestStatus;
   decision: { byName: string; at: string; note: string } | null;
   appliedToAttendanceAt: string | null;
+  attachments: LeaveAttachment[];
   createdAt: string;
   updatedAt: string;
 };
@@ -49,6 +58,7 @@ export type LeaveThreadEntry = {
   authorName: string;
   body: string;
   createdAt: string;
+  attachments?: LeaveAttachment[];
   request?: LeaveRequest;
   status?: string;
 };
