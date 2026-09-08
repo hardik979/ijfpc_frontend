@@ -107,7 +107,7 @@ function ThreadList({
           <button
             type="button"
             onClick={() => onOpen(thread)}
-            className="flex w-full items-start gap-3 rounded-2xl px-3 py-3 text-left outline-none transition hover:bg-white/25 focus-visible:ring-2 focus-visible:ring-indigo-400/70 dark:hover:bg-white/10"
+            className="flex w-full items-start gap-3 rounded-2xl px-3 py-3 text-left outline-none transition hover:bg-slate-900/[0.05] focus-visible:ring-2 focus-visible:ring-indigo-400/70 dark:hover:bg-white/10"
           >
             <span
               aria-hidden="true"
