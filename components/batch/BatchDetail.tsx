@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import { API_LMS_URL } from "@/lib/api";
@@ -25,6 +25,7 @@ import {
   Clock,
   Plus,
   Link2,
+  ChevronDown,
 } from "lucide-react";
 
 type Course = { _id: string; title?: string };
@@ -1483,6 +1484,116 @@ function CombineBatchModal({
   );
 }
 
+/* ---------------- Topic picker (dropdown used by the timetable rows) ---------------- */
+
+// Custom dropdown instead of a native <select>: the browser's popup ignores the
+// panel theme and needs a scrollbar. This shows every preset (plus "Other…") in a
+// compact grid. The panel is position:fixed so ModalShell's overflow-hidden can't clip it.
+function TopicPicker({
+  value,
+  isOther,
+  onPick,
+}: {
+  value: string;
+  isOther: boolean;
+  onPick: (value: string) => void; // a preset topic, or OTHER_TOPIC
+}) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  const PANEL_H = 290; // approximate — only used to decide whether to flip above the trigger
+
+  const place = useCallback(() => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const width = Math.min(384, window.innerWidth - 16);
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
+    const below = r.bottom + 6;
+    const top = below + PANEL_H > window.innerHeight ? Math.max(8, r.top - 6 - PANEL_H) : below;
+    setPos({ top, left, width });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    place();
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (panelRef.current?.contains(t) || triggerRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open, place]);
+
+  const pick = (v: string) => {
+    onPick(v);
+    setOpen(false);
+  };
+
+  const hasValue = isOther || !!value;
+  const label = isOther ? "Other…" : value ? topicLabel(value) : "Select topic";
+  const chip = (active: boolean) =>
+    `flex items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-xs font-semibold transition ${
+      active
+        ? "border-[var(--panel-border)] bg-[var(--panel-border)] text-[var(--panel-text-primary)]"
+        : "border-[var(--panel-border)] bg-[var(--panel-card-soft)] text-[var(--panel-text-secondary)] hover:bg-[var(--panel-card)]"
+    }`;
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`flex flex-1 items-center justify-between gap-2 rounded-xl border bg-[var(--panel-card)] px-3 py-2.5 text-left text-sm outline-none transition ${
+          open ? "border-teal-500/50" : "border-[var(--panel-border)]"
+        }`}
+      >
+        <span className={`truncate ${hasValue ? "text-[var(--panel-text-primary)]" : "text-[var(--panel-text-faint)]"}`}>
+          {label}
+        </span>
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-[var(--panel-text-muted)] transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && pos && (
+        <div
+          ref={panelRef}
+          style={{ position: "fixed", top: pos.top, left: pos.left, width: pos.width }}
+          className="z-[60] rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-bg-900)] p-2 shadow-2xl"
+        >
+          <div className="grid grid-cols-3 gap-1.5">
+            {TOPIC_OPTIONS.map((t) => (
+              <button key={t} type="button" onClick={() => pick(t)} className={chip(!isOther && value === t)}>
+                {topicLabel(t)}
+              </button>
+            ))}
+            <button type="button" onClick={() => pick(OTHER_TOPIC)} className={`${chip(isOther)} border-dashed`}>
+              <Plus className="h-3 w-3 text-fuchsia-400" />
+              Other…
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 /* ---------------- Sessions modal (daily timetable) ---------------- */
 
 function SessionsModal({
@@ -1590,19 +1701,7 @@ function SessionsModal({
             className="flex flex-col gap-2 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] p-3"
           >
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <select
-                value={r.isOther ? OTHER_TOPIC : r.topic}
-                onChange={(e) => pickTopic(i, e.target.value)}
-                className="flex-1 appearance-none rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-3 py-2.5 text-sm text-[var(--panel-text-primary)] outline-none focus:border-teal-500/50"
-              >
-                <option value="">Select topic</option>
-                {TOPIC_OPTIONS.map((t) => (
-                  <option key={t} value={t}>
-                    {topicLabel(t)}
-                  </option>
-                ))}
-                <option value={OTHER_TOPIC}>Other…</option>
-              </select>
+              <TopicPicker value={r.topic || ""} isOther={r.isOther} onPick={(v) => pickTopic(i, v)} />
               <input
                 value={r.time}
                 onChange={(e) => updateRow(i, "time", e.target.value)}
