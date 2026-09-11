@@ -79,6 +79,9 @@ const TOPIC_OPTIONS = [
   "Python",
   "Excel",
   "MySQL",
+  "Power BI",
+  "Tableau",
+  "Visualization",
   "Capstone_Projects",
   "ML",
   "Communication",
@@ -87,6 +90,10 @@ const TOPIC_OPTIONS = [
   "Mock Interviews",
   "HR Calling",
 ] as const;
+// Sentinel for the "Other" choice in the topic modal — never sent to the API,
+// the typed custom topic is sent instead.
+const OTHER_TOPIC = "__other__";
+const isPresetTopic = (t?: string) => (TOPIC_OPTIONS as readonly string[]).includes(t || "");
 const topicLabel = (t?: string) => (t ? t.replace(/_/g, " ") : "");
 
 const zoneBadge = (zone?: string) => {
@@ -1066,12 +1073,22 @@ function TopicModal({
   onClose: () => void;
   onDone: (topic: string) => void;
 }) {
-  const [topic, setTopic] = useState(currentTopic);
+  // A batch already on a custom topic reopens in "Other" mode with its text prefilled
+  const startsCustom = !!currentTopic && !isPresetTopic(currentTopic);
+  const [topic, setTopic] = useState(startsCustom ? OTHER_TOPIC : currentTopic);
+  const [customTopic, setCustomTopic] = useState(startsCustom ? currentTopic : "");
   const [saving, setSaving] = useState(false);
+
+  const isOther = topic === OTHER_TOPIC;
+  const finalTopic = isOther ? customTopic.trim() : topic;
 
   const save = async () => {
     if (!topic) {
       toast.error("Please select a topic");
+      return;
+    }
+    if (isOther && !finalTopic) {
+      toast.error("Please enter a topic name");
       return;
     }
     try {
@@ -1081,13 +1098,13 @@ function TopicModal({
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ topic }),
+          body: JSON.stringify({ topic: finalTopic }),
         }
       );
       const json = await res.json();
       if (!res.ok) throw new Error(json?.message || "Failed to update topic");
       toast.success("Batch topic updated");
-      onDone(json?.data?.topic || topic);
+      onDone(json?.data?.topic || finalTopic);
     } catch (e: any) {
       toast.error(e?.message || "Failed to update topic");
     } finally {
@@ -1116,7 +1133,39 @@ function TopicModal({
               </button>
             );
           })}
+          <button
+            onClick={() => setTopic(OTHER_TOPIC)}
+            className={`flex items-center justify-center gap-2 rounded-xl border border-dashed px-3 py-3 text-sm font-semibold transition ${
+              isOther
+                ? "border-[var(--panel-border)] bg-[var(--panel-border)] text-[var(--panel-text-primary)]"
+                : "border-[var(--panel-border)] bg-[var(--panel-card-soft)] text-[var(--panel-text-secondary)] hover:bg-[var(--panel-card)]"
+            }`}
+          >
+            <Plus className="h-3.5 w-3.5 text-fuchsia-400" />
+            Other
+          </button>
         </div>
+
+        {isOther && (
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-[var(--panel-text-secondary)]">
+              Topic name <span className="text-red-700">*</span>
+            </label>
+            <input
+              autoFocus
+              type="text"
+              value={customTopic}
+              onChange={(e) => setCustomTopic(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") save();
+              }}
+              maxLength={60}
+              placeholder="Enter a topic that is not in the list"
+              className="w-full rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] px-4 py-3 text-sm text-[var(--panel-text-primary)] placeholder:text-[var(--panel-text-faint)] outline-none focus:border-fuchsia-500/50"
+            />
+          </div>
+        )}
+
         <div className="flex justify-end gap-2">
           <button
             onClick={onClose}
@@ -1126,7 +1175,7 @@ function TopicModal({
           </button>
           <button
             onClick={save}
-            disabled={saving || !topic || topic === currentTopic}
+            disabled={saving || !finalTopic || finalTopic === currentTopic}
             className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-gradient-to-r from-fuchsia-500 to-pink-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-fuchsia-500/25 transition hover:shadow-xl disabled:opacity-50"
           >
             {saving ? (
