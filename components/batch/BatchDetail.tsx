@@ -1498,7 +1498,17 @@ function SessionsModal({
   onClose: () => void;
   onDone: (sessions: Session[]) => void;
 }) {
-  const [rows, setRows] = useState<Session[]>(
+  // isOther = the row's topic is typed in the "Other" box instead of picked from the list
+  type Row = Session & { isOther: boolean };
+  const emptyRow = (): Row => ({
+    topic: "",
+    time: "",
+    trainerName: "",
+    classRoom: "",
+    linkedBatchIds: [],
+    isOther: false,
+  });
+  const [rows, setRows] = useState<Row[]>(
     current.length
       ? current.map((s) => ({
           topic: s.topic || "",
@@ -1506,18 +1516,33 @@ function SessionsModal({
           trainerName: s.trainerName || "",
           classRoom: s.classRoom || "",
           linkedBatchIds: s.linkedBatchIds || [],
+          // A saved custom topic reopens in "Other" mode with its text prefilled
+          isOther: !!s.topic && !isPresetTopic(s.topic),
         }))
-      : [{ topic: "", time: "", trainerName: "", classRoom: "", linkedBatchIds: [] }]
+      : [emptyRow()]
   );
   const [saving, setSaving] = useState(false);
 
-  const addRow = () =>
-    setRows((prev) => [...prev, { topic: "", time: "", trainerName: "", classRoom: "", linkedBatchIds: [] }]);
+  const addRow = () => setRows((prev) => [...prev, emptyRow()]);
   const removeRow = (i: number) => setRows((prev) => prev.filter((_, idx) => idx !== i));
   const updateRow = (i: number, field: "topic" | "time" | "trainerName" | "classRoom", value: string) =>
     setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, [field]: value } : r)));
+  // Select change: "Other" switches the row to a free-text topic, anything else picks a preset
+  const pickTopic = (i: number, value: string) =>
+    setRows((prev) =>
+      prev.map((r, idx) => {
+        if (idx !== i) return r;
+        if (value === OTHER_TOPIC) return { ...r, isOther: true, topic: r.isOther ? r.topic : "" };
+        return { ...r, isOther: false, topic: value };
+      })
+    );
 
   const save = async () => {
+    const missingCustom = rows.some((r) => r.isOther && !(r.topic || "").trim());
+    if (missingCustom) {
+      toast.error("Please enter a topic name for every class marked Other");
+      return;
+    }
     try {
       setSaving(true);
       const sessions = rows
@@ -1566,8 +1591,8 @@ function SessionsModal({
           >
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <select
-                value={r.topic}
-                onChange={(e) => updateRow(i, "topic", e.target.value)}
+                value={r.isOther ? OTHER_TOPIC : r.topic}
+                onChange={(e) => pickTopic(i, e.target.value)}
                 className="flex-1 appearance-none rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-3 py-2.5 text-sm text-[var(--panel-text-primary)] outline-none focus:border-teal-500/50"
               >
                 <option value="">Select topic</option>
@@ -1576,6 +1601,7 @@ function SessionsModal({
                     {topicLabel(t)}
                   </option>
                 ))}
+                <option value={OTHER_TOPIC}>Other…</option>
               </select>
               <input
                 value={r.time}
@@ -1597,6 +1623,20 @@ function SessionsModal({
                 <Trash2 className="h-4 w-4" />
               </button>
             </div>
+            {r.isOther && (
+              <div className="flex items-center gap-2">
+                <Tag className="h-3.5 w-3.5 shrink-0 text-fuchsia-400" />
+                <input
+                  autoFocus
+                  value={r.topic}
+                  onChange={(e) => updateRow(i, "topic", e.target.value)}
+                  maxLength={60}
+                  placeholder="Topic name (required) — enter a topic not in the list"
+                  className="w-full rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card)] px-3 py-2 text-xs text-[var(--panel-text-primary)] outline-none focus:border-fuchsia-500/50"
+                />
+                <span className="shrink-0 text-xs text-red-700">*</span>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <MapPin className="h-3.5 w-3.5 shrink-0 text-rose-400" />
               <input
