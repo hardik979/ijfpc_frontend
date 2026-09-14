@@ -72,6 +72,8 @@ export type MockEvaluationDetail = {
 
 export type MockAttemptRow = {
   id: string;
+  /** Vapi call id — the key the recording proxy streams audio by. */
+  callId: string | null;
   email: string | null;
   name: string | null;
   interviewType: string | null;
@@ -870,6 +872,21 @@ export async function fetchMockDay(
     { params: { date, limit: 100, ...(courseId ? { courseId } : {}) } }
   );
   return data?.data?.attempts ?? [];
+}
+
+/**
+ * Playable URL for a mock interview recording.
+ *
+ * The `recordingUrl` stored on the attempt points at Vapi's own storage, which
+ * won't serve a browser without the private API key — so playback goes through
+ * the LMS proxy, which streams the call's stereo recording server-side. Returns
+ * null when the attempt has no call id (nothing to fetch by).
+ */
+export function mockRecordingUrl(
+  row: Pick<MockAttemptRow, "callId">
+): string | null {
+  if (!row.callId) return null;
+  return `${LMS}/api/ai/mock-interview/${encodeURIComponent(row.callId)}/recording`;
 }
 
 /* --------------------------- AI HR Calling ---------------------------- */
