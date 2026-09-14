@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   XCircle,
   Info,
+  AudioLines,
 } from "lucide-react";
 import {
   formatDuration,
@@ -24,6 +25,7 @@ import {
   hasVapiSummary,
   isMockInterviewUnanalyzed,
   mockInterviewLevel,
+  mockRecordingUrl,
   type MockAttemptRow,
 } from "./data";
 import { DetailRow } from "./ui";
@@ -219,6 +221,72 @@ function VapiUnavailableNotice({ hasRecording }: { hasRecording: boolean }) {
   );
 }
 
+/**
+ * Inline player for a mock interview recording.
+ *
+ * The audio comes from the LMS proxy rather than `interview.recordingUrl`: that
+ * URL points at Vapi's own storage, which won't serve a browser without the
+ * private API key. `preload="none"` means opening an interview costs nothing —
+ * the call is only pulled through the proxy once someone presses play.
+ */
+function MockRecordingPlayer({ interview }: { interview: MockAttemptRow }) {
+  const src = mockRecordingUrl(interview);
+  const [failed, setFailed] = React.useState(false);
+
+  // A different attempt is a different source — don't carry over its error.
+  React.useEffect(() => setFailed(false), [src]);
+
+  return (
+    <section className="mt-4 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[var(--panel-bg-900)] text-[var(--panel-text-muted)]">
+          <AudioLines className="h-4 w-4" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-[var(--panel-text-primary)]">
+            Interview recording
+          </p>
+          <p className="text-xs text-[var(--panel-text-secondary)]">
+            {formatDuration(interview.durationSeconds)}
+          </p>
+        </div>
+      </div>
+
+      {!src ? (
+        <p className="text-sm text-[var(--panel-text-secondary)]">
+          No recording was captured for this attempt.
+        </p>
+      ) : failed ? (
+        <p className="text-sm text-[var(--panel-text-secondary)]">
+          The recording couldn&rsquo;t be loaded — the provider may still be
+          processing it, or it was never stored for this call.
+        </p>
+      ) : (
+        <>
+          <audio
+            key={src}
+            src={src}
+            controls
+            preload="none"
+            onError={() => setFailed(true)}
+            className="w-full"
+          >
+            Your browser can&rsquo;t play this recording.
+          </audio>
+          <a
+            href={src}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-2 inline-block text-xs font-medium text-blue-600 hover:underline dark:text-blue-300"
+          >
+            Open in a new tab
+          </a>
+        </>
+      )}
+    </section>
+  );
+}
+
 // Call metadata (type, duration, status, timing, recording) — shared by the
 // full evaluation view and the "analysis unavailable" fallback.
 function CallFacts({ interview }: { interview: MockAttemptRow }) {
@@ -233,23 +301,7 @@ function CallFacts({ interview }: { interview: MockAttemptRow }) {
       <DetailRow label="Ended Reason" value={interview.endedReason ?? "—"} />
       <DetailRow label="Started" value={formatIST(interview.startedAt)} />
       <DetailRow label="Ended" value={formatIST(interview.endedAt)} />
-      <DetailRow
-        label="Recording"
-        value={
-          interview.recordingUrl ? (
-            <a
-              href={interview.recordingUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="font-medium text-blue-600 hover:underline dark:text-blue-300"
-            >
-              Listen
-            </a>
-          ) : (
-            "—"
-          )
-        }
-      />
+      <MockRecordingPlayer interview={interview} />
     </div>
   );
 }
@@ -263,7 +315,7 @@ export function MockEvaluationPanel({ interview }: { interview: MockAttemptRow }
   if (isMockInterviewUnanalyzed(interview)) {
     return (
       <div className="space-y-5">
-        <VapiUnavailableNotice hasRecording={Boolean(interview.recordingUrl)} />
+        <VapiUnavailableNotice hasRecording={Boolean(interview.callId)} />
         <CallFacts interview={interview} />
       </div>
     );

@@ -5,6 +5,7 @@ import {
   formatDuration,
   formatIST,
   isAiCallDnp,
+  mockRecordingUrl,
   MOCK_LEVEL_LABEL,
   type QuizAttemptRow,
   type QuizStudentRow,
@@ -303,12 +304,15 @@ export const mockColumns: Column<MockAttemptRow>[] = [
   {
     key: "recording",
     header: "Recording",
-    accessor: (r) => (r.recordingUrl ? 1 : 0),
+    // Playability follows the call id, not `recordingUrl`: the stored URL is
+    // Vapi-hosted and needs the private key, so audio comes from the proxy.
+    accessor: (r) => (r.callId ? 1 : 0),
     align: "center",
-    render: (r) =>
-      r.recordingUrl ? (
+    render: (r) => {
+      const src = mockRecordingUrl(r);
+      return src ? (
         <a
-          href={r.recordingUrl}
+          href={src}
           target="_blank"
           rel="noreferrer"
           onClick={(e) => e.stopPropagation()}
@@ -318,7 +322,8 @@ export const mockColumns: Column<MockAttemptRow>[] = [
         </a>
       ) : (
         dash
-      ),
+      );
+    },
   },
   {
     key: "createdAt",
