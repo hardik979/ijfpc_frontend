@@ -681,6 +681,7 @@ export function AttendancePanel({
   attendedSubtitle,
   attendedCount,
   rosterCourseId,
+  performerOnly,
   courseFilter,
   onCourseFilterChange,
   courseOptions = [],
@@ -701,6 +702,11 @@ export function AttendancePanel({
    */
   rosterCourseId?: string;
   /**
+   * Real HR's "Performers only" filter. Narrows the absent roster to flagged
+   * performers, the same way `rosterCourseId` narrows it by course.
+   */
+  performerOnly?: boolean;
+  /**
    * Course filter shared by both views. The tab owns the state because it also
    * has to narrow its own (attended) rows with it.
    */
@@ -717,7 +723,8 @@ export function AttendancePanel({
     tab,
     selectedDate,
     refreshKey,
-    rosterCourseId
+    rosterCourseId,
+    performerOnly
   );
 
   // Absent rows are the eligible roster, so they carry a User _id — the most

@@ -1083,10 +1083,17 @@ export function RealHrCallingTab({
   range,
   courseId,
   refreshKey,
+  performerOnly = false,
 }: {
   range: MonthRange;
   courseId: string;
   refreshKey: number;
+  /**
+   * "Performers only" — narrows the calls, the chart's denominator and the
+   * absent roster to students flagged performerInRealHRCalling (set from the
+   * call reports page's Real HR Performers view).
+   */
+  performerOnly?: boolean;
 }) {
   // "All courses" means the Real HR roster's courses (Bootcamp + Data
   // Analyst, mirroring lms-backend lib/academicRoster.js); a selected course
@@ -1095,9 +1102,9 @@ export function RealHrCallingTab({
   const { byDate, loadingMonth, selectedDate, dayRows, loadingDay, loadDay } =
     useMonthDay<RealHrByDateRow, RealHrRow>(
       range,
-      (r) => fetchRealHrMonth(r, course),
-      (d) => fetchRealHrDay(d, course),
-      [courseId, refreshKey]
+      (r) => fetchRealHrMonth(r, course, performerOnly),
+      (d) => fetchRealHrDay(d, course, performerOnly),
+      [courseId, refreshKey, performerOnly]
     );
 
   // Drill-down state: a lead/student (level 2) and, within them, one call (level 3).
@@ -1110,7 +1117,8 @@ export function RealHrCallingTab({
     "realhr",
     range,
     refreshKey,
-    courseId || undefined
+    courseId || undefined,
+    performerOnly
   );
   const hasRoster = useMemo(
     () => Array.from(expectedByDate.values()).some((v) => v > 0),
@@ -1213,10 +1221,10 @@ export function RealHrCallingTab({
         <MonthlyChart
           title={
             hasRoster
-              ? "Percentage of students who logged a call, per day"
+              ? `Percentage of ${performerOnly ? "performers" : "students"} who logged a call, per day`
               : "Unique leads per day"
           }
-          yLabel={hasRoster ? "% of students" : "Number of Students "}
+          yLabel={hasRoster ? `% of ${performerOnly ? "performers" : "students"}` : "Number of Students "}
           range={range}
           data={hasRoster ? rateByDate : byDate}
           percent={hasRoster}
@@ -1248,7 +1256,14 @@ export function RealHrCallingTab({
         selectedDate={selectedDate}
         refreshKey={refreshKey}
         rosterCourseId={courseId || undefined}
-        title={selectedDate ? `Students on ${selectedDate}` : "HR calls"}
+        performerOnly={performerOnly}
+        title={
+          selectedDate
+            ? `${performerOnly ? "Performers" : "Students"} on ${selectedDate}`
+            : performerOnly
+            ? "HR calls · performers"
+            : "HR calls"
+        }
         attendedSubtitle={
           selectedDate
             ? `${students.length} student${students.length === 1 ? "" : "s"} · ${shownCalls} call${shownCalls === 1 ? "" : "s"}`

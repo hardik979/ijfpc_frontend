@@ -199,6 +199,8 @@ export type RealHrRow = {
   analysis: unknown | null;
   hasTranscript: boolean;
   createdAt: string;
+  /** Uploader is flagged performerInRealHRCalling (the "Performers only" filter). */
+  performer?: boolean;
 };
 
 /**
@@ -212,6 +214,7 @@ export type RealHrStudentRow = {
   studentName: string;
   email: string | null;
   phone: string | null;
+  performer: boolean;
   calls: RealHrRow[];
   total: number;
   analyzed: number; // calls with an analysis
@@ -762,6 +765,7 @@ export function groupRealHrByStudent(rows: RealHrRow[]): RealHrStudentRow[] {
         studentName: r.studentName,
         email: r.email,
         phone: r.phone,
+        performer: Boolean(r.performer),
         calls: [],
         total: 0,
         analyzed: 0,
@@ -913,22 +917,31 @@ export async function fetchAiDay(
 }
 
 /* ------------------- Real HR Calling (call recordings) ---------------- */
+// `performerOnly` restricts both to uploads by students flagged
+// performerInRealHRCalling (the dashboard's "Performers only" toggle); the
+// server applies it, so the calendar's per-day counts narrow with it too.
 export async function fetchRealHrMonth(
   range: MonthRange,
-  courseId?: string
+  courseId?: string,
+  performerOnly?: boolean
 ): Promise<RealHrByDateRow[]> {
   const { data } = await axios.get(`${LMS}/api/recordings/calendar`, {
-    params: rangeParams(range, courseId),
+    params: { ...rangeParams(range, courseId), ...(performerOnly ? { performer: 1 } : {}) },
   });
   return data?.data ?? [];
 }
 
 export async function fetchRealHrDay(
   date: string,
-  courseId?: string
+  courseId?: string,
+  performerOnly?: boolean
 ): Promise<RealHrRow[]> {
   const { data } = await axios.get(`${LMS}/api/recordings/by-date`, {
-    params: { date, ...(courseId ? { courseId } : {}) },
+    params: {
+      date,
+      ...(courseId ? { courseId } : {}),
+      ...(performerOnly ? { performer: 1 } : {}),
+    },
   });
   return data?.attempts ?? [];
 }
@@ -952,14 +965,23 @@ export async function fetchMockInterviewCompleted(): Promise<MockCompletedRow[]>
 // narrows the roster to one course's purchasers on the tabs with a
 // user-selectable course filter (Daily Quiz, Mock, AI HR); Real HR's course
 // scoping is fixed and ignores it.
+// `performerOnly` (Real HR only) narrows the roster to flagged performers, so
+// "expected" agrees with the performer-filtered recordings.
 export async function fetchAbsent(
   tab: TabKey,
   date: string,
-  courseId?: string
+  courseId?: string,
+  performerOnly?: boolean
 ): Promise<AbsentResult> {
   const { data } = await axios.get(
     `${LMS}/api/academic-results/absent/${tab}`,
-    { params: { date, ...(courseId ? { courseId } : {}) } }
+    {
+      params: {
+        date,
+        ...(courseId ? { courseId } : {}),
+        ...(performerOnly ? { performer: 1 } : {}),
+      },
+    }
   );
   return {
     students: data?.students ?? [],
@@ -1189,7 +1211,8 @@ export function useAbsent(
   tab: TabKey,
   date: string | null,
   refreshKey: number,
-  courseId?: string
+  courseId?: string,
+  performerOnly?: boolean
 ) {
   const [rows, setRows] = useState<AbsentRow[]>([]);
   const [expected, setExpected] = useState(0);
@@ -1203,7 +1226,7 @@ export function useAbsent(
     }
     let cancelled = false;
     setLoading(true);
-    fetchAbsent(tab, date, courseId)
+    fetchAbsent(tab, date, courseId, performerOnly)
       .then((res) => {
         if (cancelled) return;
         setRows(res.students);
@@ -1221,7 +1244,7 @@ export function useAbsent(
     return () => {
       cancelled = true;
     };
-  }, [tab, date, refreshKey, courseId]);
+  }, [tab, date, refreshKey, courseId, performerOnly]);
 
   return { rows, expected, loading };
 }
@@ -1314,12 +1337,18 @@ const ELIGIBILITY_COURSE_KEY: Record<string, keyof EligibilityCounts> = {
  * A date with no captured row (in practice: today, before the 00:05 IST job
  * has run yet, or a date predating the snapshot job's rollout) falls back to
  * a live probe of that specific date, same as the Absent list uses.
+ *
+ * `performerOnly` (Real HR's "Performers only" filter) bypasses the snapshot:
+ * it carries no performer breakdown, and the performer flag has no history —
+ * it is a current value, so the performer roster is the same for every day of
+ * the span. One live probe therefore covers the whole range.
  */
 export function useExpectedRosterByDate(
   tab: TabKey,
   range: MonthRange,
   refreshKey: number,
-  courseId?: string
+  courseId?: string,
+  performerOnly?: boolean
 ) {
   const [expectedByDate, setExpectedByDate] = useState<Map<string, number>>(
     new Map()
@@ -1338,6 +1367,18 @@ export function useExpectedRosterByDate(
 
     (async () => {
       try {
+        if (performerOnly) {
+          const dates = datesInRange(range);
+          const probe = dates[dates.length - 1];
+          const expected = probe
+            ? await fetchAbsent(tab, probe, courseId, true)
+                .then((res) => res.expected)
+                .catch(() => 0)
+            : 0;
+          if (!cancelled) setExpectedByDate(new Map(dates.map((d) => [d, expected])));
+          return;
+        }
+
         const monthRows = await Promise.all(
           monthsInRange(range).map((m) => fetchEligibilityMonth(m).catch(() => []))
         );
@@ -1386,7 +1427,7 @@ export function useExpectedRosterByDate(
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, range.from, range.to, refreshKey, courseId]);
+  }, [tab, range.from, range.to, refreshKey, courseId, performerOnly]);
 
   return { expectedByDate, loading };
 }
