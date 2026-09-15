@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CalendarDays, GraduationCap, RefreshCw } from "lucide-react";
+import { ArrowLeft, CalendarDays, GraduationCap, RefreshCw, Star } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useTheme } from "@/context/ThemeContext";
 import {
@@ -35,6 +35,8 @@ export default function AcademicResultsClient() {
   const [range, setRange] = useState<MonthRange>(currentRange);
   const [courseId, setCourseId] = useState<string>("");
   const [refreshKey, setRefreshKey] = useState(0);
+  // Real HR only: narrow everything on the tab to flagged performers.
+  const [performerOnly, setPerformerOnly] = useState(false);
   const { theme } = useTheme();
 
   // Order the span before handing it down, so a To earlier than the From still
@@ -87,6 +89,23 @@ export default function AcademicResultsClient() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <TabBar active={tab} onChange={setTab} />
           {tab === "mock" && <MockCompletedButton refreshKey={refreshKey} />}
+          {tab === "realhr" && (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={performerOnly}
+              onClick={() => setPerformerOnly((v) => !v)}
+              title="Only students flagged as Real HR calling performers"
+              className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium shadow-sm transition ${
+                performerOnly
+                  ? "border-amber-400 bg-amber-500 text-white hover:bg-amber-600"
+                  : "border-[var(--panel-border-strong)] bg-[var(--panel-card)] text-[var(--panel-text-primary)] hover:bg-[var(--panel-card)]"
+              }`}
+            >
+              <Star className="h-4 w-4" />
+              Performers only
+            </button>
+          )}
         </div>
 
         {/* Only the active tab is mounted, so switching tabs fetches fresh data. */}
@@ -116,6 +135,7 @@ export default function AcademicResultsClient() {
             range={activeRange}
             courseId={courseId}
             refreshKey={refreshKey}
+            performerOnly={performerOnly}
           />
         )}
       </div>

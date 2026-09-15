@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useAuth } from "@clerk/nextjs";
 import {
   Calendar as CalendarIcon,
@@ -12,14 +12,18 @@ import {
   FileText,
   ChevronLeft,
   ChevronRight,
+  CalendarCheck,
+  Star,
+  Check,
 } from "lucide-react";
 import Link from "next/link";
 
 import DailyCallReport from "@/components/reports/DailyCallReport";
 import CallAnalysis from "@/components/reports/CallAnalysis";
+import RealHrPerformers from "@/components/reports/RealHrPerformers";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import InterviewSummaryPanel, { type ExternalInterviewRaw, type GroupSummary } from "@/components/reports/Interviewsummarypanel.js";
-import { AttendanceLink } from "@/components/AttendanceLink";
+import { AttendanceGate } from "@/components/AttendanceLink";
  
 
 interface RecordingReport {
@@ -39,13 +43,47 @@ interface RecordingReport {
   phone: string;
   createdAt: string;
   Placed: boolean;
+  /** Uploader is flagged performerInRealHRCalling (see the Real HR Performers view). */
+  Performer?: boolean;
 }
 
 export default function StudentsCallReports() {
   const [reports, setReports] = useState<RecordingReport[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"daily" | "analysis">("daily");
+  // "performers" is reached from the More menu rather than the tab nav.
+  const [activeTab, setActiveTab] = useState<"daily" | "analysis" | "performers">("daily");
   const { getToken } = useAuth();
+
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
+
+  // "Performers only" narrows the Daily Call Report / Call Analysis to calls
+  // by students flagged as Real HR performers. Applied client-side: the
+  // report payload carries a `Performer` flag per recording.
+  const [performersOnly, setPerformersOnly] = useState(false);
+  const performerReports = useMemo(() => reports.filter((r) => r.Performer), [reports]);
+  const performerCount = useMemo(
+    () => new Set(performerReports.map((r) => r.leadId)).size,
+    [performerReports]
+  );
+  const visibleReports = performersOnly ? performerReports : reports;
+
+  // Close the More menu on outside click / Escape.
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (moreRef.current && !moreRef.current.contains(e.target as Node)) setMoreOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMoreOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [moreOpen]);
 
   const [externalInterviews, setExternalInterviews] = useState<ExternalInterviewRaw[]>([]);
   const [groupSummary, setGroupSummary] = useState<GroupSummary | null>(null);
@@ -230,21 +268,80 @@ export default function StudentsCallReports() {
             </nav>
           </div>
 
-          <ThemeToggle />
+          <div className="flex items-center gap-4">
+            <ThemeToggle />
 
-          {/* Resume Builder link — icons use theme-aware class */}
-          <Link
-            href="/resume-builder"
-            className="resume-builder-btn flex items-center gap-3 px-8 py-4 bg-white text-[#8B4513] border border-[#EFEBE9] rounded-3xl font-medium text-sm transition-all duration-300 hover:bg-[#FAF9F6] hover:shadow-md shadow-sm group"
-          >
-            <FileText className="resume-builder-icon w-4 h-4 text-[#D2B48C] group-hover:text-[#8B4513] transition-colors" />
-            <span>Resume Builder</span>
-          </Link>
+            {/* More menu — every secondary destination lives here */}
+            <div ref={moreRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setMoreOpen((o) => !o)}
+                aria-haspopup="menu"
+                aria-expanded={moreOpen}
+                className={`resume-builder-btn flex items-center gap-3 px-8 py-4 border rounded-3xl font-medium text-sm transition-all duration-300 shadow-sm group ${
+                  activeTab === "performers"
+                    ? "bg-[#8B4513] text-white border-[#8B4513] shadow-lg"
+                    : "bg-white text-[#8B4513] border-[#EFEBE9] hover:bg-[#FAF9F6] hover:shadow-md"
+                }`}
+              >
+                <span>More</span>
+                <ChevronDown
+                  className={`w-4 h-4 transition-transform duration-300 ${moreOpen ? "rotate-180" : ""}`}
+                />
+              </button>
 
-          <AttendanceLink className="px-6 py-4 rounded-3xl" />
+              {moreOpen && (
+                <div
+                  role="menu"
+                  className="more-menu absolute right-0 mt-3 w-64 bg-white border border-[#EFEBE9] rounded-3xl shadow-xl p-2 z-50"
+                >
+                  <Link
+                    href="/resume-builder"
+                    role="menuitem"
+                    onClick={() => setMoreOpen(false)}
+                    className="more-menu-item flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-medium text-[#5D4037] hover:bg-[#FAF9F6] hover:text-[#8B4513] transition-colors group"
+                  >
+                    <FileText className="resume-builder-icon w-4 h-4 text-[#D2B48C] group-hover:text-[#8B4513] transition-colors" />
+                    <span>Resume Builder</span>
+                  </Link>
+
+                  <AttendanceGate>
+                    <Link
+                      href="/my-attendance"
+                      role="menuitem"
+                      onClick={() => setMoreOpen(false)}
+                      className="more-menu-item flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-medium text-[#5D4037] hover:bg-[#FAF9F6] hover:text-[#8B4513] transition-colors group"
+                    >
+                      <CalendarCheck className="resume-builder-icon w-4 h-4 text-[#D2B48C] group-hover:text-[#8B4513] transition-colors" />
+                      <span>My attendance</span>
+                    </Link>
+                  </AttendanceGate>
+
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setActiveTab("performers");
+                      setMoreOpen(false);
+                    }}
+                    className={`more-menu-item w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-medium transition-colors group ${
+                      activeTab === "performers"
+                        ? "bg-[#FAF5EC] text-[#8B4513]"
+                        : "text-[#5D4037] hover:bg-[#FAF9F6] hover:text-[#8B4513]"
+                    }`}
+                  >
+                    <Star className="resume-builder-icon w-4 h-4 text-[#D2B48C] group-hover:text-[#8B4513] transition-colors" />
+                    <span className="flex-1 text-left">Real HR Performers</span>
+                    {activeTab === "performers" && <Check className="w-4 h-4" />}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </header>
 
-        {/* Sticky Filter Bar */}
+        {/* Sticky Filter Bar — the performers list isn't date-scoped */}
+        {activeTab !== "performers" && (
         <div className="shrink-0 sticky top-0 z-40 bg-gradient-to-r from-white via-[#FAF5EC] to-white border-2 border-[#E5D9C6] rounded-[2rem] p-4 shadow-lg mb-6">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-3">
@@ -283,6 +380,43 @@ export default function StudentsCallReports() {
             </div>
 
             <div className="flex items-center gap-3">
+              {/* Performers only — students flagged in the Real HR Performers view */}
+              <button
+                type="button"
+                role="switch"
+                aria-checked={performersOnly}
+                onClick={() => setPerformersOnly((v) => !v)}
+                title="Show only calls by Real HR performers"
+                className={`flex items-center gap-3 px-4 py-3 rounded-2xl border-2 font-semibold text-sm transition-all shadow-sm ${
+                  performersOnly
+                    ? "bg-[#8B4513] border-[#8B4513] text-white"
+                    : "bg-white border-[#EFEBE9] text-[#4A2C2A] hover:border-[#8B4513]"
+                }`}
+              >
+                <Star
+                  className={`w-4 h-4 ${performersOnly ? "text-amber-300" : "text-[#D2B48C]"}`}
+                />
+                <span>Performers only</span>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                    performersOnly ? "bg-white/20 text-white" : "bg-[#FAF5EC] text-[#8B4513]"
+                  }`}
+                >
+                  {performerCount}
+                </span>
+                <span
+                  className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
+                    performersOnly ? "bg-emerald-500" : "bg-[#D7CCC8]"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                      performersOnly ? "translate-x-4" : "translate-x-0.5"
+                    }`}
+                  />
+                </span>
+              </button>
+
               {/* Date picker — calendar icon theme-aware */}
               <div className="relative group">
                 <CalendarIcon className="date-picker-icon absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 pointer-events-none text-[#D2B48C] group-focus-within:text-[#8B4513] transition-colors" />
@@ -303,18 +437,21 @@ export default function StudentsCallReports() {
             </div>
           </div>
         </div>
+        )}
 
         {/* Dynamic Section Content */}
         <div className="flex-1 overflow-hidden flex flex-col relative">
           {activeTab === "daily" ? (
             <DailyCallReport
-                reports={reports} 
-                selectedDate={getDisplayLabel()} 
+                reports={visibleReports}
+                selectedDate={getDisplayLabel()}
                 externalInterviews={externalInterviews}
-                groupSummary={groupSummary} 
+                groupSummary={groupSummary}
             />
+          ) : activeTab === "analysis" ? (
+            <CallAnalysis reports={visibleReports} />
           ) : (
-            <CallAnalysis reports={reports} />
+            <RealHrPerformers />
           )}
         </div>
       </div>
@@ -372,6 +509,22 @@ export default function StudentsCallReports() {
           color: #ffffff !important;
         }
         [data-theme="dark"] .resume-builder-btn:hover .resume-builder-icon {
+          color: var(--brand-text) !important;
+        }
+
+        /* ─── Dark mode: More menu ──────────────────────────────────── */
+        [data-theme="dark"] .more-menu {
+          background-color: var(--bg-card) !important;
+          border-color: var(--border-primary) !important;
+        }
+        [data-theme="dark"] .more-menu-item {
+          color: var(--text-secondary) !important;
+        }
+        [data-theme="dark"] .more-menu-item:hover {
+          background-color: var(--bg-accent) !important;
+          color: var(--brand-text) !important;
+        }
+        [data-theme="dark"] .more-menu-item:hover .resume-builder-icon {
           color: var(--brand-text) !important;
         }
 

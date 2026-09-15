@@ -771,7 +771,17 @@ export const realHrStudentColumns: Column<WithMeta<RealHrStudentRow>>[] = [
     searchable: true,
     render: (r) => (
       <div className="flex flex-col">
-        <span className="font-medium text-gray-900">{r.studentName}</span>
+        <span className="flex items-center gap-1.5 font-medium text-gray-900">
+          {r.studentName}
+          {r.performer && (
+            <span
+              title="Real HR calling performer"
+              className="inline-flex items-center rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200"
+            >
+              ★ Performer
+            </span>
+          )}
+        </span>
         {r.email && <span className="text-xs text-gray-500">{r.email}</span>}
       </div>
     ),
