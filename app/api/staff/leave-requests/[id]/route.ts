@@ -17,7 +17,8 @@ export async function PATCH(
     body: {
       status: input?.status,
       note: input?.note,
-      applyToAttendance: input?.applyToAttendance === true,
+      approvalType: input?.approvalType,
+      reason: input?.reason,
     },
   });
 }
