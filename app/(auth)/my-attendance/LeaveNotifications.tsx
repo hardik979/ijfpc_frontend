@@ -179,6 +179,8 @@ function ThreadList({
   );
 }
 
+const MAX_APPROVAL_REASON_LENGTH = 300;
+
 /** One message in the conversation. */
 function ThreadBubble({
   entry,
@@ -191,12 +193,48 @@ function ThreadBubble({
     request: LeaveRequest,
     status: "approved" | "declined",
     approvalType?: "leave" | "exception",
+    reason?: string,
   ) => void;
   onDelete: (request: LeaveRequest) => void;
   deciding: string;
 }) {
   const fromAdmin = entry.author === "admin";
   const request = entry.request;
+
+  // Approving always asks why first: a leave day spends the staff member's
+  // allowance and an exception excuses one, so neither happens without a
+  // reason on record. Picking a type swaps the two approve buttons for this
+  // box instead of deciding right away.
+  const [confirmingType, setConfirmingType] = useState<
+    "leave" | "exception" | null
+  >(null);
+  const [reason, setReason] = useState("");
+  const [reasonError, setReasonError] = useState("");
+
+  const startApproval = (type: "leave" | "exception") => {
+    setConfirmingType(type);
+    setReason("");
+    setReasonError("");
+  };
+
+  const cancelApproval = () => {
+    setConfirmingType(null);
+    setReason("");
+    setReasonError("");
+  };
+
+  const confirmApproval = () => {
+    if (!request || !confirmingType) return;
+    const trimmed = reason.trim();
+    if (!trimmed) {
+      setReasonError("A reason is required");
+      return;
+    }
+    onDecide(request, "approved", confirmingType, trimmed);
+    setConfirmingType(null);
+    setReason("");
+    setReasonError("");
+  };
 
   return (
     <li className={"flex " + (fromAdmin ? "justify-end" : "justify-start")}>
@@ -258,61 +296,134 @@ function ThreadBubble({
         ) : null}
 
         {request && request.status === "pending" ? (
-          <div className="mt-1.5 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => onDecide(request, "approved", "leave")}
-              disabled={Boolean(deciding)}
-              title="Approve and deduct this from the staff member's 15-day leave allowance"
-              className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-emerald-600 px-2.5 text-[0.7rem] font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-60"
-            >
-              {deciding === request.id + ":leave" ? (
-                <LoaderCircle
-                  aria-hidden="true"
-                  className="h-3 w-3 animate-spin motion-reduce:animate-none"
-                />
-              ) : (
-                <Check aria-hidden="true" className="h-3 w-3" />
-              )}
-              Approve Leave
-            </button>
-            <button
-              type="button"
-              onClick={() => onDecide(request, "approved", "exception")}
-              disabled={Boolean(deciding)}
-              title="Approve as an exception — never spends the staff member's leave allowance"
-              className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-indigo-600 px-2.5 text-[0.7rem] font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-wait disabled:opacity-60"
-            >
-              {deciding === request.id + ":exception" ? (
-                <LoaderCircle
-                  aria-hidden="true"
-                  className="h-3 w-3 animate-spin motion-reduce:animate-none"
-                />
-              ) : (
-                <ShieldCheck aria-hidden="true" className="h-3 w-3" />
-              )}
-              Approve Exception
-            </button>
-            <button
-              type="button"
-              onClick={() => onDecide(request, "declined")}
-              disabled={Boolean(deciding)}
+          confirmingType ? (
+            <div
               className={
                 styles.glassChip +
-                " inline-flex min-h-8 items-center gap-1.5 px-2.5 text-[0.7rem] font-semibold text-rose-600 disabled:cursor-wait disabled:opacity-60 dark:text-rose-300"
+                " mt-1.5 w-full max-w-xs rounded-xl p-2.5"
               }
             >
-              {deciding === request.id + ":declined" ? (
-                <LoaderCircle
-                  aria-hidden="true"
-                  className="h-3 w-3 animate-spin motion-reduce:animate-none"
-                />
-              ) : (
-                <X aria-hidden="true" className="h-3 w-3" />
-              )}
-              Decline
-            </button>
-          </div>
+              <label
+                htmlFor={"approval-reason-" + request.id}
+                className={styles.secondary + " block text-[0.7rem] font-semibold"}
+              >
+                Reason for{" "}
+                {confirmingType === "leave"
+                  ? "approving as leave"
+                  : "approving as an exception"}
+                <span className="text-rose-500"> *</span>
+              </label>
+              <textarea
+                id={"approval-reason-" + request.id}
+                rows={2}
+                autoFocus
+                value={reason}
+                maxLength={MAX_APPROVAL_REASON_LENGTH}
+                onChange={(event) => {
+                  setReason(event.target.value);
+                  if (reasonError) setReasonError("");
+                }}
+                placeholder={
+                  confirmingType === "leave"
+                    ? "Why is this leave being approved?"
+                    : "Why is this day excused as an exception?"
+                }
+                className={
+                  styles.glassField +
+                  " mt-1 w-full resize-none px-2.5 py-1.5 text-xs"
+                }
+              />
+              {reasonError ? (
+                <p
+                  role="alert"
+                  className="mt-1 text-[0.7rem] font-semibold text-rose-500"
+                >
+                  {reasonError}
+                </p>
+              ) : null}
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={confirmApproval}
+                  disabled={Boolean(deciding)}
+                  className={
+                    (confirmingType === "leave"
+                      ? "bg-emerald-600 hover:bg-emerald-500"
+                      : "bg-indigo-600 hover:bg-indigo-500") +
+                    " inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2.5 text-[0.7rem] font-semibold text-white transition disabled:cursor-wait disabled:opacity-60"
+                  }
+                >
+                  {deciding === request.id + ":" + confirmingType ? (
+                    <LoaderCircle
+                      aria-hidden="true"
+                      className="h-3 w-3 animate-spin motion-reduce:animate-none"
+                    />
+                  ) : confirmingType === "leave" ? (
+                    <Check aria-hidden="true" className="h-3 w-3" />
+                  ) : (
+                    <ShieldCheck aria-hidden="true" className="h-3 w-3" />
+                  )}
+                  Confirm{" "}
+                  {confirmingType === "leave"
+                    ? "Approve Leave"
+                    : "Approve Exception"}
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelApproval}
+                  disabled={Boolean(deciding)}
+                  className={
+                    styles.secondary +
+                    " inline-flex min-h-8 items-center rounded-lg px-2.5 text-[0.7rem] font-semibold disabled:opacity-60"
+                  }
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-1.5 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => startApproval("leave")}
+                disabled={Boolean(deciding)}
+                title="Approve and deduct this from the staff member's 15-day leave allowance"
+                className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-emerald-600 px-2.5 text-[0.7rem] font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-60"
+              >
+                <Check aria-hidden="true" className="h-3 w-3" />
+                Approve Leave
+              </button>
+              <button
+                type="button"
+                onClick={() => startApproval("exception")}
+                disabled={Boolean(deciding)}
+                title="Approve as an exception — never spends the staff member's leave allowance"
+                className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-indigo-600 px-2.5 text-[0.7rem] font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-wait disabled:opacity-60"
+              >
+                <ShieldCheck aria-hidden="true" className="h-3 w-3" />
+                Approve Exception
+              </button>
+              <button
+                type="button"
+                onClick={() => onDecide(request, "declined")}
+                disabled={Boolean(deciding)}
+                className={
+                  styles.glassChip +
+                  " inline-flex min-h-8 items-center gap-1.5 px-2.5 text-[0.7rem] font-semibold text-rose-600 disabled:cursor-wait disabled:opacity-60 dark:text-rose-300"
+                }
+              >
+                {deciding === request.id + ":declined" ? (
+                  <LoaderCircle
+                    aria-hidden="true"
+                    className="h-3 w-3 animate-spin motion-reduce:animate-none"
+                  />
+                ) : (
+                  <X aria-hidden="true" className="h-3 w-3" />
+                )}
+                Decline
+              </button>
+            </div>
+          )
         ) : null}
       </div>
     </li>
@@ -423,6 +534,7 @@ function ThreadView({
     request: LeaveRequest,
     status: "approved" | "declined",
     approvalType?: "leave" | "exception",
+    reason?: string,
   ) => {
     setDeciding(request.id + ":" + (status === "approved" ? approvalType : status));
     setActionError("");
@@ -430,7 +542,7 @@ function ThreadView({
       const response = await fetch("/api/staff/leave-requests/" + request.id, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status, note: "", approvalType }),
+        body: JSON.stringify({ status, note: "", approvalType, reason }),
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
