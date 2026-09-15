@@ -30,7 +30,12 @@ export type LeaveRequest = {
   days: number;
   message: string;
   status: LeaveRequestStatus;
-  decision: { byName: string; at: string; note: string } | null;
+  decision: {
+    byName: string;
+    at: string;
+    note: string;
+    approvalType: "leave" | "exception" | null;
+  } | null;
   appliedToAttendanceAt: string | null;
   attachments: LeaveAttachment[];
   createdAt: string;

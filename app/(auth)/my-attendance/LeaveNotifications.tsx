@@ -12,6 +12,7 @@ import {
   MessagesSquare,
   RefreshCw,
   Send,
+  ShieldCheck,
   X,
 } from "lucide-react";
 import styles from "./attendance.module.css";
@@ -80,6 +81,20 @@ const STATUS_TEXT: Record<string, string> = {
   declined: "Declined",
   cancelled: "Withdrawn",
   closed: "Message",
+};
+
+/**
+ * "Approved" alone would hide the one thing that actually matters once a
+ * request is decided: whether it spent a day of the 15-day leave allowance or
+ * was excused as an exception.
+ */
+const statusText = (request: LeaveRequest) => {
+  if (request.status === "approved") {
+    return request.decision?.approvalType === "exception"
+      ? "Approved (exception)"
+      : "Approved (leave)";
+  }
+  return STATUS_TEXT[request.status];
 };
 
 /** The list of people, most recent conversation first. */
@@ -172,7 +187,11 @@ function ThreadBubble({
   deciding,
 }: {
   entry: LeaveThreadEntry;
-  onDecide: (request: LeaveRequest, status: "approved" | "declined") => void;
+  onDecide: (
+    request: LeaveRequest,
+    status: "approved" | "declined",
+    approvalType?: "leave" | "exception",
+  ) => void;
   onDelete: (request: LeaveRequest) => void;
   deciding: string;
 }) {
@@ -197,7 +216,7 @@ function ThreadBubble({
                 " mb-1 text-[0.7rem] font-semibold"
               }
             >
-              {requestDates(request)} · {STATUS_TEXT[request.status]}
+              {requestDates(request)} · {statusText(request)}
             </p>
           ) : null}
           <p className="whitespace-pre-line break-words">{entry.body}</p>
@@ -239,14 +258,15 @@ function ThreadBubble({
         ) : null}
 
         {request && request.status === "pending" ? (
-          <div className="mt-1.5 flex gap-2">
+          <div className="mt-1.5 flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => onDecide(request, "approved")}
+              onClick={() => onDecide(request, "approved", "leave")}
               disabled={Boolean(deciding)}
+              title="Approve and deduct this from the staff member's 15-day leave allowance"
               className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-emerald-600 px-2.5 text-[0.7rem] font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-60"
             >
-              {deciding === request.id + ":approved" ? (
+              {deciding === request.id + ":leave" ? (
                 <LoaderCircle
                   aria-hidden="true"
                   className="h-3 w-3 animate-spin motion-reduce:animate-none"
@@ -254,7 +274,24 @@ function ThreadBubble({
               ) : (
                 <Check aria-hidden="true" className="h-3 w-3" />
               )}
-              Approve
+              Approve Leave
+            </button>
+            <button
+              type="button"
+              onClick={() => onDecide(request, "approved", "exception")}
+              disabled={Boolean(deciding)}
+              title="Approve as an exception — never spends the staff member's leave allowance"
+              className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-indigo-600 px-2.5 text-[0.7rem] font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-wait disabled:opacity-60"
+            >
+              {deciding === request.id + ":exception" ? (
+                <LoaderCircle
+                  aria-hidden="true"
+                  className="h-3 w-3 animate-spin motion-reduce:animate-none"
+                />
+              ) : (
+                <ShieldCheck aria-hidden="true" className="h-3 w-3" />
+              )}
+              Approve Exception
             </button>
             <button
               type="button"
@@ -385,14 +422,15 @@ function ThreadView({
   const decide = async (
     request: LeaveRequest,
     status: "approved" | "declined",
+    approvalType?: "leave" | "exception",
   ) => {
-    setDeciding(request.id + ":" + status);
+    setDeciding(request.id + ":" + (status === "approved" ? approvalType : status));
     setActionError("");
     try {
       const response = await fetch("/api/staff/leave-requests/" + request.id, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status, note: "" }),
+        body: JSON.stringify({ status, note: "", approvalType }),
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
