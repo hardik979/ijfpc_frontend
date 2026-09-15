@@ -15,6 +15,7 @@ import {
   AlertCircle,
   ArrowLeft,
   BarChart3,
+  CalendarClock,
   CalendarDays,
   Check,
   CheckCircle2,
@@ -1163,6 +1164,15 @@ function PersonalDashboard({ data, month }: { data: AttendancePayload; month: st
   const today = toDateKey(new Date());
   const todayRecord = data.records.find((record) => record.dateKey === today);
   const summary = data.summary;
+  // The allowance runs over the year, so this never changes with the month
+  // being viewed. Defaults match the backend's fallback for a year with no
+  // approved leave yet (see APPROVED_LEAVE_LIMIT in lib/staffAttendance.js).
+  const leaveAllowance = data.leaveAllowance ?? {
+    year: new Date().getFullYear(),
+    allowance: 15,
+    used: 0,
+    remaining: 15,
+  };
 
   return (
     <>
@@ -1236,12 +1246,14 @@ function PersonalDashboard({ data, month }: { data: AttendancePayload; month: st
           tone="rose"
         />
         <MetricCard
-          icon={<Percent className="h-4 w-4" />}
-          label="Attendance rate"
-          value={summary.attendancePercentage + "%"}
-          hint="Half days count as 0.5"
+          icon={<CalendarClock className="h-4 w-4" />}
+          label="Leave remaining"
+          value={String(leaveAllowance.remaining)}
+          hint={leaveAllowance.used + " of " + leaveAllowance.allowance + " used this year"}
           tone="accent"
-          progress={summary.attendancePercentage}
+          progress={Math.round(
+            (leaveAllowance.remaining / Math.max(1, leaveAllowance.allowance)) * 100,
+          )}
         />
       </section>
 
