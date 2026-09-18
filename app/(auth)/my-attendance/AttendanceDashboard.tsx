@@ -1455,23 +1455,70 @@ function StaffDetailView({
  * to the days behind the number — clicking "3" under Half day opens their three
  * half days. A zero is not a link: there is nothing to open.
  */
+type CountTone = "reported" | "present" | "half" | "absent" | "leave";
+
+/**
+ * Each count sits in its own tinted box rather than floating as a bare
+ * numeral, so a row can be read across at a glance and a column scanned down
+ * it. A zero is deliberately quiet: it keeps the grid even without competing
+ * with the numbers that matter.
+ */
+const COUNT_TONE: Record<CountTone, string> = {
+  reported:
+    "border-slate-300/80 bg-slate-100 text-slate-700 dark:border-slate-400/25 dark:bg-slate-400/10 dark:text-slate-200",
+  present:
+    "border-emerald-300/80 bg-emerald-50 text-emerald-800 dark:border-emerald-400/25 dark:bg-emerald-400/10 dark:text-emerald-300",
+  half:
+    "border-amber-300/80 bg-amber-50 text-amber-800 dark:border-amber-400/25 dark:bg-amber-400/10 dark:text-amber-300",
+  absent:
+    "border-rose-300/80 bg-rose-50 text-rose-800 dark:border-rose-400/25 dark:bg-rose-400/10 dark:text-rose-300",
+  leave:
+    "border-sky-300/80 bg-sky-50 text-sky-800 dark:border-sky-400/25 dark:bg-sky-400/10 dark:text-sky-300",
+};
+
+const COUNT_ZERO =
+  "border-slate-200 bg-slate-50 text-slate-400 dark:border-slate-500/20 dark:bg-slate-500/10 dark:text-slate-500";
+
+function CountBadge({
+  value,
+  tone,
+  className = "",
+}: {
+  value: number;
+  tone: CountTone;
+  className?: string;
+}) {
+  return (
+    <span
+      className={
+        "inline-flex min-h-8 min-w-[2.5rem] items-center justify-center rounded-lg border px-2 text-sm font-bold tabular-nums " +
+        (value > 0 ? COUNT_TONE[tone] : COUNT_ZERO) +
+        " " +
+        className
+      }
+    >
+      {value}
+    </span>
+  );
+}
+
 function StatusCountCell({
   employeeId,
   name,
   month,
   status,
   count,
-  className,
+  tone,
 }: {
   employeeId: number;
   name: string;
   month: string;
   status: FilterableStatus;
   count: number;
-  className: string;
+  tone: CountTone;
 }) {
   return (
-    <td className={"px-4 py-3.5 font-semibold tabular-nums " + className}>
+    <td className="px-4 py-3.5">
       {count > 0 ? (
         <Link
           href={
@@ -1485,14 +1532,12 @@ function StatusCountCell({
           title={
             "Show " + name + "'s " + STATUS_FILTER_LABEL[status] + " days"
           }
-          className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-md px-1.5 underline-offset-4 outline-none transition hover:bg-indigo-500/[0.08] hover:underline focus-visible:ring-2 focus-visible:ring-indigo-400/70"
+          className="inline-block rounded-lg outline-none transition hover:-translate-y-px hover:brightness-95 focus-visible:ring-2 focus-visible:ring-indigo-400/70 dark:hover:brightness-125"
         >
-          {count}
+          <CountBadge value={count} tone={tone} />
         </Link>
       ) : (
-        <span className="inline-flex min-h-8 min-w-8 items-center justify-center px-1.5 opacity-60">
-          {count}
-        </span>
+        <CountBadge value={count} tone={tone} />
       )}
     </td>
   );
@@ -1761,13 +1806,8 @@ function StaffSummaryTable({
                           />
                         </Link>
                       </td>
-                      <td
-                        className={
-                          styles.secondary +
-                          " px-4 py-3.5 font-semibold tabular-nums"
-                        }
-                      >
-                        {entry.recordedDays}
+                      <td className="px-4 py-3.5">
+                        <CountBadge value={entry.recordedDays} tone="reported" />
                       </td>
                       <StatusCountCell
                         employeeId={entry.employeeId}
@@ -1775,7 +1815,7 @@ function StaffSummaryTable({
                         month={month}
                         status="present"
                         count={entry.summary.presentDays}
-                        className="text-emerald-700 dark:text-emerald-300"
+                        tone="present"
                       />
                       <StatusCountCell
                         employeeId={entry.employeeId}
@@ -1783,7 +1823,7 @@ function StaffSummaryTable({
                         month={month}
                         status="half"
                         count={entry.summary.halfDays}
-                        className="text-amber-700 dark:text-amber-300"
+                        tone="half"
                       />
                       <StatusCountCell
                         employeeId={entry.employeeId}
@@ -1791,15 +1831,15 @@ function StaffSummaryTable({
                         month={month}
                         status="absent"
                         count={entry.summary.absentDays}
-                        className="text-rose-700 dark:text-rose-300"
+                        tone="absent"
                       />
-                      <td
-                        className={
-                          styles.muted + " px-4 py-3.5 tabular-nums"
-                        }
-                      >
-                        {entry.summary.leaveDays +
-                          entry.summary.weeklyOffDays}
+                      <td className="px-4 py-3.5">
+                        <CountBadge
+                          value={
+                            entry.summary.leaveDays + entry.summary.weeklyOffDays
+                          }
+                          tone="leave"
+                        />
                       </td>
                       <td className="whitespace-nowrap px-4 py-3.5 text-right">
                         <YesterdayHours yesterday={entry.yesterday} />
@@ -1860,16 +1900,19 @@ function StaffSummaryTable({
                       </span>
                     </div>
                     <dl className="mt-3 grid grid-cols-4 gap-2">
-                      {[
-                        ["Present", entry.summary.presentDays],
-                        ["Half", entry.summary.halfDays],
-                        ["Absent", entry.summary.absentDays],
+                      {(
                         [
-                          "Leave/off",
-                          entry.summary.leaveDays +
-                            entry.summary.weeklyOffDays,
-                        ],
-                      ].map(([label, value]) => (
+                          ["Present", entry.summary.presentDays, "present"],
+                          ["Half", entry.summary.halfDays, "half"],
+                          ["Absent", entry.summary.absentDays, "absent"],
+                          [
+                            "Leave/off",
+                            entry.summary.leaveDays +
+                              entry.summary.weeklyOffDays,
+                            "leave",
+                          ],
+                        ] as [string, number, CountTone][]
+                      ).map(([label, value, tone]) => (
                         <div key={label} className="min-w-0">
                           <dt
                             className={
@@ -1879,13 +1922,8 @@ function StaffSummaryTable({
                           >
                             {label}
                           </dt>
-                          <dd
-                            className={
-                              styles.primary +
-                              " mt-1 text-sm font-bold tabular-nums"
-                            }
-                          >
-                            {value}
+                          <dd className="mt-1">
+                            <CountBadge value={value} tone={tone} />
                           </dd>
                         </div>
                       ))}
