@@ -115,12 +115,34 @@ const formatDate = (value?: string | null) => {
   });
 };
 
+const shortDate = (value?: string | null) => {
+  if (!value) return "No date";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "No date";
+  return date.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "2-digit",
+  });
+};
+
 const monthKey = (value?: string | null) => {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 };
+
+const monthLabel = (key: string) =>
+  new Date(`${key}-01T00:00:00`).toLocaleDateString("en-IN", {
+    month: "short",
+    year: "numeric",
+  });
+
+const sortedInstallments = (offer: PostPlacementOffer) =>
+  [...(offer.installments || [])].sort(
+    (a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime(),
+  );
 
 const collectedFor = (offer: PostPlacementOffer) =>
   (offer.installments || []).reduce(
@@ -236,6 +258,67 @@ function StatusBadge({ status }: { status: Exclude<PaymentStatus, "ALL"> }) {
   );
 }
 
+const PILL_LIMIT = 3;
+
+function InstallmentPills({
+  offer,
+  month,
+}: {
+  offer: PostPlacementOffer;
+  month: string;
+}) {
+  const all = sortedInstallments(offer);
+  const shown =
+    month === "ALL"
+      ? all
+      : all.filter((installment) => monthKey(installment.date) === month);
+  const visible = shown.slice(0, PILL_LIMIT);
+  const hidden = shown.length - visible.length;
+
+  if (!all.length) {
+    return <span className="text-xs text-slate-600">No installments yet</span>;
+  }
+  if (!shown.length) {
+    return (
+      <span className="text-xs text-slate-600">
+        None in {monthLabel(month)}
+      </span>
+    );
+  }
+
+  return (
+    <div className="max-w-[300px]">
+      <div className="flex flex-wrap gap-1.5">
+        {visible.map((installment, index) => (
+          <span
+            key={installment._id || `${installment.date}-${index}`}
+            title={`${installment.label || "Installment"} · ${formatMode(installment.mode)}`}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/20 bg-emerald-400/[0.07] px-2 py-1 text-[11px] leading-none"
+          >
+            <span className="font-bold tabular-nums text-emerald-200">
+              {currency(toNumber(installment.amount))}
+            </span>
+            <span className="h-3 w-px bg-emerald-400/25" />
+            <span className="font-medium text-slate-400">
+              {shortDate(installment.date)}
+            </span>
+          </span>
+        ))}
+        {hidden > 0 && (
+          <span className="inline-flex items-center rounded-lg border border-slate-700 bg-slate-800/60 px-2 py-1 text-[11px] font-semibold leading-none text-slate-400">
+            +{hidden} more
+          </span>
+        )}
+      </div>
+      {month !== "ALL" && shown.length < all.length && (
+        <p className="mt-1.5 text-[10px] text-slate-600">
+          {shown.length} of {all.length} installments in {monthLabel(month)}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function DetailModal({
   offer,
   onClose,
@@ -247,9 +330,7 @@ function DetailModal({
   const remaining = remainingFor(offer);
   const netFee = netFeeFor(offer);
   const progress = netFee ? Math.min((collected / netFee) * 100, 100) : 0;
-  const installments = [...(offer.installments || [])].sort(
-    (a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime(),
-  );
+  const installments = sortedInstallments(offer);
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -1008,10 +1089,7 @@ export default function PostPlacementDashboard() {
                   <option value="ALL">All payment months</option>
                   {monthOptions.map((key) => (
                     <option key={key} value={key}>
-                      {new Date(`${key}-01T00:00:00`).toLocaleDateString(
-                        "en-IN",
-                        { month: "short", year: "numeric" },
-                      )}
+                      {monthLabel(key)}
                     </option>
                   ))}
                 </select>
@@ -1031,24 +1109,61 @@ export default function PostPlacementDashboard() {
                   </option>
                 ))}
               </select>
-              <p className="text-xs text-slate-500">
-                <span className="font-bold text-slate-300">
-                  {filteredOffers.length}
-                </span>{" "}
-                records · {currency(filteredTotals.collected)} collected ·{" "}
-                {currency(filteredTotals.remaining)} outstanding
-              </p>
+              <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto">
+                {[
+                  {
+                    label: "Records",
+                    value: String(filteredOffers.length),
+                    tone: "text-white",
+                  },
+                  {
+                    label:
+                      month === "ALL"
+                        ? "Collected"
+                        : `Collected · ${monthLabel(month)}`,
+                    value: currency(filteredTotals.collected),
+                    tone: "text-emerald-300",
+                  },
+                  {
+                    label: "Outstanding",
+                    value: currency(filteredTotals.remaining),
+                    tone: "text-amber-200",
+                  },
+                ].map((item) => (
+                  <div
+                    key={item.label}
+                    className="rounded-xl border border-slate-700/80 bg-slate-950/45 px-3.5 py-2.5 sm:min-w-[150px]"
+                  >
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                      {item.label}
+                    </p>
+                    <p
+                      className={`mt-1 text-base font-black tabular-nums ${item.tone}`}
+                    >
+                      {item.value}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1050px] border-collapse text-left">
+            <table className="w-full min-w-[1320px] border-collapse text-left">
               <thead className="bg-slate-950/35 text-xs uppercase tracking-[0.12em] text-slate-500">
                 <tr>
                   <th className="px-6 py-4 font-semibold">Student</th>
                   <th className="px-4 py-4 font-semibold">Placement</th>
                   <th className="px-4 py-4 font-semibold">Net fee</th>
                   <th className="px-4 py-4 font-semibold">Collected</th>
+                  <th className="px-4 py-4 font-semibold">
+                    Installments
+                    {month !== "ALL" && (
+                      <span className="ml-1.5 normal-case tracking-normal text-sky-300">
+                        · {monthLabel(month)}
+                      </span>
+                    )}
+                  </th>
                   <th className="px-4 py-4 font-semibold">Outstanding</th>
                   <th className="px-4 py-4 font-semibold">Status</th>
                   <th className="px-6 py-4 text-right font-semibold">
@@ -1096,6 +1211,9 @@ export default function PostPlacementDashboard() {
                       </td>
                       <td className="px-4 py-4 text-sm font-bold text-emerald-300">
                         {currency(collectedFor(offer))}
+                      </td>
+                      <td className="px-4 py-4">
+                        <InstallmentPills offer={offer} month={month} />
                       </td>
                       <td className="px-4 py-4 text-sm font-bold text-amber-200">
                         {currency(remainingFor(offer))}
