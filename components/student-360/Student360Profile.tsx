@@ -14,6 +14,7 @@ import {
   BrainCircuit,
   BriefcaseBusiness,
   Building2,
+  CalendarCheck2,
   CalendarClock,
   CalendarDays,
   CheckCircle2,
@@ -95,6 +96,7 @@ interface ProfileResponse {
     records: InterviewRecord[];
   };
   academics: AcademicData;
+  attendance: AttendanceData;
   meta: {
     preplacementSourceAvailable: boolean;
     preplacementRecordFound: boolean;
@@ -104,7 +106,45 @@ interface ProfileResponse {
     postplacementMatchedBy: string | null;
     interviewSourceAvailable: boolean;
     academicSourceAvailable: boolean;
+    attendanceSourceAvailable: boolean;
   };
+}
+
+// Read from the same Hikvision-fed collection staff attendance uses, matched
+// to this student by clerkId/email only (never employeeId — see
+// lib/studentAttendance.js in the backend repo). `matched` is false, not an
+// error, for the ordinary case of a student who has no Hikvision mapping yet.
+interface AttendanceDayRecord {
+  dateKey: string;
+  dayOfWeek: string | null;
+  status: string;
+  halfDayReason: string | null;
+  inTime: string | null;
+  outTime: string | null;
+  punchCount: number;
+  workedMinutes: number | null;
+  workedLabel: string | null;
+}
+
+interface AttendanceSummary {
+  totalDays: number;
+  presentDays: number;
+  halfDays: number;
+  absentDays: number;
+  incompleteDays: number;
+  missingPunchOutDays: number;
+  weeklyOffDays: number;
+  attendancePercentage: number;
+  totalWorkedMinutes: number;
+  totalWorkedLabel: string | null;
+  averageWorkedMinutes: number | null;
+  averageWorkedLabel: string | null;
+}
+
+interface AttendanceData {
+  matched: boolean;
+  records: AttendanceDayRecord[];
+  summary: AttendanceSummary | null;
 }
 
 interface PreplacementPayment {
@@ -368,7 +408,8 @@ type ProfileSection =
   | "preplacement"
   | "postplacement"
   | "interviews"
-  | "academics";
+  | "academics"
+  | "attendance";
 
 type AcademicView = "quiz" | "mock" | "ai-hr" | "real-hr" | "mega-test";
 
@@ -1965,6 +2006,154 @@ function AcademicsSection({
   );
 }
 
+const ATTENDANCE_STATUS_LABEL: Record<string, string> = {
+  present: "Present",
+  half: "Half day",
+  absent: "Absent",
+  incomplete: "Incomplete",
+  weekly_off: "Weekly off",
+  leave: "Leave",
+  exception: "Exception",
+  public_holiday: "Holiday",
+};
+
+const attendanceStatusClass = (status: string) => {
+  switch (status.toLowerCase()) {
+    case "present":
+      return styles.interviewStatusCompleted;
+    case "half":
+    case "incomplete":
+      return styles.interviewStatusActive;
+    case "absent":
+      return styles.interviewStatusAttention;
+    default:
+      return styles.interviewStatusNeutral;
+  }
+};
+
+// Reuses .interviewSection/.interviewMetric/.interviewStatus: those classes
+// only alias the shared card/badge palette (see the CSS module), not
+// anything interview-specific, so borrowing them here keeps this section's
+// look consistent with the rest of the profile for free.
+function AttendanceSection({
+  data,
+  sourceAvailable,
+  studentName,
+}: {
+  data: AttendanceData;
+  sourceAvailable: boolean;
+  studentName: string | null;
+}) {
+  const summary = data.summary;
+
+  return (
+    <section
+      id="attendance"
+      className={`student360-profile-section ${styles.glassCard} ${styles.interviewSection} scroll-mt-6 rounded-2xl p-5 sm:p-6 [will-change:transform,opacity]`}
+      aria-labelledby="attendance-heading"
+    >
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className={styles.eyebrow}>Biometric attendance</p>
+          <h2 id="attendance-heading" className="mt-1 text-xl font-semibold tracking-tight">
+            Attendance history
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-[var(--s360-profile-text-secondary)]">
+            Daily check-in and check-out recorded by the campus biometric device.
+          </p>
+        </div>
+        {sourceAvailable && summary ? (
+          <span className={styles.interviewCount}>
+            {summary.totalDays} {summary.totalDays === 1 ? "day" : "days"} tracked
+          </span>
+        ) : null}
+      </div>
+
+      {!sourceAvailable ? (
+        <div className={`${styles.sourceNotice} rounded-xl px-4 py-3 text-sm`} role="status">
+          Attendance records are temporarily unavailable. The LMS attendance service did
+          not respond — refresh this profile to try again.
+        </div>
+      ) : !data.matched ? (
+        <div className={`${styles.sourceNotice} rounded-xl px-4 py-3 text-sm`} role="status">
+          {studentName || "This student"} is not yet linked to a biometric device, so no
+          attendance has been recorded. It will appear here automatically once they are
+          mapped to one.
+        </div>
+      ) : (
+        <>
+          {summary ? (
+            <div className={styles.interviewMetrics}>
+              <InterviewMetric label="Present" value={summary.presentDays} icon={CheckCircle2} />
+              <InterviewMetric label="Half days" value={summary.halfDays} icon={Clock3} />
+              <InterviewMetric label="Absent" value={summary.absentDays} icon={AlertCircle} />
+              <InterviewMetric
+                label="Attendance rate"
+                value={formatPercent(summary.attendancePercentage)}
+                icon={CalendarCheck2}
+              />
+            </div>
+          ) : null}
+
+          {data.records.length ? (
+            <div className="mt-5 overflow-x-auto">
+              <table className="w-full min-w-[560px] text-left text-sm">
+                <thead>
+                  <tr className={styles.attendanceHeadRow}>
+                    <th className="py-2 pr-4 font-semibold text-[var(--s360-profile-text-secondary)]">
+                      Date
+                    </th>
+                    <th className="py-2 pr-4 font-semibold text-[var(--s360-profile-text-secondary)]">
+                      Status
+                    </th>
+                    <th className="py-2 pr-4 font-semibold text-[var(--s360-profile-text-secondary)]">
+                      Check-in
+                    </th>
+                    <th className="py-2 pr-4 font-semibold text-[var(--s360-profile-text-secondary)]">
+                      Check-out
+                    </th>
+                    <th className="py-2 font-semibold text-[var(--s360-profile-text-secondary)]">
+                      Hours
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.records.map((record) => (
+                    <tr key={record.dateKey} className={styles.attendanceRow}>
+                      <td className="py-2.5 pr-4">
+                        <div className="font-semibold">{formatDate(record.dateKey)}</div>
+                        <div className="text-xs text-[var(--s360-profile-text-secondary)]">
+                          {record.dayOfWeek || ""}
+                        </div>
+                      </td>
+                      <td className="py-2.5 pr-4">
+                        <span
+                          className={`${styles.interviewStatus} ${attendanceStatusClass(record.status)}`}
+                        >
+                          {ATTENDANCE_STATUS_LABEL[record.status] ||
+                            readableToken(record.status) ||
+                            record.status}
+                        </span>
+                      </td>
+                      <td className="py-2.5 pr-4 tabular-nums">{record.inTime || "-"}</td>
+                      <td className="py-2.5 pr-4 tabular-nums">{record.outTime || "-"}</td>
+                      <td className="py-2.5 tabular-nums">{record.workedLabel || "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className={`${styles.sourceNotice} mt-5 rounded-xl px-4 py-3 text-sm`} role="status">
+              No attendance days recorded yet.
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
 export default function Student360Profile({ studentId }: { studentId: string }) {
   const pageRef = useRef<HTMLElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -2175,6 +2364,16 @@ export default function Student360Profile({ studentId }: { studentId: string }) 
           } tracked activities`
         : "Records unavailable",
       icon: GraduationCap,
+    },
+    {
+      id: "attendance",
+      label: "Attendance",
+      description: !profile?.meta.attendanceSourceAvailable
+        ? "Records unavailable"
+        : profile.attendance.matched
+          ? `${profile.attendance.summary?.totalDays ?? 0} days recorded`
+          : "Not linked to a device yet",
+      icon: CalendarCheck2,
     },
   ];
 
@@ -2474,7 +2673,7 @@ export default function Student360Profile({ studentId }: { studentId: string }) 
                       sourceAvailable={profile.meta.interviewSourceAvailable}
                     />
                   </div>
-                ) : (
+                ) : activeSection === "academics" ? (
                   <div
                     id="student360-panel-academics"
                     role="tabpanel"
@@ -2486,6 +2685,20 @@ export default function Student360Profile({ studentId }: { studentId: string }) 
                       data={profile.academics}
                       sourceAvailable={profile.meta.academicSourceAvailable}
                       studentId={student.id}
+                    />
+                  </div>
+                ) : (
+                  <div
+                    id="student360-panel-attendance"
+                    role="tabpanel"
+                    aria-labelledby="student360-tab-attendance"
+                    tabIndex={0}
+                    className="student360-tab-panel focus-visible:outline-none [will-change:transform,opacity]"
+                  >
+                    <AttendanceSection
+                      data={profile.attendance}
+                      sourceAvailable={profile.meta.attendanceSourceAvailable}
+                      studentName={student.fullName}
                     />
                   </div>
                 )}

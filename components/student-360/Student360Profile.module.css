@@ -2052,6 +2052,18 @@
   background: var(--s360-profile-accent-soft);
 }
 
+.attendanceHeadRow {
+  border-bottom: 1px solid var(--s360-profile-border);
+}
+
+.attendanceRow {
+  border-bottom: 1px solid var(--s360-profile-border);
+}
+
+.attendanceRow:last-child {
+  border-bottom: none;
+}
+
 .errorGlass {
   border-color: rgb(190 18 60 / 0.28);
   background: linear-gradient(145deg, rgb(190 18 60 / 0.08), var(--s360-profile-glass));

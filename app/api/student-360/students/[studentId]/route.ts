@@ -111,6 +111,45 @@ interface InterviewPayload {
   interviews?: InterviewRecord[];
 }
 
+interface AttendanceDayRecord {
+  dateKey?: string;
+  dayOfWeek?: string | null;
+  status?: string;
+  halfDayReason?: string | null;
+  inTime?: string | null;
+  outTime?: string | null;
+  punchCount?: number;
+  workedMinutes?: number | null;
+  workedLabel?: string | null;
+}
+
+interface AttendanceSummary {
+  totalDays?: number;
+  presentDays?: number;
+  halfDays?: number;
+  absentDays?: number;
+  incompleteDays?: number;
+  missingPunchOutDays?: number;
+  weeklyOffDays?: number;
+  attendancePercentage?: number;
+  totalWorkedMinutes?: number;
+  totalWorkedLabel?: string | null;
+  averageWorkedMinutes?: number | null;
+  averageWorkedLabel?: string | null;
+}
+
+// The LMS backend reads this off the same Hikvision-fed collection staff
+// attendance uses, matched to the student by clerkId/email only — see
+// lib/studentAttendance.js in the backend repo for why employeeId can never
+// be used for this match (it collides between staff and students).
+interface AttendancePayload {
+  attendance?: {
+    matched?: boolean;
+    records?: AttendanceDayRecord[];
+    summary?: AttendanceSummary;
+  };
+}
+
 const stringId = (value: unknown) => {
   if (typeof value === "string") return value;
   if (value && typeof value === "object" && "_id" in value) {
@@ -216,28 +255,47 @@ export async function GET(
 
     let academicPayload: Record<string, unknown> | null = null;
     let academicSourceAvailable = true;
+    let attendancePayload: AttendancePayload | null = null;
+    let attendanceSourceAvailable = true;
 
     if (student.clerkId) {
-      try {
-        const academicQuery = new URLSearchParams({
-          clerkId: String(student.clerkId),
-        });
-        const academicResponse = await fetch(
-          `${lmsUrl}/api/student-info/get-student-details?${academicQuery.toString()}`,
-          {
-            headers,
-            cache: "no-store",
-          },
-        );
+      const clerkQuery = new URLSearchParams({ clerkId: String(student.clerkId) });
+
+      const [academicResult, attendanceResult] = await Promise.allSettled([
+        fetch(
+          `${lmsUrl}/api/student-info/get-student-details?${clerkQuery.toString()}`,
+          { headers, cache: "no-store" },
+        ),
+        fetch(
+          `${lmsUrl}/api/student-info/get-student-attendance?${clerkQuery.toString()}`,
+          { headers, cache: "no-store" },
+        ),
+      ]);
+
+      if (academicResult.status === "fulfilled") {
+        const academicResponse = academicResult.value;
         const payload = await academicResponse.json().catch(() => null);
         academicSourceAvailable = academicResponse.ok;
         academicPayload =
           academicResponse.ok && payload && typeof payload === "object"
             ? (payload as Record<string, unknown>)
             : null;
-      } catch (error) {
+      } else {
         academicSourceAvailable = false;
-        console.error("Student 360 academics source error:", error);
+        console.error("Student 360 academics source error:", academicResult.reason);
+      }
+
+      if (attendanceResult.status === "fulfilled") {
+        const attendanceResponse = attendanceResult.value;
+        const payload = await attendanceResponse.json().catch(() => null);
+        attendanceSourceAvailable = attendanceResponse.ok;
+        attendancePayload =
+          attendanceResponse.ok && payload && typeof payload === "object"
+            ? (payload as AttendancePayload)
+            : null;
+      } else {
+        attendanceSourceAvailable = false;
+        console.error("Student 360 attendance source error:", attendanceResult.reason);
       }
     }
     const purchasedCourseIds = Array.isArray(student.purchasedCourses)
@@ -437,6 +495,11 @@ export async function GET(
             realHrCalls: null,
             megaTests: null,
           },
+      attendance: {
+        matched: attendancePayload?.attendance?.matched === true,
+        records: attendancePayload?.attendance?.records ?? [],
+        summary: attendancePayload?.attendance?.summary ?? null,
+      },
       meta: {
         preplacementSourceAvailable: true,
         preplacementRecordFound: Boolean(preplacement),
@@ -446,6 +509,7 @@ export async function GET(
         postplacementMatchedBy: student.postplacementMatchedBy || null,
         interviewSourceAvailable: interviewsResponse.ok,
         academicSourceAvailable,
+        attendanceSourceAvailable,
       },
     });
   } catch (error) {
