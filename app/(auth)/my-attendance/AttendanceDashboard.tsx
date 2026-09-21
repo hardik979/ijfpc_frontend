@@ -24,6 +24,7 @@ import {
   ChevronRight,
   Clock,
   EllipsisVertical,
+  GraduationCap,
   LogIn,
   LogOut,
   LoaderCircle,
@@ -176,6 +177,51 @@ interface StaffSummaryRow {
     | "weeklyOffDays"
     | "attendancePercentage"
   >;
+}
+
+/**
+ * One row of the company-wide student attendance table — a Manager/Admin
+ * view alongside the staff one. Only students mapped to a Hikvision device
+ * appear at all (see lib/studentAttendance.js on the backend); `fullName` is
+ * always the real name from the student's account, never the raw device
+ * label the biometric log itself carries.
+ */
+interface StudentSummaryRow {
+  clerkId: string;
+  fullName: string;
+  email: string | null;
+  matched: boolean;
+  recordedDays: number;
+  yesterday: YesterdayWork | null;
+  summary: Pick<
+    AttendanceSummary,
+    | "totalDays"
+    | "presentDays"
+    | "halfDays"
+    | "absentDays"
+    | "leaveDays"
+    | "exceptionDays"
+    | "publicHolidayDays"
+    | "weeklyOffDays"
+    | "attendancePercentage"
+  >;
+}
+
+interface StudentAttendanceOverviewPayload {
+  month: string | null;
+  students: StudentSummaryRow[];
+  availableMonths: string[];
+}
+
+/** One mapped student's full history — the click-through target from a row
+ * in StudentSummaryTable, the student-side twin of AttendancePayload. */
+interface StudentAttendanceDetail {
+  student: { clerkId: string; fullName: string; email: string | null };
+  month: string | null;
+  matched: boolean;
+  records: AttendanceRecord[];
+  summary: AttendanceSummary;
+  availableMonths: string[];
 }
 
 /** The statuses a history can be narrowed to from a count in the overview. */
@@ -1940,6 +1986,370 @@ function StaffSummaryTable({
 }
 
 /**
+ * The company-wide student attendance table — the same shape as the staff
+ * one (search, Half Day / Absent filters, the same columns), so switching
+ * the Staff/Students toggle above feels like the same dashboard, not a
+ * different tool. Only students mapped to a Hikvision device appear at all;
+ * "Not linked yet" marks a mapped-but-never-punched student apart from one
+ * with a genuinely empty month.
+ */
+function StudentSummaryTable({
+  students,
+  month,
+}: {
+  students: StudentSummaryRow[];
+  month: string;
+}) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [halfDayOnly, setHalfDayOnly] = useState(false);
+  const [absentOnly, setAbsentOnly] = useState(false);
+
+  const visibleStudents = useMemo(() => {
+    const query = searchQuery.trim().toLocaleLowerCase();
+    const categoryFilterActive = halfDayOnly || absentOnly;
+
+    const matching = students.filter((entry) => {
+      const matchesSearch =
+        !query ||
+        entry.fullName.toLocaleLowerCase().includes(query) ||
+        (entry.email || "").toLocaleLowerCase().includes(query);
+      const matchesCategory =
+        !categoryFilterActive ||
+        (halfDayOnly && entry.summary.halfDays > 0) ||
+        (absentOnly && entry.summary.absentDays > 0);
+
+      return matchesSearch && matchesCategory;
+    });
+
+    if (!categoryFilterActive) return matching;
+
+    const rank = (entry: StudentSummaryRow) =>
+      (halfDayOnly ? entry.summary.halfDays : 0) +
+      (absentOnly ? entry.summary.absentDays : 0);
+
+    return [...matching].sort(
+      (first, second) =>
+        rank(second) - rank(first) || first.fullName.localeCompare(second.fullName),
+    );
+  }, [absentOnly, halfDayOnly, searchQuery, students]);
+
+  const filtersActive = Boolean(searchQuery.trim()) || halfDayOnly || absentOnly;
+
+  return (
+    <section
+      aria-labelledby="daily-student-overview-title"
+      className={styles.glass + " overflow-hidden"}
+    >
+      <div
+        className={
+          styles.divider +
+          " flex items-center justify-between gap-3 border-b px-4 py-3.5 sm:px-5"
+        }
+      >
+        <div>
+          <h2
+            id="daily-student-overview-title"
+            className={styles.primary + " text-sm font-bold"}
+          >
+            Daily student summary
+          </h2>
+          <p className={styles.muted + " mt-0.5 text-xs"}>
+            {formatMonth(month)}
+          </p>
+        </div>
+        <span
+          className={
+            styles.control +
+            " inline-flex min-h-8 items-center px-2.5 text-xs font-semibold"
+          }
+        >
+          {filtersActive ? visibleStudents.length + " of " : ""}
+          {students.length} {students.length === 1 ? "student" : "students"}
+        </span>
+      </div>
+
+      {students.length ? (
+        <div
+          className={
+            styles.divider +
+            " flex flex-col gap-3 border-b px-4 py-3 sm:px-5 lg:flex-row lg:items-center"
+          }
+        >
+          <div className="relative min-w-0 flex-1">
+            <Search
+              aria-hidden="true"
+              className={styles.muted + " pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2"}
+            />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search students by name or email"
+              aria-label="Search students by name or email"
+              className={
+                styles.control +
+                " h-10 w-full pl-9 pr-9 text-sm outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70"
+              }
+            />
+            {searchQuery ? (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                aria-label="Clear student search"
+                title="Clear search"
+                className={
+                  styles.muted +
+                  " absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md hover:bg-slate-500/10"
+                }
+              >
+                <X aria-hidden="true" className="h-4 w-4" />
+              </button>
+            ) : null}
+          </div>
+
+          <fieldset className="flex flex-wrap items-center gap-2">
+            <legend className="sr-only">Filter students by attendance category</legend>
+            <label
+              className={
+                styles.control +
+                " inline-flex h-10 cursor-pointer items-center gap-2 px-3 text-sm font-semibold"
+              }
+            >
+              <input
+                type="checkbox"
+                checked={halfDayOnly}
+                onChange={(event) => setHalfDayOnly(event.target.checked)}
+                className="h-4 w-4 accent-amber-600"
+              />
+              Half Day
+            </label>
+            <label
+              className={
+                styles.control +
+                " inline-flex h-10 cursor-pointer items-center gap-2 px-3 text-sm font-semibold"
+              }
+            >
+              <input
+                type="checkbox"
+                checked={absentOnly}
+                onChange={(event) => setAbsentOnly(event.target.checked)}
+                className="h-4 w-4 accent-rose-600"
+              />
+              Absent
+            </label>
+            {filtersActive ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("");
+                  setHalfDayOnly(false);
+                  setAbsentOnly(false);
+                }}
+                className={
+                  styles.secondary +
+                  " inline-flex h-10 items-center px-2 text-xs font-semibold hover:underline"
+                }
+              >
+                Clear filters
+              </button>
+            ) : null}
+          </fieldset>
+        </div>
+      ) : null}
+
+      {!students.length ? (
+        <EmptyState
+          title="No students mapped to a device yet"
+          detail="Run the Hikvision ID mapping for a student and their attendance will appear here."
+        />
+      ) : !visibleStudents.length ? (
+        <EmptyState
+          title="No matching students"
+          detail="Try another search or clear the selected attendance filters."
+        />
+      ) : (
+        <>
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full text-left text-sm">
+              <caption className="sr-only">
+                Student attendance summary for {formatMonth(month)}
+              </caption>
+              <thead className={styles.surfaceMuted}>
+                <tr className={styles.divider + " border-b"}>
+                  {[
+                    "All Students",
+                    "Reported",
+                    "Present",
+                    "Half day",
+                    "Absent",
+                    "Leave / off",
+                    "Yesterday hours",
+                  ].map((heading) => (
+                    <th
+                      key={heading}
+                      scope="col"
+                      className={
+                        styles.secondary +
+                        " whitespace-nowrap px-4 py-3 text-xs font-semibold " +
+                        (heading === "Yesterday hours" ? "text-right" : "")
+                      }
+                    >
+                      {heading}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {visibleStudents.map((entry) => (
+                  <tr
+                    key={entry.clerkId}
+                    className={
+                      styles.tableRow +
+                      " " +
+                      styles.divider +
+                      " border-b last:border-b-0"
+                    }
+                  >
+                    <td className="px-4 py-3">
+                      <Link
+                        href={
+                          "/my-attendance/students/" +
+                          encodeURIComponent(entry.clerkId) +
+                          "?month=" +
+                          encodeURIComponent(month)
+                        }
+                        className="group flex min-h-11 w-full items-center gap-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70"
+                      >
+                        <span
+                          aria-hidden="true"
+                          className={
+                            styles.identityIcon +
+                            " flex h-9 w-9 shrink-0 items-center justify-center text-[0.68rem] font-bold"
+                          }
+                        >
+                          {initials(entry.fullName)}
+                        </span>
+                        <span className="min-w-0">
+                          <span
+                            className={
+                              styles.primary +
+                              " block max-w-52 truncate font-semibold group-hover:underline"
+                            }
+                          >
+                            {entry.fullName}
+                          </span>
+                          <span className={styles.muted + " mt-0.5 block truncate text-xs"}>
+                            {entry.matched ? entry.email || "" : "Not linked yet"}
+                          </span>
+                        </span>
+                        <ChevronRight
+                          aria-hidden="true"
+                          className={styles.muted + " ml-auto h-4 w-4 shrink-0"}
+                        />
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <CountBadge value={entry.recordedDays} tone="reported" />
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <CountBadge value={entry.summary.presentDays} tone="present" />
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <CountBadge value={entry.summary.halfDays} tone="half" />
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <CountBadge value={entry.summary.absentDays} tone="absent" />
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <CountBadge
+                        value={entry.summary.leaveDays + entry.summary.weeklyOffDays}
+                        tone="leave"
+                      />
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-right">
+                      <YesterdayHours yesterday={entry.yesterday} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <ul className="md:hidden">
+            {visibleStudents.map((entry) => (
+              <li
+                key={entry.clerkId}
+                className={styles.divider + " border-b last:border-b-0"}
+              >
+                <Link
+                  href={
+                    "/my-attendance/students/" +
+                    encodeURIComponent(entry.clerkId) +
+                    "?month=" +
+                    encodeURIComponent(month)
+                  }
+                  className="block w-full p-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400/70"
+                >
+                  <div className="flex items-start gap-3">
+                    <span
+                      aria-hidden="true"
+                      className={
+                        styles.identityIcon +
+                        " flex h-9 w-9 shrink-0 items-center justify-center text-[0.68rem] font-bold"
+                      }
+                    >
+                      {initials(entry.fullName)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className={styles.primary + " truncate text-sm font-semibold"}>
+                        {entry.fullName}
+                      </p>
+                      <p className={styles.muted + " mt-0.5 truncate text-xs"}>
+                        {entry.matched ? entry.email || "" : "Not linked yet"} |{" "}
+                        {entry.recordedDays} days reported
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-right">
+                      <span className={styles.muted + " block text-[0.68rem] font-medium"}>
+                        Yesterday hours
+                      </span>
+                      <YesterdayHours yesterday={entry.yesterday} />
+                    </span>
+                  </div>
+                  <dl className="mt-3 grid grid-cols-4 gap-2">
+                    {(
+                      [
+                        ["Present", entry.summary.presentDays, "present"],
+                        ["Half", entry.summary.halfDays, "half"],
+                        ["Absent", entry.summary.absentDays, "absent"],
+                        [
+                          "Leave/off",
+                          entry.summary.leaveDays + entry.summary.weeklyOffDays,
+                          "leave",
+                        ],
+                      ] as [string, number, CountTone][]
+                    ).map(([label, value, tone]) => (
+                      <div key={label} className="min-w-0">
+                        <dt className={styles.muted + " truncate text-[0.68rem] font-medium"}>
+                          {label}
+                        </dt>
+                        <dd className="mt-1">
+                          <CountBadge value={value} tone={tone} />
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
+  );
+}
+
+/**
  * One exception applied to every active staff member for a single date — the
  * office was shut, the device was down, the team was off site.
  *
@@ -2381,6 +2791,68 @@ function AdminDashboard({
   );
 }
 
+/**
+ * The student half of the Staff/Students toggle — company-wide, mapped
+ * students only. No bulk-exception panel here: that feature writes to
+ * AttendanceAdjustment, which is staff HR policy (leave allowance,
+ * exceptions) with no equivalent for a student's attendance record.
+ */
+function StudentAdminDashboard({
+  data,
+  month,
+}: {
+  data: StudentAttendanceOverviewPayload;
+  month: string;
+}) {
+  const students = data.students || [];
+  const linkedCount = students.filter((entry) => entry.matched).length;
+  const reportingRate = students.length
+    ? Math.round((linkedCount / students.length) * 100)
+    : 0;
+  const attendancePercentage = students.length
+    ? Math.round(
+        (students.reduce(
+          (total, entry) => total + entry.summary.attendancePercentage,
+          0,
+        ) /
+          students.length) *
+          10,
+      ) / 10
+    : 0;
+
+  return (
+    <>
+      <section aria-label="Overall student attendance summary" className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-3">
+        <MetricCard
+          icon={<GraduationCap className="h-4 w-4" />}
+          label="Mapped students"
+          value={String(students.length)}
+          hint="Linked to a Hikvision device"
+          tone="neutral"
+        />
+        <MetricCard
+          icon={<BarChart3 className="h-4 w-4" />}
+          label="Students reported"
+          value={String(linkedCount)}
+          hint={reportingRate + "% have punched at least once"}
+          tone="accent"
+          progress={reportingRate}
+        />
+        <MetricCard
+          icon={<Percent className="h-4 w-4" />}
+          label="Attendance rate"
+          value={attendancePercentage + "%"}
+          hint="Averaged across mapped students"
+          tone="accent"
+          progress={attendancePercentage}
+        />
+      </section>
+
+      <StudentSummaryTable students={students} month={month} />
+    </>
+  );
+}
+
 // Only the admin views are role-gated now, so this is the only message left:
 // a personal view that cannot be shown reports the LMS's own reason instead.
 function UnauthorizedState({ adminOnly = true }: { adminOnly?: boolean }) {
@@ -2625,6 +3097,269 @@ export function StaffAttendanceDetailPage({
   );
 }
 
+/**
+ * One mapped student's full history — the student-side twin of
+ * StaffAttendanceDetailPage, reached by clicking a name in the company-wide
+ * student table. No adjustment menu: exceptions/approved leave are staff HR
+ * policy with no equivalent here, so this is read-only, same as a student's
+ * own personal attendance view.
+ */
+export function StudentAttendanceDetailPage({
+  clerkId,
+  initialMonth,
+}: {
+  clerkId: string;
+  initialMonth?: string;
+}) {
+  const { user, isLoaded } = useUser();
+  const router = useRouter();
+  const role = String(user?.publicMetadata?.role || "").toUpperCase();
+  const isAdmin = isAttendanceAdmin(role);
+  const validClerkId = decodeURIComponent(clerkId || "").trim();
+  const [month, setMonth] = useState(() =>
+    /^\d{4}-(0[1-9]|1[0-2])$/.test(initialMonth || "")
+      ? String(initialMonth)
+      : toMonthKey(new Date()),
+  );
+  const [data, setData] = useState<StudentAttendanceDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const requestSequence = useRef(0);
+
+  const loadStudent = useCallback(
+    async (monthKey: string, silent = false) => {
+      const requestId = ++requestSequence.current;
+      if (silent) setRefreshing(true);
+      else setLoading(true);
+      setError("");
+
+      try {
+        const response = await fetch(
+          "/api/staff/attendance/students/" +
+            encodeURIComponent(validClerkId) +
+            "?month=" +
+            encodeURIComponent(monthKey),
+          { cache: "no-store" },
+        );
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload?.error || "Could not load student attendance");
+        }
+        if (requestId !== requestSequence.current) return;
+        setData(payload as StudentAttendanceDetail);
+        setLastUpdated(new Date());
+      } catch (caught) {
+        if (requestId !== requestSequence.current) return;
+        if (!silent) setData(null);
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "Could not load student attendance",
+        );
+      } finally {
+        if (requestId === requestSequence.current) {
+          setLoading(false);
+          setRefreshing(false);
+        }
+      }
+    },
+    [validClerkId],
+  );
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    if (!isAdmin) {
+      requestSequence.current += 1;
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+    if (!validClerkId) {
+      setData(null);
+      setError("Invalid student");
+      setLoading(false);
+      return;
+    }
+    loadStudent(month);
+  }, [isAdmin, isLoaded, loadStudent, month, validClerkId]);
+
+  // Same auto-refresh as the staff detail page: a direct MongoDB edit has
+  // nothing else to invalidate, so this just asks again periodically.
+  useEffect(() => {
+    if (!isLoaded || !isAdmin || !validClerkId) return;
+
+    const refresh = () => {
+      if (document.visibilityState !== "visible") return;
+      loadStudent(month, true);
+    };
+
+    const timer = window.setInterval(refresh, REFRESH_INTERVAL_MS);
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("focus", refresh);
+
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [isAdmin, isLoaded, loadStudent, month, validClerkId]);
+
+  const monthOptions = useMemo(() => {
+    const options = new Set<string>([
+      month,
+      toMonthKey(new Date()),
+      ...(data?.availableMonths || []),
+    ]);
+    return [...options].sort((first, second) => second.localeCompare(first));
+  }, [data?.availableMonths, month]);
+
+  const changeMonth = (nextMonth: string) => {
+    setMonth(nextMonth);
+    router.replace(
+      "/my-attendance/students/" +
+        encodeURIComponent(validClerkId) +
+        "?month=" +
+        encodeURIComponent(nextMonth),
+    );
+  };
+
+  if (isLoaded && !isAdmin) return <UnauthorizedState adminOnly />;
+
+  const facts = data
+    ? [
+        { label: "Recorded", value: data.records.length },
+        { label: "Present", value: data.summary.presentDays },
+        { label: "Half day", value: data.summary.halfDays },
+        { label: "Absent", value: data.summary.absentDays },
+        {
+          label: "Leave / off",
+          value: data.summary.leaveDays + data.summary.weeklyOffDays,
+        },
+      ]
+    : [];
+
+  return (
+    <main className={styles.page}>
+      <div className="mx-auto max-w-7xl px-4 py-7 sm:px-6 sm:py-9 lg:px-8">
+        <header className="mb-6 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 items-start gap-3.5">
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className={styles.iconButton + " flex h-11 w-11 shrink-0 items-center justify-center"}
+              aria-label="Back to student attendance overview"
+              title="Back to student attendance overview"
+            >
+              <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+            </button>
+            <div className="min-w-0 pt-0.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className={styles.primary + " truncate text-2xl font-bold sm:text-[1.7rem]"}>
+                  {data?.student.fullName || "Student attendance details"}
+                </h1>
+                <span className="inline-flex min-h-7 items-center gap-1.5 rounded-full border border-indigo-300/60 bg-indigo-50/75 px-2.5 text-xs font-semibold text-indigo-800 dark:border-indigo-400/25 dark:bg-indigo-400/10 dark:text-indigo-300">
+                  <GraduationCap aria-hidden="true" className="h-3.5 w-3.5" />
+                  Student
+                </span>
+              </div>
+              <p className={styles.secondary + " mt-1 text-sm leading-5"}>
+                {data
+                  ? (data.student.email || "Individual attendance record") +
+                    " | " +
+                    formatMonth(month)
+                  : "Individual student attendance record"}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
+            <MonthControls
+              month={month}
+              options={monthOptions}
+              loading={!isLoaded || loading}
+              refreshing={refreshing}
+              lastUpdated={lastUpdated}
+              onMonthChange={changeMonth}
+              onRefresh={() => loadStudent(month, true)}
+            />
+          </div>
+        </header>
+
+        <ErrorBanner error={error} code="" />
+        {!isLoaded || loading ? <LoadingState /> : null}
+        {isLoaded && !loading && data ? (
+          !data.matched ? (
+            <EmptyState
+              title="No attendance recorded yet"
+              detail="This student is mapped to a device, but nothing has been punched yet."
+            />
+          ) : (
+            <>
+              <section className={styles.glass + " mb-4 overflow-hidden"}>
+                <div className="flex items-start gap-4 px-4 py-4 sm:px-5">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span
+                      aria-hidden="true"
+                      className={
+                        styles.identityIcon +
+                        " flex h-10 w-10 shrink-0 items-center justify-center text-xs font-bold"
+                      }
+                    >
+                      {initials(data.student.fullName)}
+                    </span>
+                    <div className="min-w-0">
+                      <h3 className={styles.primary + " truncate text-sm font-bold"}>
+                        {data.student.fullName}
+                      </h3>
+                      <p className={styles.muted + " mt-0.5 text-xs"}>
+                        {formatMonth(month)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <dl
+                  className={
+                    styles.surfaceMuted +
+                    " " +
+                    styles.divider +
+                    " grid grid-cols-2 border-t sm:grid-cols-3 lg:grid-cols-5"
+                  }
+                >
+                  {facts.map((fact) => (
+                    <div
+                      key={fact.label}
+                      className={
+                        styles.divider +
+                        " min-w-0 border-b px-4 py-3 last:border-b-0 sm:border-r sm:last:border-r-0 lg:border-b-0"
+                      }
+                    >
+                      <dt className={styles.muted + " text-xs font-medium"}>
+                        {fact.label}
+                      </dt>
+                      <dd className={styles.primary + " mt-1 text-base font-bold tabular-nums"}>
+                        {fact.value}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+
+              <PersonalHistory
+                records={data.records}
+                month={month}
+                title="Individual attendance details"
+              />
+            </>
+          )
+        ) : null}
+      </div>
+    </main>
+  );
+}
+
 export default function AttendanceDashboard() {
   const { user, isLoaded } = useUser();
   const role = String(user?.publicMetadata?.role || "").toUpperCase();
@@ -2633,8 +3368,14 @@ export default function AttendanceDashboard() {
   const isAdmin = isAttendanceAdmin(role);
 
   const [month, setMonth] = useState(() => toMonthKey(new Date()));
+  // Only meaningful while isAdmin: which company-wide table the overview
+  // shows. Reset to "staff" whenever admin access itself changes, same as
+  // autoJumped below, so a role change never leaves a stale student view up.
+  const [viewMode, setViewMode] = useState<"staff" | "students">("staff");
   const [personal, setPersonal] = useState<AttendancePayload | null>(null);
   const [overall, setOverall] = useState<AttendanceOverviewPayload | null>(null);
+  const [studentsOverall, setStudentsOverall] =
+    useState<StudentAttendanceOverviewPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -2737,15 +3478,59 @@ export default function AttendanceDashboard() {
     }
   }, []);
 
+  const loadStudentsOverall = useCallback(async (monthKey: string, silent = false) => {
+    const requestId = ++requestSequence.current;
+    if (silent) setRefreshing(true);
+    else setLoading(true);
+    setError("");
+    setErrorCode("");
+
+    try {
+      const response = await fetch(
+        "/api/staff/attendance/students-overview?month=" + encodeURIComponent(monthKey),
+        { cache: "no-store" },
+      );
+      const payload = await response.json();
+      if (!response.ok) {
+        if (requestId === requestSequence.current) {
+          setErrorCode(String(payload?.code || ""));
+        }
+        throw new Error(payload?.error || "Could not load the student overview");
+      }
+      if (requestId !== requestSequence.current) return;
+
+      setStudentsOverall(payload as StudentAttendanceOverviewPayload);
+      setPersonal(null);
+      setOverall(null);
+      setLastUpdated(new Date());
+    } catch (caught) {
+      if (requestId !== requestSequence.current) return;
+      if (!silent) setStudentsOverall(null);
+      setError(
+        caught instanceof Error ? caught.message : "Could not load the student overview",
+      );
+    } finally {
+      if (requestId === requestSequence.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (!isLoaded) return;
 
-    if (isAdmin) loadOverall(month);
+    if (isAdmin && viewMode === "students") loadStudentsOverall(month);
+    else if (isAdmin) loadOverall(month);
     else loadPersonal(month);
-  }, [isAdmin, isLoaded, loadOverall, loadPersonal, month]);
+  }, [isAdmin, isLoaded, loadOverall, loadPersonal, loadStudentsOverall, month, viewMode]);
 
   useEffect(() => {
     autoJumped.current = false;
+  }, [isAdmin]);
+
+  useEffect(() => {
+    setViewMode("staff");
   }, [isAdmin]);
 
   useEffect(() => {
@@ -2753,7 +3538,8 @@ export default function AttendanceDashboard() {
 
     const refresh = () => {
       if (document.visibilityState !== "visible") return;
-      if (isAdmin) loadOverall(month, true);
+      if (isAdmin && viewMode === "students") loadStudentsOverall(month, true);
+      else if (isAdmin) loadOverall(month, true);
       else loadPersonal(month, true);
     };
 
@@ -2766,19 +3552,31 @@ export default function AttendanceDashboard() {
       document.removeEventListener("visibilitychange", refresh);
       window.removeEventListener("focus", refresh);
     };
-  }, [isAdmin, isLoaded, loadOverall, loadPersonal, month]);
+  }, [isAdmin, isLoaded, loadOverall, loadPersonal, loadStudentsOverall, month, viewMode]);
 
   const monthOptions = useMemo(() => {
     const options = new Set<string>([
       month,
       toMonthKey(new Date()),
-      ...(isAdmin ? overall?.availableMonths || [] : personal?.availableMonths || []),
+      ...(isAdmin
+        ? viewMode === "students"
+          ? studentsOverall?.availableMonths || []
+          : overall?.availableMonths || []
+        : personal?.availableMonths || []),
     ]);
     return [...options].sort((first, second) => second.localeCompare(first));
-  }, [isAdmin, month, overall?.availableMonths, personal?.availableMonths]);
+  }, [
+    isAdmin,
+    month,
+    overall?.availableMonths,
+    personal?.availableMonths,
+    studentsOverall?.availableMonths,
+    viewMode,
+  ]);
 
   const refresh = () => {
-    if (isAdmin) loadOverall(month, true);
+    if (isAdmin && viewMode === "students") loadStudentsOverall(month, true);
+    else if (isAdmin) loadOverall(month, true);
     else loadPersonal(month, true);
   };
 
@@ -2825,6 +3623,45 @@ export default function AttendanceDashboard() {
           }
         />
 
+        {isAdmin ? (
+          <div
+            role="tablist"
+            aria-label="Attendance view"
+            className={styles.control + " mb-4 inline-flex gap-1 p-1"}
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === "staff"}
+              onClick={() => setViewMode("staff")}
+              className={
+                "inline-flex min-h-9 items-center gap-2 rounded-lg px-3.5 text-sm font-semibold transition " +
+                (viewMode === "staff"
+                  ? "bg-indigo-600 text-white"
+                  : styles.secondary)
+              }
+            >
+              <Users aria-hidden="true" className="h-4 w-4" />
+              Staff
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === "students"}
+              onClick={() => setViewMode("students")}
+              className={
+                "inline-flex min-h-9 items-center gap-2 rounded-lg px-3.5 text-sm font-semibold transition " +
+                (viewMode === "students"
+                  ? "bg-indigo-600 text-white"
+                  : styles.secondary)
+              }
+            >
+              <GraduationCap aria-hidden="true" className="h-4 w-4" />
+              Students
+            </button>
+          </div>
+        ) : null}
+
         <ErrorBanner error={error} code={errorCode} />
 
         {!isLoaded || loading ? <LoadingState /> : null}
@@ -2843,12 +3680,15 @@ export default function AttendanceDashboard() {
             <MyLeaveConversation reloadKey={leaveThreadKey} />
           </>
         ) : null}
-        {isLoaded && !loading && isAdmin && overall ? (
+        {isLoaded && !loading && isAdmin && viewMode === "staff" && overall ? (
           <AdminDashboard
             data={overall}
             month={month}
             onRefresh={() => loadOverall(month, true)}
           />
+        ) : null}
+        {isLoaded && !loading && isAdmin && viewMode === "students" && studentsOverall ? (
+          <StudentAdminDashboard data={studentsOverall} month={month} />
         ) : null}
       </div>
 
