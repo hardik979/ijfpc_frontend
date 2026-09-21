@@ -1975,12 +1975,49 @@ function BulkExceptionPanel({ onChanged }: { onChanged: () => void }) {
     return false;
   };
 
+  // The weekday and "in N days" / "N days ago" framing is deliberate: a bare
+  // "21 Sept 2026" reads the same whether it is today or three weeks out, and
+  // that is exactly the kind of mistake that put an exception on the wrong
+  // date for every member of staff before.
+  const describeDateContext = (key: string) => {
+    const target = new Date(key + "T00:00:00");
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diffDays = Math.round((target.getTime() - today.getTime()) / 86_400_000);
+    const weekday = target.toLocaleDateString("en-IN", { weekday: "long" });
+    const when =
+      diffDays === 0
+        ? "today"
+        : diffDays === 1
+          ? "tomorrow"
+          : diffDays === -1
+            ? "yesterday"
+            : diffDays > 0
+              ? "in " + diffDays + " days"
+              : Math.abs(diffDays) + " days ago";
+    return weekday + ", " + formatDate(key) + " (" + when + ")";
+  };
+
   const apply = async () => {
     const trimmedReason = reason.trim();
     if (!dateIsValid()) return;
     if (!trimmedReason) {
       setError("A reason is required");
       setResult("");
+      return;
+    }
+
+    if (
+      !window.confirm(
+        "Apply this exception to " +
+          targetLabel +
+          " for " +
+          describeDateContext(dateKey) +
+          "?\n\nReason: " +
+          trimmedReason +
+          "\n\nThis writes to every matching staff member's attendance record — double-check the date before continuing.",
+      )
+    ) {
       return;
     }
 
