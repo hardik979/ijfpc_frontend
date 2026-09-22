@@ -399,6 +399,14 @@ export default function Student360Overview() {
           <div className={`${styles.heroActions} flex items-center gap-2 self-start lg:self-auto`}>
             <AttendanceLink className="min-h-11 rounded-xl" />
             <button
+            type="button"
+              onClick={() => router.push('/interview-questions')}
+              disabled={loading}
+              className={`${styles.glassControl} inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-xl px-3.5 text-sm font-semibold transition-colors duration-200 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60`}
+           >
+            Interview Questions
+            </button>
+            <button
               type="button"
               onClick={() => setRefreshKey((key) => key + 1)}
               disabled={loading}

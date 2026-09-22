@@ -7,6 +7,7 @@ import {
   CheckCircle,
   ArrowLeft,
   Users,
+  MessageSquareText,
 } from "lucide-react";
 import type { Variants } from "framer-motion";
 import Link from "next/link";
@@ -47,14 +48,25 @@ export default function ITJobsFactoryDashboard() {
       gradient: "from-pink-400 to-red-500",
       path: "/studentOverview",
     },
+    {
+      id: "interview-questions",
+      title: "Interview Question Bank",
+      description:
+        "Upload company question sheets and browse them by course, company and round",
+      icon: MessageSquareText,
+      gradient: "from-cyan-500 to-teal-400",
+      path: "/interview-questions",
+    },
   ];
 
   // PREEPLACEMENT_STAFF works only the pre-placement side of the cell, so the
   // post-placement and student overview cards are dropped rather than shown and
-  // refused.
+  // refused. The question bank is interview prep, so it stays.
   const visibleCards =
     role === ROLES.PREEPLACEMENT_STAFF
-      ? reportCards.filter((card) => card.id === "preplacement-data")
+      ? reportCards.filter((card) =>
+          ["preplacement-data", "interview-questions"].includes(card.id),
+        )
       : reportCards;
 
   const containerVariants = {
