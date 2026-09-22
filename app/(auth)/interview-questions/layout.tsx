@@ -1,0 +1,13 @@
+import { currentUser } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
+import { isAllowed, type Role } from "@/lib/rbac";
+
+export default async function Layout({ children }: { children: React.ReactNode }) {
+  const user = await currentUser();
+  if (!user) redirect("/sign-in");
+
+  const role = (user.publicMetadata as { role?: Role })?.role;
+  if (!isAllowed("/interview-questions", role)) redirect("/unauthorized");
+
+  return <>{children}</>;
+}
