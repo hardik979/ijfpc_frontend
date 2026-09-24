@@ -1,6 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useUser } from "@clerk/nextjs";
+import { isAttendanceAdmin } from "./attendanceRoles";
 import {
   AlertCircle,
   ArrowLeft,
@@ -26,6 +30,8 @@ import {
 import { LIVE_LIST_MS, useLiveThread } from "@/lib/hooks/useLiveThread";
 
 const MAX_MESSAGE_LENGTH = 2000;
+// Matches the attendance dashboard's own polling cadence (AttendanceDashboard.tsx).
+const REFRESH_INTERVAL_MS = 60_000;
 
 const formatWhen = (value: string) => {
   const date = new Date(value);
@@ -679,13 +685,10 @@ function ThreadView({
 }
 
 /**
- * The admin's leave inbox.
- *
- * The bell opens the same centred glass panel the staff member writes in, and
- * shows people rather than requests: clicking a name opens that person's whole
- * conversation, where the admin can read the history, decide anything still
- * pending, and reply. Both views re-read themselves on a short interval, so a
- * message that arrives while the panel is open simply appears.
+ * The bell icon that lives in the dashboard header. It is a plain link now,
+ * not a toggle: clicking it navigates to the full Messages page rather than
+ * opening anything on top of the current view. Only the unread badge is
+ * still live here.
  */
 export function LeaveNotificationBell({
   enabled,
@@ -694,13 +697,58 @@ export function LeaveNotificationBell({
   enabled: boolean;
   intervalMs: number;
 }) {
-  const { pending, newSince, refresh, markSeen } = useLeaveNotifications({
-    enabled,
-    intervalMs,
+  const { pending, newSince } = useLeaveNotifications({ enabled, intervalMs });
+
+  if (!enabled) return null;
+
+  return (
+    <Link
+      href="/my-attendance/messages"
+      aria-label={
+        pending
+          ? pending + " leave requests waiting for a decision"
+          : "Leave requests and messages"
+      }
+      title="Leave requests and messages"
+      className={
+        styles.iconButton + " relative flex h-11 w-11 items-center justify-center"
+      }
+    >
+      <Bell aria-hidden="true" className="h-4 w-4" />
+      {pending ? (
+        <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[0.65rem] font-bold tabular-nums text-white">
+          {pending > 99 ? "99+" : pending}
+        </span>
+      ) : null}
+      {!pending && newSince ? (
+        <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-indigo-400" />
+      ) : null}
+    </Link>
+  );
+}
+
+/**
+ * The admin's leave inbox — its own full page, not a popup. Shows people
+ * rather than requests: clicking a name opens that person's whole
+ * conversation, where the admin can read the history, decide anything still
+ * pending, and reply. On a wide screen the list and the open conversation sit
+ * side by side, the way a real inbox does; on a phone, opening a conversation
+ * replaces the list until you go back. Both panes re-read themselves on a
+ * short interval, so a message that arrives while the page is open simply
+ * appears.
+ */
+export function LeaveMessagesPage() {
+  const router = useRouter();
+  const { user, isLoaded } = useUser();
+  const role = String(user?.publicMetadata?.role || "").toUpperCase();
+  const isAdmin = isAttendanceAdmin(role);
+
+  const { pending, refresh, markSeen } = useLeaveNotifications({
+    enabled: isAdmin,
+    intervalMs: REFRESH_INTERVAL_MS,
   });
-  const [open, setOpen] = useState(false);
   const [threads, setThreads] = useState<LeaveThreadSummary[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [active, setActive] = useState<LeaveThreadSummary | null>(null);
   const listStamp = useRef("");
@@ -743,9 +791,11 @@ export function LeaveNotificationBell({
     }
   }, []);
 
-  // The list keeps itself current while the panel is open on it.
+  // The list keeps refreshing even with a conversation open — on a wide
+  // screen both panes are visible together, so the list should never look
+  // stale just because one thread is being read.
   useEffect(() => {
-    if (!open || active) return undefined;
+    if (!isAdmin) return undefined;
 
     loadThreads(false);
     const timer = window.setInterval(() => {
@@ -762,84 +812,119 @@ export function LeaveNotificationBell({
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
     };
-  }, [open, active, loadThreads]);
+  }, [isAdmin, loadThreads]);
 
   useEffect(() => {
-    if (!open) return undefined;
-
+    if (!isAdmin) return;
     markSeen();
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      // Escape steps back through the panel rather than closing it outright.
-      if (active) setActive(null);
-      else setOpen(false);
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, active, markSeen]);
-
-  if (!enabled) return null;
+  }, [isAdmin, markSeen]);
 
   const afterChange = () => {
     loadThreads(true);
     refresh();
   };
 
-  const close = () => {
-    setOpen(false);
-    setActive(null);
-    refresh();
-  };
+  if (isLoaded && !isAdmin) {
+    return (
+      <main className={styles.page}>
+        <div className="mx-auto flex min-h-screen max-w-xl flex-col items-center justify-center px-4 text-center">
+          <span
+            aria-hidden="true"
+            className={styles.glassIconBadge + " flex h-14 w-14 items-center justify-center"}
+          >
+            <ShieldCheck className="h-6 w-6" />
+          </span>
+          <h1 className={styles.primary + " mt-4 text-xl font-bold"}>
+            Messages unavailable
+          </h1>
+          <p className={styles.secondary + " mt-2 text-sm leading-6"}>
+            This page is available to the Attendance Admin and Super Admin roles.
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => {
-          setOpen(true);
-          setActive(null);
-        }}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-label={
-          pending
-            ? pending + " leave requests waiting for a decision"
-            : "Leave requests and messages"
-        }
-        title="Leave requests and messages"
-        className={
-          styles.iconButton + " relative flex h-11 w-11 items-center justify-center"
-        }
-      >
-        <Bell aria-hidden="true" className="h-4 w-4" />
-        {pending ? (
-          <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[0.65rem] font-bold tabular-nums text-white">
-            {pending > 99 ? "99+" : pending}
-          </span>
-        ) : null}
-        {!pending && newSince ? (
-          <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-indigo-400" />
-        ) : null}
-      </button>
+    <main className={styles.page}>
+      <div className="mx-auto flex h-screen max-w-6xl flex-col px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
+        <header className="mb-4 flex shrink-0 items-center justify-between gap-4 sm:mb-6">
+          <div className="flex min-w-0 items-center gap-3.5">
+            <button
+              type="button"
+              onClick={() => router.push("/my-attendance")}
+              className={
+                styles.iconButton + " flex h-11 w-11 shrink-0 items-center justify-center"
+              }
+              aria-label="Back to attendance overview"
+              title="Back to attendance overview"
+            >
+              <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+            </button>
+            <span
+              aria-hidden="true"
+              className={
+                styles.glassIconBadge + " flex h-11 w-11 shrink-0 items-center justify-center"
+              }
+            >
+              <MessagesSquare className="h-5 w-5" />
+            </span>
+            <div className="min-w-0">
+              <h1 className={styles.primary + " truncate text-2xl font-bold sm:text-[1.7rem]"}>
+                Messages
+              </h1>
+              <p className={styles.secondary + " mt-1 text-sm leading-5"}>
+                {pending
+                  ? pending + (pending === 1 ? " request" : " requests") + " waiting for a decision"
+                  : "Nothing waiting for a decision"}
+              </p>
+            </div>
+          </div>
 
-      {open ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Leave requests and messages"
-          className={
-            styles.glassOverlay +
-            " fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center"
-          }
-          onClick={close}
+          <button
+            type="button"
+            onClick={() => loadThreads(false)}
+            disabled={loading}
+            className={
+              styles.iconButton + " flex h-11 w-11 shrink-0 items-center justify-center disabled:opacity-50"
+            }
+            aria-label="Refresh"
+            title="Refresh"
+          >
+            <RefreshCw
+              aria-hidden="true"
+              className={"h-4 w-4 motion-reduce:animate-none" + (loading ? " animate-spin" : "")}
+            />
+          </button>
+        </header>
+
+        {error ? (
+          <p
+            role="alert"
+            className="mb-4 flex shrink-0 items-start gap-2 rounded-xl bg-rose-500/10 px-4 py-3 text-xs font-semibold text-rose-600 dark:text-rose-300"
+          >
+            <AlertCircle aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            {error}
+          </p>
+        ) : null}
+
+        <section
+          aria-label="Conversations"
+          className={styles.glass + " flex min-h-0 flex-1 overflow-hidden lg:flex-row"}
         >
           <div
             className={
-              styles.glassPanel +
-              " flex max-h-[min(38rem,calc(100vh-2rem))] w-full max-w-xl flex-col"
+              (active ? "hidden lg:flex" : "flex") +
+              " min-h-0 w-full flex-col lg:w-[22rem] lg:shrink-0 lg:border-r " +
+              styles.glassDivider
             }
-            onClick={(event) => event.stopPropagation()}
           >
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <ThreadList threads={threads} loading={loading} onOpen={setActive} />
+            </div>
+          </div>
+
+          <div className={(active ? "flex" : "hidden lg:flex") + " min-h-0 flex-1 flex-col"}>
             {active ? (
               <ThreadView
                 employeeId={active.employeeId}
@@ -851,93 +936,25 @@ export function LeaveNotificationBell({
                 onChanged={afterChange}
               />
             ) : (
-              <>
-                <div
-                  className={
-                    styles.glassDivider +
-                    " flex shrink-0 items-start justify-between gap-4 border-b px-5 py-5"
-                  }
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
+                <span
+                  aria-hidden="true"
+                  className={styles.glassIconBadge + " flex h-14 w-14 items-center justify-center"}
                 >
-                  <div className="flex items-center gap-3">
-                    <span
-                      aria-hidden="true"
-                      className={
-                        styles.glassIconBadge +
-                        " flex h-11 w-11 items-center justify-center"
-                      }
-                    >
-                      <MessagesSquare className="h-5 w-5" />
-                    </span>
-                    <div>
-                      <h2 className={styles.primary + " text-base font-bold"}>
-                        Messages
-                      </h2>
-                      <p className={styles.muted + " mt-0.5 text-xs"}>
-                        {pending
-                          ? pending + " waiting for a decision"
-                          : "Nothing waiting for a decision"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => loadThreads(false)}
-                      disabled={loading}
-                      className={
-                        styles.glassChip +
-                        " flex h-9 w-9 items-center justify-center disabled:opacity-50"
-                      }
-                      aria-label="Refresh"
-                    >
-                      <RefreshCw
-                        aria-hidden="true"
-                        className={
-                          "h-3.5 w-3.5 motion-reduce:animate-none" +
-                          (loading ? " animate-spin" : "")
-                        }
-                      />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={close}
-                      className={
-                        styles.glassChip +
-                        " flex h-9 w-9 items-center justify-center"
-                      }
-                      aria-label="Close"
-                    >
-                      <X aria-hidden="true" className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-
-                {error ? (
-                  <p
-                    role="alert"
-                    className="flex shrink-0 items-start gap-2 px-5 py-3 text-xs font-semibold text-rose-500"
-                  >
-                    <AlertCircle
-                      aria-hidden="true"
-                      className="mt-0.5 h-3.5 w-3.5 shrink-0"
-                    />
-                    {error}
-                  </p>
-                ) : null}
-
-                <div className="min-h-0 flex-1 overflow-y-auto">
-                  <ThreadList
-                    threads={threads}
-                    loading={loading}
-                    onOpen={setActive}
-                  />
-                </div>
-              </>
+                  <MessagesSquare className="h-6 w-6" />
+                </span>
+                <p className={styles.primary + " text-sm font-bold"}>
+                  Select a conversation
+                </p>
+                <p className={styles.muted + " max-w-xs text-xs leading-5"}>
+                  Choose someone from the list to read their messages and decide
+                  anything still pending.
+                </p>
+              </div>
             )}
           </div>
-        </div>
-      ) : null}
-    </>
+        </section>
+      </div>
+    </main>
   );
 }

@@ -11,6 +11,7 @@ import {
 import { useUser } from "@clerk/nextjs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useAttendanceRealtime } from "@/lib/hooks/useAttendanceRealtime";
 import {
   AlertCircle,
   ArrowLeft,
@@ -49,6 +50,7 @@ import {
 } from "./LeaveRequests";
 import { LeaveNotificationBell } from "./LeaveNotifications";
 import { useMyLeaveRequests } from "@/lib/hooks/useLeaveRequests";
+import { isAttendanceAdmin } from "./attendanceRoles";
 
 type AttendanceStatus =
   | "present"
@@ -107,7 +109,7 @@ interface LeaveAllowance {
 }
 
 interface AttendancePayload {
-  staff: { employeeId: number; name: string };
+  staff: { employeeId: number; name: string; lastWorkingDate: string | null };
   month: string | null;
   records: AttendanceRecord[];
   summary: AttendanceSummary;
@@ -239,17 +241,7 @@ const readFilterableStatus = (value: string | undefined): FilterableStatus | "" 
 type MetricTone = "accent" | "teal" | "amber" | "rose" | "neutral";
 type BulkExceptionTarget = "all" | "half" | "absent";
 
-const ATTENDANCE_ADMIN_ROLE = "ATTENDANCE_ADMIN";
-const SUPER_ADMIN_ROLE = "SUPER_ADMIN";
-const ADMIN_ROLE = "ADMIN";
 const REFRESH_INTERVAL_MS = 60_000;
-
-// Roles that get the admin views. SUPER_ADMIN and ADMIN are console roles that
-// open the attendance admin section from their own dashboards, and hold the
-// same attendance scopes server-side (see the LMS lib/staffAttendancePolicy.js).
-const ADMIN_ROLES = [ATTENDANCE_ADMIN_ROLE, SUPER_ADMIN_ROLE, ADMIN_ROLE];
-
-const isAttendanceAdmin = (role: string) => ADMIN_ROLES.includes(role);
 
 const STATUS_LABEL: Record<AttendanceStatus, string> = {
   present: "Present",
@@ -2875,6 +2867,108 @@ function UnauthorizedState({ adminOnly = true }: { adminOnly?: boolean }) {
   );
 }
 
+/**
+ * Set or clear when someone left. Does not affect `active` or hide their
+ * history — it only tells the backend where to stop treating a missing
+ * punch as an absence (see fillMissingDays in lib/staffAttendance.js).
+ */
+function LastWorkingDateControl({
+  lastWorkingDate,
+  onChange,
+  saving,
+}: {
+  lastWorkingDate: string | null;
+  onChange: (nextDate: string | null) => void;
+  saving: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(lastWorkingDate || "");
+
+  useEffect(() => {
+    setDraft(lastWorkingDate || "");
+  }, [lastWorkingDate]);
+
+  if (!editing) {
+    return (
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {lastWorkingDate ? (
+          <span className="inline-flex min-h-7 items-center gap-1.5 rounded-full border border-rose-300/60 bg-rose-50/75 px-2.5 text-xs font-semibold text-rose-800 dark:border-rose-400/25 dark:bg-rose-400/10 dark:text-rose-300">
+            Last working date: {formatDate(lastWorkingDate)}
+          </span>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className={
+            styles.secondary +
+            " inline-flex min-h-7 items-center px-1 text-xs font-semibold hover:underline"
+          }
+        >
+          {lastWorkingDate ? "Change" : "Mark as no longer working here"}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <label className="sr-only" htmlFor="last-working-date-input">
+        Last working date
+      </label>
+      <input
+        id="last-working-date-input"
+        type="date"
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        disabled={saving}
+        className={
+          styles.control + " h-9 px-2.5 text-sm outline-none disabled:opacity-60"
+        }
+      />
+      <button
+        type="button"
+        disabled={saving}
+        onClick={() => {
+          onChange(draft || null);
+          setEditing(false);
+        }}
+        className="inline-flex min-h-8 items-center rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-wait disabled:opacity-60"
+      >
+        Save
+      </button>
+      {lastWorkingDate ? (
+        <button
+          type="button"
+          disabled={saving}
+          onClick={() => {
+            onChange(null);
+            setEditing(false);
+          }}
+          className={
+            styles.secondary +
+            " inline-flex min-h-8 items-center px-2 text-xs font-semibold hover:underline disabled:opacity-60"
+          }
+        >
+          Clear
+        </button>
+      ) : null}
+      <button
+        type="button"
+        onClick={() => {
+          setDraft(lastWorkingDate || "");
+          setEditing(false);
+        }}
+        className={
+          styles.secondary +
+          " inline-flex min-h-8 items-center px-2 text-xs font-semibold hover:underline"
+        }
+      >
+        Cancel
+      </button>
+    </div>
+  );
+}
+
 export function StaffAttendanceDetailPage({
   employeeId,
   initialMonth,
@@ -2903,6 +2997,7 @@ export function StaffAttendanceDetailPage({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [savingDate, setSavingDate] = useState("");
+  const [savingLastWorkingDate, setSavingLastWorkingDate] = useState(false);
   const [error, setError] = useState("");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const requestSequence = useRef(0);
@@ -2989,6 +3084,43 @@ export function StaffAttendanceDetailPage({
     [month, savingDate, validEmployeeId],
   );
 
+  const updateLastWorkingDate = useCallback(
+    async (nextDate: string | null) => {
+      if (savingLastWorkingDate) return;
+      setSavingLastWorkingDate(true);
+      setError("");
+
+      try {
+        const response = await fetch(
+          "/api/staff/attendance/staff/" +
+            validEmployeeId +
+            "/last-working-date",
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ lastWorkingDate: nextDate }),
+          },
+        );
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload?.error || "Could not update the last working date");
+        }
+        setData((current) =>
+          current ? { ...current, staff: payload.staff } : current,
+        );
+      } catch (caught) {
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "Could not update the last working date",
+        );
+      } finally {
+        setSavingLastWorkingDate(false);
+      }
+    },
+    [savingLastWorkingDate, validEmployeeId],
+  );
+
   useEffect(() => {
     if (!isLoaded) return;
     if (!isAdmin) {
@@ -3004,6 +3136,32 @@ export function StaffAttendanceDetailPage({
       return;
     }
     loadStaff(month);
+  }, [isAdmin, isLoaded, loadStaff, month, validEmployeeId]);
+
+  useAttendanceRealtime(
+    () => loadStaff(month, true),
+    {
+      enabled: isLoaded && isAdmin && Boolean(validEmployeeId),
+      shouldRefetch: (payload) => payload.employeeId === validEmployeeId,
+    },
+  );
+
+  useEffect(() => {
+    if (!isLoaded || !isAdmin || !validEmployeeId) return;
+
+    const refresh = () => {
+      if (document.visibilityState !== "visible") return;
+      loadStaff(month, true);
+    };
+    const timer = window.setInterval(refresh, REFRESH_INTERVAL_MS);
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("focus", refresh);
+
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("focus", refresh);
+    };
   }, [isAdmin, isLoaded, loadStaff, month, validEmployeeId]);
 
   const monthOptions = useMemo(() => {
@@ -3063,6 +3221,13 @@ export function StaffAttendanceDetailPage({
                   ? "Employee ID " + data.staff.employeeId + " | Individual attendance record"
                   : "Individual staff information and attendance record"}
               </p>
+              {data ? (
+                <LastWorkingDateControl
+                  lastWorkingDate={data.staff.lastWorkingDate}
+                  onChange={updateLastWorkingDate}
+                  saving={savingLastWorkingDate}
+                />
+              ) : null}
             </div>
           </div>
 
@@ -3184,6 +3349,14 @@ export function StudentAttendanceDetailPage({
     }
     loadStudent(month);
   }, [isAdmin, isLoaded, loadStudent, month, validClerkId]);
+
+  useAttendanceRealtime(
+    () => loadStudent(month, true),
+    {
+      enabled: isLoaded && isAdmin && Boolean(validClerkId),
+      shouldRefetch: (payload) => payload.clerkId === validClerkId,
+    },
+  );
 
   // Same auto-refresh as the staff detail page: a direct MongoDB edit has
   // nothing else to invalidate, so this just asks again periodically.
@@ -3533,26 +3706,32 @@ export default function AttendanceDashboard() {
     setViewMode("staff");
   }, [isAdmin]);
 
+  const refresh = useCallback(() => {
+    if (isAdmin && viewMode === "students") loadStudentsOverall(month, true);
+    else if (isAdmin) loadOverall(month, true);
+    else loadPersonal(month, true);
+  }, [isAdmin, loadOverall, loadPersonal, loadStudentsOverall, month, viewMode]);
+
+  useAttendanceRealtime(refresh, { enabled: isLoaded });
+
   useEffect(() => {
     if (!isLoaded) return;
 
-    const refresh = () => {
+    const refreshWhenVisible = () => {
       if (document.visibilityState !== "visible") return;
-      if (isAdmin && viewMode === "students") loadStudentsOverall(month, true);
-      else if (isAdmin) loadOverall(month, true);
-      else loadPersonal(month, true);
+      refresh();
     };
 
-    const timer = window.setInterval(refresh, REFRESH_INTERVAL_MS);
-    document.addEventListener("visibilitychange", refresh);
-    window.addEventListener("focus", refresh);
+    const timer = window.setInterval(refreshWhenVisible, REFRESH_INTERVAL_MS);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    window.addEventListener("focus", refreshWhenVisible);
 
     return () => {
       window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", refresh);
-      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      window.removeEventListener("focus", refreshWhenVisible);
     };
-  }, [isAdmin, isLoaded, loadOverall, loadPersonal, loadStudentsOverall, month, viewMode]);
+  }, [isLoaded, refresh]);
 
   const monthOptions = useMemo(() => {
     const options = new Set<string>([
@@ -3573,12 +3752,6 @@ export default function AttendanceDashboard() {
     studentsOverall?.availableMonths,
     viewMode,
   ]);
-
-  const refresh = () => {
-    if (isAdmin && viewMode === "students") loadStudentsOverall(month, true);
-    else if (isAdmin) loadOverall(month, true);
-    else loadPersonal(month, true);
-  };
 
   // Staff-side leave. Loaded for anyone on the personal view; an account with
   // no employee record simply gets an empty list, and the panel hides itself.
