@@ -140,6 +140,8 @@ export async function PATCH(
         approvedLeave: input.approvedLeave,
         // Mandatory for an exception; the LMS rejects the call without it.
         reason: String(input?.reason || ""),
+        // Mandatory when approving leave.
+        leaveReason: String(input?.leaveReason || ""),
       }),
       cache: "no-store",
     });
