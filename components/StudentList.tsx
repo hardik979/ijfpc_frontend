@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useAttendanceEntry } from "@/components/AttendanceLink";
 import ZoneStudentAnalytics from "./ZoneStudentAnalytics";
+import PlacedStudentsList from "./PlacedStudentsList";
 import {
   Bar,
   BarChart,
@@ -179,8 +180,11 @@ const StudentsListPage = () => {
   const [courseFilter, setCourseFilter] = useState<string>("all");
   const [placementUnlocked, setPlacementUnlocked] = useState(false);
 
+  const [placedStudentCount, setPlacedStudentCount] = useState<number | null>(null);
+
   // Whether we are in the "ALL students" drill-down view (any of the 3 top cards)
   const isAllView = selectedCourseId === "ALL";
+  const isPlacedView = selectedCourseId === "PLACED";
   // Active students view = ALL view filtered to not-placed (entered via "Active Students" card)
   const isActiveView = isAllView && placedFilter === "notplaced";
   // Pause is a separate feature: its column shows only in the All Enrolled
@@ -230,6 +234,44 @@ const StudentsListPage = () => {
     [allEnrolledStudents]
   );
 
+  useEffect(() => {
+    let active = true;
+
+    const getPlacedStudentCount = async () => {
+      try {
+        const response = await fetch(
+          `${API_LMS_URL}/api/users/get-placed-students-count`,
+          {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": process.env.NEXT_PUBLIC_STUDENT_INFO_API_KEY || "",
+            },
+            cache: "no-store",
+          }
+        );
+        const data: { count?: number; message?: string } = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || "Failed to fetch placed student count");
+        }
+
+        if (active) {
+          setPlacedStudentCount(
+            typeof data.count === "number" ? data.count : 0
+          );
+        }
+      } catch (error) {
+        console.error("getPlacedStudentCount error:", error);
+      }
+    };
+
+    void getPlacedStudentCount();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   // Students of the selected course, derived from the same source the course
   // tiles use so the drill-down always matches the tile count. Derived (not
   // state) so zone counts are correct on first render after a course click.
@@ -250,10 +292,13 @@ const StudentsListPage = () => {
     [activeStudentsBase]
   );
 
-  const totalEnrolled = activeStudentsCount + placedStudentsCount;
+  // Prefer the placed-students API count (same number the Placed card shows);
+  // fall back to the locally derived count until it loads.
+  const placedForRate = placedStudentCount ?? placedStudentsCount;
+  const totalEnrolled = activeStudentsCount + placedForRate;
   const placementRate =
     totalEnrolled > 0
-      ? `${((placedStudentsCount / totalEnrolled) * 100).toFixed(1)}%`
+      ? `${((placedForRate / totalEnrolled) * 100).toFixed(1)}%`
       : "—";
 
   // Only elapsed months for the current year; the current month renders as
@@ -649,7 +694,7 @@ const StudentsListPage = () => {
   // Course-specific pagination — a pure client-side slice of the already-fetched
   // allEnrolledStudents (via courseStudents), so it never touches the network.
   useEffect(() => {
-    if (!selectedCourseId || selectedCourseId === "ALL") return;
+    if (!selectedCourseId || selectedCourseId === "ALL" || isPlacedView) return;
     let filtered = courseStudents;
     if (appliedSearch.trim()) {
       const q = appliedSearch.trim().toLowerCase();
@@ -664,7 +709,7 @@ const StudentsListPage = () => {
     setStudents(sorted.slice(start, start + limit));
     setTotal(sorted.length);
     setLoading(false);
-  }, [selectedCourseId, courseStudents, appliedSearch, page, limit]);
+  }, [selectedCourseId, isPlacedView, courseStudents, appliedSearch, page, limit]);
 
   useEffect(() => {
     try {
@@ -838,11 +883,7 @@ const StudentsListPage = () => {
             <h1 className="text-2xl font-semibold tracking-tight text-[var(--so-text-primary)]">
               Students Overview
             </h1>
-            <p className="mt-1 text-sm text-[var(--so-text-secondary)]">
-              {totalEnrolled > 0
-                ? `${totalEnrolled + pausedStudentsCount} students · ${activeStudentsCount} active · ${pausedStudentsCount} paused · ${placedStudentsCount} placed`
-                : "View all students, search them, and open complete details"}
-            </p>
+            
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -972,11 +1013,7 @@ const StudentsListPage = () => {
 
             <button
               onClick={() => {
-                setSelectedCourseId("ALL");
-                setPlacedFilter("placed");
-                setPage(1);
-                setSearchDraft("");
-                setAppliedSearch("");
+                setSelectedCourseId("PLACED");
               }}
               className="rounded-xl border border-[var(--so-border)] bg-[var(--so-bg-card)] p-4 text-left transition hover:border-[#8b5cf6]/70 hover:bg-[var(--so-bg-hover)]"
             >
@@ -989,7 +1026,7 @@ const StudentsListPage = () => {
                 </span>
               </div>
               <p className="mt-1 text-3xl font-bold text-[var(--so-text-primary)]">
-                {placedStudentsCount}
+                {placedStudentCount ?? "—"}
               </p>
               <p className="mt-1 text-xs text-[var(--so-text-secondary)]">all-time placements</p>
             </button>
@@ -1005,7 +1042,7 @@ const StudentsListPage = () => {
               </div>
               <p className="mt-1 text-3xl font-bold text-[var(--so-text-primary)]">{placementRate}</p>
               <p className="mt-1 text-xs text-[var(--so-text-secondary)]">
-                {placedStudentsCount} of {totalEnrolled} students
+                {placedForRate} of {totalEnrolled} students
               </p>
             </div>
 
@@ -1173,8 +1210,12 @@ const StudentsListPage = () => {
           </div>
         )}
 
+        {isPlacedView && (
+          <PlacedStudentsList onBack={() => setSelectedCourseId("")} />
+        )}
+
         {/* ── Drill-down (course or ALL) ── */}
-        {selectedCourseId && (
+        {selectedCourseId && !isPlacedView && (
           <>
             <div className="mb-6 flex items-center justify-between">
               <button
