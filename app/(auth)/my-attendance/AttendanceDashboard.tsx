@@ -80,6 +80,7 @@ interface AttendanceRecord {
     approvedLeave: boolean;
     leaveLimitExceeded: boolean;
     reason?: string;
+    leaveReason?: string;
   };
 }
 
@@ -810,12 +811,14 @@ type AttendanceAdjustmentInput = {
   exception: boolean;
   approvedLeave: boolean;
   reason?: string;
+  leaveReason?: string;
 };
 
 const adjustmentFor = (record: AttendanceRecord): AttendanceAdjustmentInput => ({
   exception: record.adjustment?.exception === true,
   approvedLeave: record.adjustment?.approvedLeave === true,
   reason: record.adjustment?.reason || "",
+  leaveReason: record.adjustment?.leaveReason || "",
 });
 
 function AttendanceAdjustmentMenu({
@@ -832,11 +835,42 @@ function AttendanceAdjustmentMenu({
   onChange: (dateKey: string, adjustment: AttendanceAdjustmentInput) => void;
 }) {
   const adjustment = adjustmentFor(record);
-  // Applying an exception asks for a reason first; clearing one does not, and
-  // approved leave is a plain toggle.
+  // Applying an exception or approving leave asks for a reason first;
+  // clearing either one does not.
   const [reasonOpen, setReasonOpen] = useState(false);
   const [reason, setReason] = useState(adjustment.reason || "");
   const [reasonError, setReasonError] = useState("");
+  const [leaveReasonOpen, setLeaveReasonOpen] = useState(false);
+  const [leaveReason, setLeaveReason] = useState(adjustment.leaveReason || "");
+  const [leaveReasonError, setLeaveReasonError] = useState("");
+
+  const applyLeave = () => {
+    const trimmed = leaveReason.trim();
+    if (!trimmed) {
+      setLeaveReasonError("A reason is required");
+      return;
+    }
+    setLeaveReasonError("");
+    setLeaveReasonOpen(false);
+    onChange(record.dateKey, {
+      ...adjustment,
+      approvedLeave: true,
+      leaveReason: trimmed,
+    });
+  };
+
+  const toggleLeave = () => {
+    if (adjustment.approvedLeave) {
+      onChange(record.dateKey, {
+        ...adjustment,
+        approvedLeave: false,
+        leaveReason: "",
+      });
+      return;
+    }
+    setLeaveReasonError("");
+    setLeaveReasonOpen((open) => !open);
+  };
 
   const applyException = () => {
     const trimmed = reason.trim();
@@ -967,12 +1001,8 @@ function AttendanceAdjustmentMenu({
           type="button"
           disabled={disabled}
           aria-pressed={adjustment.approvedLeave}
-          onClick={() =>
-            onChange(record.dateKey, {
-              ...adjustment,
-              approvedLeave: !adjustment.approvedLeave,
-            })
-          }
+          aria-expanded={leaveReasonOpen}
+          onClick={toggleLeave}
           className={
             styles.divider +
             " flex min-h-10 w-full items-center gap-2 px-3 text-left text-xs font-semibold outline-none hover:bg-indigo-500/[0.06] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400/70 disabled:cursor-wait disabled:opacity-60"
@@ -991,6 +1021,54 @@ function AttendanceAdjustmentMenu({
           </span>
           <span className={styles.primary}>Approved Leave</span>
         </button>
+
+        {leaveReasonOpen && !adjustment.approvedLeave ? (
+          <div className={styles.divider + " border-t px-3 py-2.5"}>
+            <label
+              htmlFor={"leave-reason-" + record.dateKey}
+              className={styles.secondary + " block text-[0.7rem] font-semibold"}
+            >
+              Reason <span className="text-rose-500">*</span>
+            </label>
+            <textarea
+              id={"leave-reason-" + record.dateKey}
+              rows={2}
+              value={leaveReason}
+              maxLength={300}
+              onChange={(event) => setLeaveReason(event.target.value)}
+              placeholder="Why is this leave approved?"
+              className={
+                styles.control +
+                " mt-1.5 w-full resize-none px-2 py-1.5 text-xs outline-none"
+              }
+            />
+            {leaveReasonError ? (
+              <p className="mt-1 text-[0.7rem] font-semibold text-rose-500">
+                {leaveReasonError}
+              </p>
+            ) : null}
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={applyLeave}
+                className="inline-flex min-h-8 items-center rounded-md bg-indigo-600 px-3 text-xs font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-wait disabled:opacity-60"
+              >
+                Approve leave
+              </button>
+              <button
+                type="button"
+                onClick={() => setLeaveReasonOpen(false)}
+                className={
+                  styles.secondary +
+                  " inline-flex min-h-8 items-center rounded-md px-2 text-xs font-semibold"
+                }
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
     </details>
   );
@@ -1006,6 +1084,9 @@ const adjustmentNote = (record: AttendanceRecord) => {
   }
   if (record.adjustment?.leaveLimitExceeded) {
     return "Approved leave limit exceeded";
+  }
+  if (record.adjustment?.approvedLeave && record.adjustment.leaveReason) {
+    return "Leave: " + record.adjustment.leaveReason;
   }
   return null;
 };
@@ -3062,6 +3143,7 @@ export function StaffAttendanceDetailPage({
               exception: adjustment.exception,
               approvedLeave: adjustment.approvedLeave,
               reason: adjustment.reason || "",
+              leaveReason: adjustment.leaveReason || "",
             }),
           },
         );
