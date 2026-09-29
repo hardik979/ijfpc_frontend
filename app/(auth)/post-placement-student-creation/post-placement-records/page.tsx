@@ -84,6 +84,7 @@ interface PostPlacementOffer {
   clerkId?: string;
   offerDate?: string;
   joiningDate?: string;
+  nextDueDate?: string | null;
   companyName?: string;
   location?: string;
   hr?: HRContact;
@@ -294,6 +295,7 @@ const PostPlacementDashboard: React.FC = () => {
       "Package (LPA)",
       "Offer Date",
       "Joining Date",
+      "Next Due Date",
       "HR Name",
       "HR Contact",
       "HR Email",
@@ -340,6 +342,7 @@ const PostPlacementDashboard: React.FC = () => {
         s.packageLPA,
         toYMDCsv(s.offerDate),
         toYMDCsv(s.joiningDate),
+        toYMDCsv(s.nextDueDate),
         s.hr?.name,
         s.hr?.contactNumber,
         s.hr?.email,
@@ -740,6 +743,11 @@ const PostPlacementDashboard: React.FC = () => {
                             <p className="text-xs text-gray-500">
                               {isPaid ? "Paid" : "Remaining"}
                             </p>
+                            {student.nextDueDate && (
+                              <p className="mt-1 text-[11px] font-medium text-indigo-600">
+                                Due {formatDate(student.nextDueDate)}
+                              </p>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1000,13 +1008,6 @@ const StudentDetailPanel: React.FC<StudentDetailPanelProps> = ({
       </div>
 
       <div className="p-6 space-y-6">
-        <OfferLetterUpload
-          file={null}
-          existingUrl={student.offerLetterUrl}
-          existingName={student.offerLetterOriginalName}
-          uploadedAt={student.offerLetterUploadedAt}
-          readOnly
-        />
         {/* Basic Details */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
@@ -1068,6 +1069,16 @@ const StudentDetailPanel: React.FC<StudentDetailPanelProps> = ({
                 </label>
                 <p className="text-gray-900">
                   {formatDate(student.joiningDate || "")}
+                </p>
+              </div>
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                <label className="text-sm font-medium text-amber-800">
+                  Next Due Date
+                </label>
+                <p className="font-semibold text-amber-950">
+                  {student.nextDueDate
+                    ? formatDate(student.nextDueDate)
+                    : "Not scheduled"}
                 </p>
               </div>
             </div>
@@ -1521,6 +1532,14 @@ const StudentDetailPanel: React.FC<StudentDetailPanelProps> = ({
             </p>
           )}
         </div>
+
+        <OfferLetterUpload
+          file={null}
+          existingUrl={student.offerLetterUrl}
+          existingName={student.offerLetterOriginalName}
+          uploadedAt={student.offerLetterUploadedAt}
+          readOnly
+        />
       </div>
     </div>
   );
@@ -1918,7 +1937,7 @@ const EditForm: React.FC<EditFormProps> = ({ formData, setFormData }) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Offer Date
@@ -1948,6 +1967,22 @@ const EditForm: React.FC<EditFormProps> = ({ formData, setFormData }) => {
             onChange={(e) => updateField("joiningDate", e.target.value)}
             className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Next Due Date
+          </label>
+          <input
+            type="date"
+            value={toYMD(formData.nextDueDate)}
+            onChange={(e) =>
+              updateField("nextDueDate", e.target.value || null)
+            }
+            className="w-full px-3 py-2 border border-amber-200 bg-amber-50/60 rounded-lg text-gray-900 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+          />
+          <p className="mt-1.5 text-xs text-gray-500">
+            Leave empty when no payment follow-up is scheduled.
+          </p>
         </div>
       </div>
 
