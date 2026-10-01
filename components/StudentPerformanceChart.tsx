@@ -38,6 +38,9 @@ export interface PerformanceSource {
       startedAt?: string | null;
       percentage?: number;
       totalQuestions?: number;
+      /** Backend verdict on whether Vapi returned anything gradable. */
+      scored?: boolean;
+      interviewType?: string;
       summary?: string;
       feedback?: string;
     }[];
@@ -161,10 +164,21 @@ function collectScores(src: PerformanceSource | null | undefined): ScorePoint[] 
 
   for (const m of src.mockInterviewData?.attempts ?? []) {
     const at = validDate(m.date || m.createdAt || m.startedAt);
+    // `scored` covers every score shape the backend reads (summary line,
+    // structured rubric, readiness %); older responses without it fall back
+    // to the summary-line check.
     const text = (m.feedback || m.summary || "").trim().toLowerCase();
-    const graded = text.length > 0 && text !== NO_VAPI_SUMMARY;
-    if (!at || !graded || !m.totalQuestions || typeof m.percentage !== "number") continue;
-    points.push({ category: "mock", at, pct: clampPct(m.percentage) });
+    const graded =
+      typeof m.scored === "boolean"
+        ? m.scored
+        : text.length > 0 && text !== NO_VAPI_SUMMARY && !!m.totalQuestions;
+    if (!at || !graded || typeof m.percentage !== "number") continue;
+    // Older records on the "ai-hr" track are AI HR interviews, not mocks —
+    // the same split the Results page makes.
+    const category: Category = String(m.interviewType ?? "").toLowerCase().includes("ai-hr")
+      ? "aiCall"
+      : "mock";
+    points.push({ category, at, pct: clampPct(m.percentage) });
   }
 
   for (const c of src.callingAgentData ?? []) {
