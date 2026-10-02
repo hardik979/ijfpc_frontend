@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import StudentPerformanceChart from "./StudentPerformanceChart";
 
 const API_LMS_URL = process.env.NEXT_PUBLIC_LMS_URL;
 
@@ -143,6 +144,14 @@ interface ApiResponse {
    * The backend has always returned it; the dashboard just never read it.
    */
   callingAgentData?: AiCallRecord[];
+  megaTestData?: {
+    attempts?: {
+      percentage?: number;
+      obtainedMarks?: number;
+      totalMarks?: number;
+      evaluatedAt?: string | null;
+    }[];
+  };
 }
 
 interface Grade {
@@ -348,6 +357,9 @@ export default function StudentDashboard() {
   const [month, setMonth] = useState<number | null>(null);
   const [year, setYear] = useState<number | null>(null);
   const [data, setData] = useState<ApiResponse | null>(null);
+  // The performance chart has its own weekly/monthly/all-time range, so it needs
+  // the unfiltered response even while the month/year filter narrows `data`.
+  const [allTimeData, setAllTimeData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeModal, setActiveModal] = useState<ModalType>(null);
@@ -519,6 +531,7 @@ export default function StudentDashboard() {
       }
 
       setData(json);
+      if (!(filter?.month && filter?.year)) setAllTimeData(json);
     } catch (err: any) {
       console.error("fetchStudentDetails error:", err);
       setError(err.message || "Something went wrong");
@@ -933,6 +946,12 @@ export default function StudentDashboard() {
                 <InfoCard label="Course" value={data.student?.courseName} />
               </div>
             </div>
+
+            {/* Overall performance trend (independent of the month filter) */}
+            <StudentPerformanceChart
+              data={allTimeData}
+              studentName={allTimeData?.student?.fullName}
+            />
 
             {/* Quiz Performance */}
             <div>
