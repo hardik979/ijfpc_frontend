@@ -1,5 +1,5 @@
 "use client";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
 import {
@@ -77,6 +77,12 @@ interface Installment {
   note?: string;
 }
 
+interface DueDate {
+  _id?: string;
+  label: string;
+  dueDate: string;
+}
+
 interface PostPlacementOffer {
   _id: string;
   studentName: string;
@@ -85,6 +91,7 @@ interface PostPlacementOffer {
   offerDate?: string;
   joiningDate?: string;
   nextDueDate?: string | null;
+  dueDates?: DueDate[];
   companyName?: string;
   location?: string;
   hr?: HRContact;
@@ -105,6 +112,7 @@ interface PostPlacementOffer {
   offerLetterMimeType?: string;
   offerLetterSize?: number;
   offerLetterUploadedAt?: string;
+  offerLetterStatus?: "PENDING" | "RECEIVED";
 }
 
 interface LinkableStudent {
@@ -192,6 +200,20 @@ const getInitials = (name: string): string =>
     .join("")
     .toUpperCase() || "?";
 
+const toMonthKey = (value?: string | null): string => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 7);
+};
+
+const getStudentScheduleDates = (student: PostPlacementOffer): string[] =>
+  [
+    ...(student.installments || []).map((installment) => installment.date),
+    ...(student.dueDates || []).map((dueDate) => dueDate.dueDate),
+    ...(student.nextDueDate ? [student.nextDueDate] : []),
+  ].filter(Boolean);
 const PostPlacementDashboard: React.FC = () => {
   const router = useRouter();
   const [students, setStudents] = useState<PostPlacementOffer[]>([]);
@@ -202,6 +224,7 @@ const PostPlacementDashboard: React.FC = () => {
   const [feesFilter, setFeesFilter] = useState<"all" | "remaining" | "paid">(
     "all",
   );
+  const [dueMonthFilter, setDueMonthFilter] = useState("all");
   const [selectedStudent, setSelectedStudent] =
     useState<PostPlacementOffer | null>(null);
   const [isEditing, setIsEditing] = useState<boolean>(false);
@@ -244,11 +267,28 @@ const PostPlacementDashboard: React.FC = () => {
         (feesFilter === "remaining" && hasRemainingFee) ||
         (feesFilter === "paid" && !hasRemainingFee);
 
-      return matchesSearch && matchesFeesFilter;
+      const matchesDueMonth =
+        dueMonthFilter === "all" ||
+        getStudentScheduleDates(student).some(
+          (date) => toMonthKey(date) === dueMonthFilter,
+        );
+
+      return matchesSearch && matchesFeesFilter && matchesDueMonth;
     });
     setFilteredStudents(filtered);
-  }, [searchTerm, students, feesFilter]);
+  }, [searchTerm, students, feesFilter, dueMonthFilter]);
 
+  const dueMonthOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          students.flatMap((student) =>
+            getStudentScheduleDates(student).map(toMonthKey).filter(Boolean),
+          ),
+        ),
+      ).sort(),
+    [students],
+  );
   const formatCurrency = (amount: number): string => {
     return new Intl.NumberFormat("en-IN", {
       style: "currency",
@@ -296,6 +336,8 @@ const PostPlacementDashboard: React.FC = () => {
       "Offer Date",
       "Joining Date",
       "Next Due Date",
+      "Scheduled Due Dates",
+      "Offer Letter Status",
       "HR Name",
       "HR Contact",
       "HR Email",
@@ -343,6 +385,10 @@ const PostPlacementDashboard: React.FC = () => {
         toYMDCsv(s.offerDate),
         toYMDCsv(s.joiningDate),
         toYMDCsv(s.nextDueDate),
+        (s.dueDates || [])
+          .map((dueDate) => dueDate.label + ": " + toYMDCsv(dueDate.dueDate))
+          .join(" ;; "),
+        s.offerLetterStatus || (s.offerLetterUrl ? "RECEIVED" : "PENDING"),
         s.hr?.name,
         s.hr?.contactNumber,
         s.hr?.email,
@@ -680,6 +726,24 @@ const PostPlacementDashboard: React.FC = () => {
                     </button>
                   ))}
                 </div>
+                <label className="mt-3 block text-xs font-semibold text-gray-600">
+                  Payment / due month
+                  <select
+                    value={dueMonthFilter}
+                    onChange={(event) => setDueMonthFilter(event.target.value)}
+                    className="mt-1.5 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+                  >
+                    <option value="all">All payment and due months</option>
+                    {dueMonthOptions.map((month) => (
+                      <option key={month} value={month}>
+                        {new Date(month + "-01T00:00:00").toLocaleDateString(
+                          "en-IN",
+                          { month: "long", year: "numeric" },
+                        )}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <p className="mt-3 text-xs font-medium text-gray-500">
                   {filteredStudents.length}{" "}
                   {filteredStudents.length === 1 ? "student" : "students"}
@@ -1071,15 +1135,40 @@ const StudentDetailPanel: React.FC<StudentDetailPanelProps> = ({
                   {formatDate(student.joiningDate || "")}
                 </p>
               </div>
+              <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2">
+                <label className="text-sm font-medium text-indigo-800">
+                  Offer Letter
+                </label>
+                <p className="font-semibold text-indigo-950">
+                  {student.offerLetterStatus ||
+                    (student.offerLetterUrl ? "RECEIVED" : "PENDING")}
+                </p>
+              </div>
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
                 <label className="text-sm font-medium text-amber-800">
-                  Next Due Date
+                  Installment due dates
                 </label>
-                <p className="font-semibold text-amber-950">
-                  {student.nextDueDate
-                    ? formatDate(student.nextDueDate)
-                    : "Not scheduled"}
-                </p>
+                <div className="mt-1.5 space-y-1.5">
+                  {(student.dueDates || []).length ? (
+                    student.dueDates?.map((dueDate) => (
+                      <p
+                        key={dueDate._id || dueDate.label + dueDate.dueDate}
+                        className="flex items-center justify-between gap-3 text-sm text-amber-950"
+                      >
+                        <span>{dueDate.label}</span>
+                        <span className="font-semibold">
+                          {formatDate(dueDate.dueDate)}
+                        </span>
+                      </p>
+                    ))
+                  ) : student.nextDueDate ? (
+                    <p className="font-semibold text-amber-950">
+                      {formatDate(student.nextDueDate)}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-amber-900">Not scheduled</p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -1880,6 +1969,20 @@ const EditForm: React.FC<EditFormProps> = ({ formData, setFormData }) => {
     const local = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000);
     return local.toISOString().slice(0, 10);
   };
+  const dueDates: DueDate[] =
+    formData.dueDates && formData.dueDates.length > 0
+      ? formData.dueDates
+      : formData.nextDueDate
+        ? [{ label: "Next installment", dueDate: formData.nextDueDate }]
+        : [];
+
+  const updateDueDates = (nextDueDates: DueDate[]) => {
+    setFormData((current) => ({
+      ...current,
+      dueDates: nextDueDates,
+      nextDueDate: null,
+    }));
+  };
 
   return (
     <div className="space-y-6">
@@ -1937,6 +2040,30 @@ const EditForm: React.FC<EditFormProps> = ({ formData, setFormData }) => {
         </div>
       </div>
 
+      <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
+        <label className="block text-sm font-semibold text-gray-800">
+          Offer letter status
+        </label>
+        <select
+          value={
+            formData.offerLetterStatus ||
+            (formData.offerLetterUrl ? "RECEIVED" : "PENDING")
+          }
+          onChange={(event) =>
+            updateField(
+              "offerLetterStatus",
+              event.target.value as "PENDING" | "RECEIVED",
+            )
+          }
+          className="mt-2 w-full max-w-sm rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm font-medium text-gray-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+        >
+          <option value="PENDING">Offer letter pending</option>
+          <option value="RECEIVED">Offer letter received</option>
+        </select>
+        <p className="mt-1.5 text-xs text-gray-500">
+          Uploading an offer letter automatically marks this as received.
+        </p>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1968,21 +2095,87 @@ const EditForm: React.FC<EditFormProps> = ({ formData, setFormData }) => {
             className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Next Due Date
-          </label>
-          <input
-            type="date"
-            value={toYMD(formData.nextDueDate)}
-            onChange={(e) =>
-              updateField("nextDueDate", e.target.value || null)
+      </div>
+
+      <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h4 className="font-semibold text-amber-950">Installment due schedule</h4>
+            <p className="mt-1 text-xs text-amber-800">
+              Add a label and due date for every expected installment.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() =>
+              updateDueDates([
+                ...dueDates,
+                { label: "New installment", dueDate: "" },
+              ])
             }
-            className="w-full px-3 py-2 border border-amber-200 bg-amber-50/60 rounded-lg text-gray-900 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-          />
-          <p className="mt-1.5 text-xs text-gray-500">
-            Leave empty when no payment follow-up is scheduled.
-          </p>
+            className="inline-flex items-center gap-1 rounded-lg bg-amber-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-amber-700"
+          >
+            <Plus className="h-4 w-4" />
+            Add due date
+          </button>
+        </div>
+
+        <div className="mt-4 space-y-3">
+          {dueDates.length ? (
+            dueDates.map((dueDate, index) => (
+              <div
+                key={dueDate._id || index}
+                className="grid grid-cols-1 gap-3 rounded-lg border border-amber-100 bg-white p-3 sm:grid-cols-[minmax(0,1fr)_12rem_auto]"
+              >
+                <input
+                  type="text"
+                  value={dueDate.label}
+                  onChange={(event) =>
+                    updateDueDates(
+                      dueDates.map((item, itemIndex) =>
+                        itemIndex === index
+                          ? { ...item, label: event.target.value }
+                          : item,
+                      ),
+                    )
+                  }
+                  placeholder="e.g. 2nd installment"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
+                />
+                <input
+                  type="date"
+                  value={toYMD(dueDate.dueDate)}
+                  onChange={(event) =>
+                    updateDueDates(
+                      dueDates.map((item, itemIndex) =>
+                        itemIndex === index
+                          ? { ...item, dueDate: event.target.value }
+                          : item,
+                      ),
+                    )
+                  }
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateDueDates(
+                      dueDates.filter((_, itemIndex) => itemIndex !== index),
+                    )
+                  }
+                  className="inline-flex items-center justify-center rounded-lg border border-rose-200 px-3 py-2 text-rose-700 transition hover:bg-rose-50"
+                  aria-label={"Remove " + dueDate.label}
+                  title="Remove due date"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            ))
+          ) : (
+            <p className="rounded-lg border border-dashed border-amber-200 bg-white/70 px-3 py-4 text-sm text-amber-900">
+              No future installment due dates are scheduled.
+            </p>
+          )}
         </div>
       </div>
 
