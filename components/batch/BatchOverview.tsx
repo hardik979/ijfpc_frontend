@@ -58,6 +58,11 @@ type ZoneFilter = "all" | (typeof ZONES)[number];
 
 type PlacementFilter = "active" | "placed" | "all";
 
+// "running" = Upcoming + Active — completed batches no longer hold classes,
+// so they're hidden unless the filter is switched.
+type StatusFilter = "running" | "completed" | "all";
+const isCompleted = (b: Batch) => (b.status || "").toLowerCase() === "completed";
+
 // Display order for zone rows: blue, then yellow, then green — anything else
 // (e.g. "newly_enrolled" or no zone) sorts last.
 const ZONE_RANK: Record<string, number> = { blue: 0, yellow: 1, green: 2 };
@@ -185,6 +190,7 @@ export default function BatchOverview() {
   // Placed students clutter the overview by default — only active (not yet
   // placed) students should show unless the filter is switched.
   const [placement, setPlacement] = useState<PlacementFilter>("active");
+  const [status, setStatus] = useState<StatusFilter>("running");
 
   const load = async () => {
     try {
@@ -207,11 +213,26 @@ export default function BatchOverview() {
     load();
   }, []);
 
+  const statusCounts = useMemo(() => {
+    const completed = batches.filter(isCompleted).length;
+    return { running: batches.length - completed, completed, total: batches.length };
+  }, [batches]);
+
+  // Batches left after the status filter — everything below (rows, zone and
+  // placement counts) works off this so the numbers match the table.
+  const visibleBatches = useMemo(
+    () =>
+      status === "all"
+        ? batches
+        : batches.filter((b) => (status === "completed" ? isCompleted(b) : !isCompleted(b))),
+    [batches, status]
+  );
+
   const groups = useMemo<Group[]>(() => {
     const q = search.trim().toLowerCase();
     const out: Group[] = [];
 
-    for (const b of batches) {
+    for (const b of visibleBatches) {
       const rawStudents = b.students || [];
       const allStudents =
         placement === "all"
@@ -289,7 +310,7 @@ export default function BatchOverview() {
     // folds in rows the same way per-session linkedBatchIds does below, just
     // seeded from the batch-level relationship instead of a per-class one.
     const combinedWithByBatch = new Map<string, Set<string>>();
-    for (const b of batches) {
+    for (const b of visibleBatches) {
       if (b.combinedWith?.length) {
         combinedWithByBatch.set(b._id, new Set(b.combinedWith.map((c) => c._id)));
       }
@@ -364,7 +385,7 @@ export default function BatchOverview() {
     });
 
     return merged;
-  }, [batches, search, zone, placement]);
+  }, [visibleBatches, search, zone, placement]);
 
   const rowCount = useMemo(
     () => groups.reduce((n, g) => n + Math.max(g.students.length, 1), 0),
@@ -373,7 +394,7 @@ export default function BatchOverview() {
 
   const zoneCounts = useMemo(() => {
     const counts = { blue: 0, yellow: 0, green: 0, other: 0, total: 0 };
-    for (const b of batches) {
+    for (const b of visibleBatches) {
       const z = deriveZone(b.students || []);
       counts.total++;
       if (z === "blue") counts.blue++;
@@ -382,19 +403,19 @@ export default function BatchOverview() {
       else counts.other++;
     }
     return counts;
-  }, [batches]);
+  }, [visibleBatches]);
 
   const placementCounts = useMemo(() => {
     let active = 0;
     let placed = 0;
-    for (const b of batches) {
+    for (const b of visibleBatches) {
       for (const s of b.students || []) {
         if (s.isPlaced) placed++;
         else active++;
       }
     }
     return { active, placed, total: active + placed };
-  }, [batches]);
+  }, [visibleBatches]);
 
   const HEADERS = [
     "Time",
@@ -419,7 +440,7 @@ export default function BatchOverview() {
       setExporting(true);
       const zoneFilterLabel = `${zone === "all" ? "All zones" : `${zone[0].toUpperCase()}${zone.slice(1)} zone`} · ${
         placement === "all" ? "All students" : placement === "placed" ? "Placed students" : "Active students"
-      }`;
+      } · ${status === "all" ? "All batches" : status === "completed" ? "Completed batches" : "Running batches"}`;
       const generatedAt = new Date().toLocaleString(undefined, {
         day: "2-digit",
         month: "short",
@@ -510,7 +531,7 @@ export default function BatchOverview() {
         </div>
 
         {/* Legend + filters */}
-        <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
           <div className="relative flex-1 lg:max-w-md">
             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--panel-text-faint)]" />
             <input
@@ -519,6 +540,32 @@ export default function BatchOverview() {
               placeholder="Search by student, batch, trainer, topic…"
               className="w-full rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] py-3 pl-10 pr-3 text-sm text-[var(--panel-text-primary)] placeholder:text-[var(--panel-text-faint)] outline-none focus:border-cyan-500/50"
             />
+          </div>
+
+          <div className="flex items-center gap-1.5 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] p-1">
+            {(["running", "completed", "all"] as StatusFilter[]).map((st) => {
+              const isActive = status === st;
+              const label =
+                st === "running"
+                  ? `Running (${statusCounts.running})`
+                  : st === "completed"
+                  ? `Completed (${statusCounts.completed})`
+                  : `All Batches (${statusCounts.total})`;
+              return (
+                <button
+                  key={st}
+                  onClick={() => setStatus(st)}
+                  title={st === "running" ? "Upcoming and Active batches" : undefined}
+                  className={`rounded-lg px-3 py-2 text-xs font-semibold capitalize transition ${
+                    isActive
+                      ? "bg-[var(--panel-card)] text-[var(--panel-text-primary)]"
+                      : "text-[var(--panel-text-muted)] hover:text-[var(--panel-text-secondary)]"
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
 
           <div className="flex items-center gap-1.5 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-card-soft)] p-1">
