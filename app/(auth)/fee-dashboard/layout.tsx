@@ -12,7 +12,11 @@ export default async function Layout({
 
   const role = (user.publicMetadata as any)?.role as Role | undefined;
 
-  const ALLOWED_ROLES: readonly Role[] = [ROLES.FOUNDER, ROLES.SUPER_ADMIN];
+  const ALLOWED_ROLES: readonly Role[] = [
+    ROLES.FOUNDER,
+    ROLES.SUPER_ADMIN,
+    ROLES.ADMIN,
+  ];
 
   if (!role || !ALLOWED_ROLES.includes(role)) {
     redirect("/unauthorized");
