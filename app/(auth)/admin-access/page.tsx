@@ -1,7 +1,7 @@
-"use client"
+"use client";
 // new page
-import { useRouter } from "next/navigation"
-import { useUser } from "@clerk/nextjs"
+import { useRouter } from "next/navigation";
+import { useUser } from "@clerk/nextjs";
 import {
   LayoutDashboard,
   BarChart3,
@@ -10,18 +10,18 @@ import {
   ShieldCheck,
   UserSearch,
   type LucideIcon,
-} from "lucide-react"
-import { ROLES, type Role } from "@/lib/rbac"
-import { AttendanceLink } from "@/components/AttendanceLink"
+} from "lucide-react";
+import { ROLES, type Role } from "@/lib/rbac";
+import { AttendanceLink } from "@/components/AttendanceLink";
 
 interface AdminModule {
-  label: string
-  description: string
-  href: string
-  icon: LucideIcon
-  accent: string
-  tag: string
-  roles?: readonly Role[]
+  label: string;
+  description: string;
+  href: string;
+  icon: LucideIcon;
+  accent: string;
+  tag: string;
+  roles?: readonly Role[];
 }
 
 const ADMIN_MODULES: AdminModule[] = [
@@ -33,12 +33,10 @@ const ADMIN_MODULES: AdminModule[] = [
     icon: LayoutDashboard,
     accent: "from-indigo-500 to-indigo-600",
     tag: "Management",
-  },  
+  },
   {
-    
     label: "Daily Calling Report",
-    description:
-      "Review daily calling activities and performance metrics.",
+    description: "Review daily calling activities and performance metrics.",
     href: "/daily-calling-report",
     icon: BarChart3,
     accent: "from-emerald-500 to-emerald-600",
@@ -88,16 +86,26 @@ const ADMIN_MODULES: AdminModule[] = [
     tag: "Analytics",
     roles: [ROLES.FOUNDER, ROLES.SUPER_ADMIN],
   },
+  {
+    label: "Post Placement Analytics",
+    description:
+      "Analyze post-placement data and trends for informed decision-making.",
+    href: "/fee-dashboard/post-placement",
+    icon: BarChart3,
+    accent: "from-emerald-500 to-emerald-600",
+    tag: "Analytics",
+    roles: [ROLES.FOUNDER, ROLES.SUPER_ADMIN, ROLES.ADMIN],
+  },
 ];
 
 export default function AdminAccessPage() {
-  const router = useRouter()
-  const { user } = useUser()
-  const role = (user?.publicMetadata as any)?.role as Role | undefined
+  const router = useRouter();
+  const { user } = useUser();
+  const role = (user?.publicMetadata as any)?.role as Role | undefined;
 
   const visibleModules = ADMIN_MODULES.filter(
     (mod) => !mod.roles || (role && mod.roles.includes(role)),
-  )
+  );
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -121,7 +129,7 @@ export default function AdminAccessPage() {
 
         <div className="grid gap-5 sm:grid-cols-2">
           {visibleModules.map((mod) => {
-            const Icon = mod.icon
+            const Icon = mod.icon;
             return (
               <button
                 key={mod.href}
@@ -156,7 +164,7 @@ export default function AdminAccessPage() {
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                 </div>
               </button>
-            )
+            );
           })}
         </div>
 
@@ -165,5 +173,5 @@ export default function AdminAccessPage() {
         </footer>
       </div>
     </main>
-  )
+  );
 }

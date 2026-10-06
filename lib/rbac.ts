@@ -1,6 +1,6 @@
 export const ROLES = {
   SUPER_ADMIN: "SUPER_ADMIN",
-  ADMIN : "ADMIN",
+  ADMIN: "ADMIN",
   FEE_STAFF: "FEE_STAFF",
   PLACEMENT_STAFF: "PLACEMENT_STAFF",
   FOUNDER: "FOUNDER",
@@ -11,7 +11,7 @@ export const ROLES = {
   TRAINER: "TRAINER",
   ATTENDANCE: "ATTENDANCE",
   ATTENDANCE_ADMIN: "ATTENDANCE_ADMIN",
-  PREEPLACEMENT_STAFF : "PREEPLACEMENT_STAFF"
+  PREEPLACEMENT_STAFF: "PREEPLACEMENT_STAFF",
 } as const;
 
 export type Role = (typeof ROLES)[keyof typeof ROLES];
@@ -35,16 +35,26 @@ export const canAccessStudent360 = (role?: unknown) =>
 
 export const ACCESS: Record<string, readonly Role[]> = {
   // REAL URL PATHS (no /(auth))
-  "/fee-dashboard": [ROLES.SUPER_ADMIN, ROLES.FOUNDER, ROLES.INTERVIEWER,ROLES.ADMIN],
+  "/fee-dashboard": [
+    ROLES.SUPER_ADMIN,
+    ROLES.FOUNDER,
+    ROLES.INTERVIEWER,
+    ROLES.ADMIN,
+  ],
   "/interview-reporting": [ROLES.SUPER_ADMIN, ROLES.INTERVIEWER],
   "/post-placement-student-creation": [
     ROLES.SUPER_ADMIN,
     ROLES.PLACEMENT_STAFF,
     ROLES?.ADMIN,
-    ROLES?.PREEPLACEMENT_STAFF
+    ROLES?.PREEPLACEMENT_STAFF,
   ],
+  "/fee-dashboard/post-placement": [ROLES.SUPER_ADMIN, ROLES.FOUNDER],
   "/fee-dashboard/student-full-info": [ROLES.SUPER_ADMIN, ROLES.FOUNDER],
-  "/fee-dashboard/studentOverview": [ROLES.SUPER_ADMIN, ROLES.FOUNDER,ROLES?.PREEPLACEMENT_STAFF],
+  "/fee-dashboard/studentOverview": [
+    ROLES.SUPER_ADMIN,
+    ROLES.FOUNDER,
+    ROLES?.PREEPLACEMENT_STAFF,
+  ],
   "/remaining-notification": [ROLES.SUPER_ADMIN, ROLES.FEE_STAFF], // adjust as needed
   "/founder": [ROLES.SUPER_ADMIN, ROLES.FOUNDER],
   "/admin": [ROLES.SUPER_ADMIN],
@@ -53,16 +63,39 @@ export const ACCESS: Record<string, readonly Role[]> = {
     ROLES.CALLING_STAFF,
     ROLES.FEE_STAFF,
     ROLES.STUDENT_MANAGEMENT,
-    ROLES?.PREEPLACEMENT_STAFF
+    ROLES?.PREEPLACEMENT_STAFF,
   ],
-  "/resume-builder": [ROLES.SUPER_ADMIN, ROLES.CALLING_STAFF, ROLES?.PREEPLACEMENT_STAFF],
-  "/studentOverview":[ROLES.STUDENT_MANAGEMENT, ROLES?.ADMIN, ROLES?.PREEPLACEMENT_STAFF],
+  "/resume-builder": [
+    ROLES.SUPER_ADMIN,
+    ROLES.CALLING_STAFF,
+    ROLES?.PREEPLACEMENT_STAFF,
+  ],
+  "/studentOverview": [
+    ROLES.STUDENT_MANAGEMENT,
+    ROLES?.ADMIN,
+    ROLES?.PREEPLACEMENT_STAFF,
+  ],
   "/student_360": STUDENT_360_ROLES,
-  "/interview-questions": [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.PLACEMENT_STAFF, ROLES?.PREEPLACEMENT_STAFF, ROLES.TRAINER, ROLES.INTERVIEWER, ROLES.MANAGERS, ROLES.STUDENT_MANAGEMENT, ROLES.FOUNDER],
+  "/interview-questions": [
+    ROLES.SUPER_ADMIN,
+    ROLES.ADMIN,
+    ROLES.PLACEMENT_STAFF,
+    ROLES?.PREEPLACEMENT_STAFF,
+    ROLES.TRAINER,
+    ROLES.INTERVIEWER,
+    ROLES.MANAGERS,
+    ROLES.STUDENT_MANAGEMENT,
+    ROLES.FOUNDER,
+  ],
   "/trainer-dashboard": [ROLES.TRAINER],
-  "/student-full-info":[ROLES.STUDENT_MANAGEMENT, ROLES?.ADMIN],
-  "/academic-results":[ROLES.STUDENT_MANAGEMENT, ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES?.PREEPLACEMENT_STAFF],
-  "/feedback-dash" : [ROLES?.FOUNDER, ROLES?.SUPER_ADMIN]
+  "/student-full-info": [ROLES.STUDENT_MANAGEMENT, ROLES?.ADMIN],
+  "/academic-results": [
+    ROLES.STUDENT_MANAGEMENT,
+    ROLES.ADMIN,
+    ROLES.SUPER_ADMIN,
+    ROLES?.PREEPLACEMENT_STAFF,
+  ],
+  "/feedback-dash": [ROLES?.FOUNDER, ROLES?.SUPER_ADMIN],
 } as const;
 
 export function isAllowed(pathname: string, role?: string) {
