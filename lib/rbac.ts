@@ -48,7 +48,11 @@ export const ACCESS: Record<string, readonly Role[]> = {
     ROLES?.ADMIN,
     ROLES?.PREEPLACEMENT_STAFF,
   ],
-  "/fee-dashboard/post-placement": [ROLES.SUPER_ADMIN, ROLES.FOUNDER],
+  "/fee-dashboard/post-placement": [
+    ROLES.SUPER_ADMIN,
+    ROLES.FOUNDER,
+    ROLES.ADMIN,
+  ],
   "/fee-dashboard/student-full-info": [ROLES.SUPER_ADMIN, ROLES.FOUNDER],
   "/fee-dashboard/studentOverview": [
     ROLES.SUPER_ADMIN,
