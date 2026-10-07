@@ -1,10 +1,21 @@
 import { currentUser } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
-import { ROLES, type Role } from "@/lib/rbac";
+import { ACCESS, ROLES, type Role } from "@/lib/rbac";
 
-const ALLOWED_ROLES: readonly Role[] = [ROLES.FOUNDER, ROLES.SUPER_ADMIN];
+const ALLOWED_ROLES: readonly Role[] = [
+  ROLES.FOUNDER,
+  ROLES.SUPER_ADMIN,
+  ROLES.ADMIN,
+];
 
-const authorize = async () => {
+// The post-placement page is shared with roles beyond the fee dashboard
+// default, so its data route follows the same list the page layout checks.
+const rolesFor = (segments: string[]): readonly Role[] =>
+  segments[0] === "post-placement"
+    ? ACCESS["/fee-dashboard/post-placement"]
+    : ALLOWED_ROLES;
+
+const authorize = async (allowed: readonly Role[] = ALLOWED_ROLES) => {
   const user = await currentUser();
   if (!user) {
     return NextResponse.json(
@@ -14,7 +25,7 @@ const authorize = async () => {
   }
 
   const role = (user.publicMetadata as { role?: Role })?.role;
-  if (!role || !ALLOWED_ROLES.includes(role)) {
+  if (!role || !allowed.includes(role)) {
     return NextResponse.json(
       { error: "Fee dashboard access required" },
       { status: 403 },
@@ -25,26 +36,31 @@ const authorize = async () => {
 };
 
 const isAllowedPath = (segments: string[]) =>
-  segments.length === 1 && segments[0] === "summary" ||
-  segments.length === 1 && segments[0] === "students" ||
-  segments.length === 2 && segments[0] === "students" && /^[a-f\d]{24}$/i.test(segments[1]) ||
-  segments.length === 2 &&
+  (segments.length === 1 && segments[0] === "summary") ||
+  (segments.length === 1 && segments[0] === "students") ||
+  (segments.length === 2 &&
+    segments[0] === "students" &&
+    /^[a-f\d]{24}$/i.test(segments[1])) ||
+  (segments.length === 2 &&
     segments[0] === "pre-placement" &&
-    ["summary", "students"].includes(segments[1]) ||
-  segments.length === 2 &&
+    ["summary", "students"].includes(segments[1])) ||
+  (segments.length === 2 &&
     segments[0] === "post-placement" &&
-    segments[1] === "offers";
+    segments[1] === "offers");
 
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ segments: string[] }> },
 ) {
-  const authError = await authorize();
+  const { segments } = await context.params;
+  const authError = await authorize(rolesFor(segments));
   if (authError) return authError;
 
-  const { segments } = await context.params;
   if (!isAllowedPath(segments)) {
-    return NextResponse.json({ error: "Unsupported fee dashboard route" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Unsupported fee dashboard route" },
+      { status: 404 },
+    );
   }
 
   const base = process.env.NEXT_PUBLIC_LMS_URL?.replace(/\/$/, "");
@@ -56,11 +72,12 @@ export async function GET(
     );
   }
 
-  const apiPath = segments[0] === "pre-placement"
-    ? `/api/preplacement/${segments.slice(1).join("/")}`
-    : segments[0] === "post-placement"
-      ? "/api/offers/list"
-      : `/api/student-info/fee-dashboard/${segments.join("/")}`;
+  const apiPath =
+    segments[0] === "pre-placement"
+      ? `/api/preplacement/${segments.slice(1).join("/")}`
+      : segments[0] === "post-placement"
+        ? "/api/offers/list"
+        : `/api/student-info/fee-dashboard/${segments.join("/")}`;
   const endpoint = `${base}${apiPath}${request.nextUrl.search}`;
 
   try {
@@ -73,7 +90,8 @@ export async function GET(
     return new NextResponse(body, {
       status: response.status,
       headers: {
-        "Content-Type": response.headers.get("content-type") || "application/json",
+        "Content-Type":
+          response.headers.get("content-type") || "application/json",
       },
     });
   } catch (error) {
@@ -119,7 +137,10 @@ export async function PATCH(
   try {
     input = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid request body" },
+      { status: 400 },
+    );
   }
 
   try {
@@ -135,7 +156,10 @@ export async function PATCH(
     const body = await response.text();
     return new NextResponse(body, {
       status: response.status,
-      headers: { "Content-Type": response.headers.get("content-type") || "application/json" },
+      headers: {
+        "Content-Type":
+          response.headers.get("content-type") || "application/json",
+      },
     });
   } catch (error) {
     console.error("Pre-placement status proxy error:", error);
