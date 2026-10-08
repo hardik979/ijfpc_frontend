@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import StudentPerformanceChart from "./StudentPerformanceChart";
+import AcademicPerformance from "./AcademicPerformance";
 
 const API_LMS_URL = process.env.NEXT_PUBLIC_LMS_URL;
 
@@ -440,13 +441,13 @@ export default function StudentDashboard() {
   }, [data]);
 
   const Callrecordingstatus = useMemo(() => {
-    return data?.callRecordingData || {      
+    return data?.callRecordingData || {
       stats: {
-            total: 0,
-            positive: 0,
-            negative: 0,
-            neutral: 0            
-        }
+        total: 0,
+        positive: 0,
+        negative: 0,
+        neutral: 0
+      }
     };
   }, [data]);
 
@@ -649,19 +650,18 @@ export default function StudentDashboard() {
                       </div>
                       <div className="flex flex-col items-end gap-1">
                         <span
-                          className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                            !analyzed
-                              ? "bg-slate-600/40 text-slate-300"
-                              : isPass
-                                ? "bg-emerald-500/20 text-emerald-300"
-                                : "bg-rose-500/20 text-rose-300"
-                          }`}
+                          className={`rounded-full px-3 py-1 text-xs font-semibold ${!analyzed
+                            ? "bg-slate-600/40 text-slate-300"
+                            : isPass
+                              ? "bg-emerald-500/20 text-emerald-300"
+                              : "bg-rose-500/20 text-rose-300"
+                            }`}
                         >
                           {!analyzed ? "Not analyzed" : item.status || "—"}
                         </span>
                         {analyzed &&
-                        typeof item.percentage === "number" &&
-                        item.totalQuestions ? (
+                          typeof item.percentage === "number" &&
+                          item.totalQuestions ? (
                           <span className="text-xs text-slate-400">
                             {item.correctAnswers}/{item.totalQuestions} ({item.percentage}%)
                           </span>
@@ -905,22 +905,20 @@ export default function StudentDashboard() {
                 <h2 className="text-lg font-semibold text-white">Student Information</h2>
                 <div className="flex items-center gap-3">
                   <span
-                    className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                      isPlaced
-                        ? "bg-emerald-500/20 text-emerald-300"
-                        : "bg-slate-600/40 text-slate-300"
-                    }`}
+                    className={`rounded-full px-3 py-1 text-xs font-semibold ${isPlaced
+                      ? "bg-emerald-500/20 text-emerald-300"
+                      : "bg-slate-600/40 text-slate-300"
+                      }`}
                   >
                     {isPlaced ? "Placed" : "Not Placed"}
                   </span>
                   <button
                     onClick={() => updatePlacementStatus(!isPlaced)}
                     disabled={placementUpdating || !data.student?._id}
-                    className={`rounded-lg px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                      isPlaced
-                        ? "bg-rose-600 hover:bg-rose-700"
-                        : "bg-emerald-600 hover:bg-emerald-700"
-                    }`}
+                    className={`rounded-lg px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${isPlaced
+                      ? "bg-rose-600 hover:bg-rose-700"
+                      : "bg-emerald-600 hover:bg-emerald-700"
+                      }`}
                   >
                     {placementUpdating
                       ? "Updating..."
@@ -947,11 +945,14 @@ export default function StudentDashboard() {
               </div>
             </div>
 
+            {/* Academic performance from the admin API (own range filter) */}
+            <AcademicPerformance clerkId={clerkId} />
+
             {/* Overall performance trend (independent of the month filter) */}
-            <StudentPerformanceChart
+            {/* <StudentPerformanceChart
               data={allTimeData}
               studentName={allTimeData?.student?.fullName}
-            />
+            /> */}
 
             {/* Quiz Performance */}
             <div>
@@ -1174,15 +1175,15 @@ export default function StudentDashboard() {
         onClose={() => setActiveModal(null)}
         title={
           activeModal === "quiz-attempts" ? "All Quiz Attempts" :
-                  activeModal === "quiz-days" ? "Quiz Activity Days" :
-                    activeModal === "mock-attempts" ? "All Mock Interview Attempts" :
-                      activeModal === "mock-pass" ? "Passed Mock Interviews" :
-                        activeModal === "mock-fail" ? "Failed Mock Interviews" :
-                          activeModal === "calls-total" ? "All HR Call Recordings" :
-                            activeModal === "calls-positive" ? "Positive Calls" :
-                              activeModal === "calls-negative" ? "Negative Calls" :
-                                activeModal === "calls-neutral" ? "Neutral Calls" :
-                                  ""
+            activeModal === "quiz-days" ? "Quiz Activity Days" :
+              activeModal === "mock-attempts" ? "All Mock Interview Attempts" :
+                activeModal === "mock-pass" ? "Passed Mock Interviews" :
+                  activeModal === "mock-fail" ? "Failed Mock Interviews" :
+                    activeModal === "calls-total" ? "All HR Call Recordings" :
+                      activeModal === "calls-positive" ? "Positive Calls" :
+                        activeModal === "calls-negative" ? "Negative Calls" :
+                          activeModal === "calls-neutral" ? "Neutral Calls" :
+                            ""
         }
       >
         {renderModalContent()}
