@@ -136,9 +136,9 @@ const bucketTitle = (key: string, unit: Exclude<Granularity, "auto">) =>
     : unit === "week"
       ? `Week of ${longDate(key)}`
       : parseYMD(key).toLocaleDateString("en-IN", {
-          month: "long",
-          year: "numeric",
-        });
+        month: "long",
+        year: "numeric",
+      });
 
 const pickUnit = (spanDays: number): Exclude<Granularity, "auto"> =>
   spanDays <= 62 ? "day" : spanDays <= 400 ? "week" : "month";
@@ -213,22 +213,32 @@ const CoursePlacementAnalytics: React.FC<Props> = ({ open, onClose }) => {
     };
   }, [open, onClose]);
 
-  // Offers that have a date for the chosen basis.
+  // Every offer is placed on the timeline: the chosen basis date, or the
+  // record's createdAt when that date was never filled in.
   const dated = useMemo<PlacedRow[]>(
     () =>
       rows
-        .map((row) => ({ row, date: toYMD(row[basis]) }))
+        .map((row) => ({
+          row,
+          date: toYMD(row[basis]) || toYMD(row.createdAt),
+        }))
         .filter((item): item is PlacedRow => item.date !== ""),
     [rows, basis],
   );
-  const undatedCount = rows.length - dated.length;
+
+  // Offers missing the chosen date, so they sit at their createdAt instead.
+  const undatedCount = useMemo(
+    () => rows.filter((row) => !toYMD(row[basis])).length,
+    [rows, basis],
+  );
+
 
   const dataBounds = useMemo(() => {
     if (!dated.length) return null;
+
     const sorted = dated.map((d) => d.date).sort();
     return { min: sorted[0], max: sorted[sorted.length - 1] };
   }, [dated]);
-
   // Effective [from, to] window (inclusive).
   const range = useMemo(() => {
     const today = fmtYMD(new Date());
@@ -431,11 +441,10 @@ const CoursePlacementAnalytics: React.FC<Props> = ({ open, onClose }) => {
                       setBasis(opt.key);
                       setBucket(null);
                     }}
-                    className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                      basis === opt.key
-                        ? "bg-purple-600 text-white shadow-sm"
-                        : "text-gray-600 hover:text-gray-900"
-                    }`}
+                    className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${basis === opt.key
+                      ? "bg-purple-600 text-white shadow-sm"
+                      : "text-gray-600 hover:text-gray-900"
+                      }`}
                   >
                     {opt.label}
                   </button>
@@ -450,11 +459,10 @@ const CoursePlacementAnalytics: React.FC<Props> = ({ open, onClose }) => {
                   key={opt.key}
                   type="button"
                   onClick={() => pickPreset(opt.key)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                    preset === opt.key
-                      ? "bg-purple-600 text-white"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                  }`}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${preset === opt.key
+                    ? "bg-purple-600 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
                 >
                   {opt.label}
                 </button>
@@ -496,7 +504,8 @@ const CoursePlacementAnalytics: React.FC<Props> = ({ open, onClose }) => {
               <>
                 {" "}
                 · {undatedCount} record{undatedCount === 1 ? "" : "s"} without a{" "}
-                {basis === "offerDate" ? "offer" : "joining"} date excluded
+                {basis === "offerDate" ? "offer" : "joining"} date shown at
+                created date
               </>
             )}
           </p>
@@ -595,19 +604,17 @@ const CoursePlacementAnalytics: React.FC<Props> = ({ open, onClose }) => {
                               setBucket(null);
                             }}
                             aria-pressed={active}
-                            className={`block w-full border-b border-gray-100 px-4 py-3 text-left transition-colors ${
-                              active
-                                ? "bg-purple-50"
-                                : "hover:bg-purple-50/50"
-                            }`}
+                            className={`block w-full border-b border-gray-100 px-4 py-3 text-left transition-colors ${active
+                              ? "bg-purple-50"
+                              : "hover:bg-purple-50/50"
+                              }`}
                           >
                             <div className="flex items-center justify-between gap-3">
                               <span
-                                className={`truncate text-sm font-medium ${
-                                  c.title === UNASSIGNED
-                                    ? "italic text-gray-500"
-                                    : "text-gray-900"
-                                }`}
+                                className={`truncate text-sm font-medium ${c.title === UNASSIGNED
+                                  ? "italic text-gray-500"
+                                  : "text-gray-900"
+                                  }`}
                               >
                                 {c.title}
                               </span>
@@ -758,11 +765,10 @@ const CoursePlacementAnalytics: React.FC<Props> = ({ open, onClose }) => {
                                 setGranularity(opt.key);
                                 setBucket(null);
                               }}
-                              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                                granularity === opt.key
-                                  ? "bg-purple-600 text-white shadow-sm"
-                                  : "text-gray-600 hover:text-gray-900"
-                              }`}
+                              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${granularity === opt.key
+                                ? "bg-purple-600 text-white shadow-sm"
+                                : "text-gray-600 hover:text-gray-900"
+                                }`}
                             >
                               {opt.label}
                             </button>
