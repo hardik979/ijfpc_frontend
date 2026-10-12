@@ -21,9 +21,11 @@ import {
   LoaderCircle,
   Mail,
   UserRound,
+  BarChart3,
 } from "lucide-react";
 import { API_LMS_URL } from "@/lib/api";
 import OfferLetterUpload from "@/components/post-placement/OfferLetterUpload";
+import CoursePlacementAnalytics from "@/components/post-placement/CoursePlacementAnalytics";
 import { uploadPostPlacementOfferLetter } from "@/lib/postPlacementOfferLetter";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -113,7 +115,20 @@ interface PostPlacementOffer {
   offerLetterSize?: number;
   offerLetterUploadedAt?: string;
   offerLetterStatus?: "PENDING" | "RECEIVED";
+  // Course ref; the API populates it as { _id, title }
+  courseName?: string | { _id: string; title: string } | null;
 }
+
+interface CourseOption {
+  _id: string;
+  title: string;
+}
+
+const getCourseId = (course: PostPlacementOffer["courseName"]): string =>
+  !course ? "" : typeof course === "string" ? course : course._id;
+
+const getCourseTitle = (course: PostPlacementOffer["courseName"]): string =>
+  course && typeof course === "object" ? course.title : "";
 
 interface LinkableStudent {
   _id: string;
@@ -229,6 +244,7 @@ const PostPlacementDashboard: React.FC = () => {
     useState<PostPlacementOffer | null>(null);
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [isCreating, setIsCreating] = useState<boolean>(false);
+  const [showInsights, setShowInsights] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -657,6 +673,13 @@ const PostPlacementDashboard: React.FC = () => {
             </div>
             <div className="flex items-center space-x-3">
               <button
+                onClick={() => setShowInsights(true)}
+                className="flex items-center space-x-2 bg-white border border-purple-200 hover:bg-purple-50 text-purple-700 px-4 py-2 rounded-lg transition-colors"
+              >
+                <BarChart3 className="h-5 w-5" />
+                <span>Placement Insights</span>
+              </button>
+              <button
                 onClick={exportToCSV}
                 className="flex items-center space-x-2 bg-white border border-purple-200 hover:bg-purple-50 text-purple-700 px-4 py-2 rounded-lg transition-colors"
               >
@@ -673,6 +696,11 @@ const PostPlacementDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <CoursePlacementAnalytics
+        open={showInsights}
+        onClose={() => setShowInsights(false)}
+      />
 
       {error && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -794,6 +822,11 @@ const PostPlacementDashboard: React.FC = () => {
                                   {student.companyName || "No company"}
                                 </span>
                               </p>
+                              {getCourseTitle(student.courseName) && (
+                                <p className="mt-0.5 truncate text-xs font-medium text-purple-700">
+                                  {getCourseTitle(student.courseName)}
+                                </p>
+                              )}
                             </div>
                           </div>
                           <div className="shrink-0 text-right">
@@ -1092,6 +1125,14 @@ const StudentDetailPanel: React.FC<StudentDetailPanelProps> = ({
                 </label>
                 <p className="text-gray-900">
                   {student.companyName || "Not specified"}
+                </p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">
+                  Course
+                </label>
+                <p className="text-gray-900">
+                  {getCourseTitle(student.courseName) || "Not specified"}
                 </p>
               </div>
               <div>
@@ -1948,6 +1989,13 @@ const OfferUserLinker: React.FC<OfferUserLinkerProps> = ({ offer, onLink }) => {
 };
 
 const EditForm: React.FC<EditFormProps> = ({ formData, setFormData }) => {
+  const [courses, setCourses] = useState<CourseOption[]>([]);
+  useEffect(() => {
+    fetch(offersApiUrl("/courses"), { headers: lmsHeaders(), cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: CourseOption[]) => setCourses(Array.isArray(data) ? data : []))
+      .catch(() => setCourses([]));
+  }, []);
   const updateField = (field: string, value: any): void => {
     if (field.includes(".")) {
       const [parent, child] = field.split(".");
@@ -2010,6 +2058,24 @@ const EditForm: React.FC<EditFormProps> = ({ formData, setFormData }) => {
             className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           />
         </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Course
+        </label>
+        <select
+          value={getCourseId(formData.courseName)}
+          onChange={(e) => updateField("courseName", e.target.value || null)}
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+        >
+          <option value="">No course selected</option>
+          {courses.map((course) => (
+            <option key={course._id} value={course._id}>
+              {course.title}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
