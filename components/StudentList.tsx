@@ -1,5 +1,6 @@
 "use client";
 
+import { encodeStudentRef } from "@/lib/studentRef";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -831,7 +832,7 @@ const StudentsListPage = () => {
         })
       );
     } catch { }
-    router.push(`/student-full-info?clerkId=${clerkId}`);
+    router.push(`/student-full-info?ref=${encodeStudentRef(clerkId)}`);
   };
 
   const handleApplySearch = (value: string) => {

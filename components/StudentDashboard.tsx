@@ -1,5 +1,6 @@
 "use client";
 
+import { decodeStudentRef } from "@/lib/studentRef";
 import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import StudentPerformanceChart from "./StudentPerformanceChart";
@@ -351,7 +352,10 @@ function Modal({ isOpen, onClose, title, children }: {
 export default function StudentDashboard() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const clerkId = searchParams.get("clerkId");
+  // The Clerk ID travels encoded (?ref=) so it isn't readable in the URL.
+  // A legacy ?clerkId= link still works.
+  const clerkId =
+    decodeStudentRef(searchParams.get("ref")) || searchParams.get("clerkId");
 
   const now = new Date();
 
