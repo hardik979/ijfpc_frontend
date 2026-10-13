@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const API_LMS_URL = process.env.NEXT_PUBLIC_LMS_URL;
 
@@ -27,7 +27,7 @@ interface TrendPoint {
   aiHrCalling: number | null;
 }
 
-interface AcademicData {
+export interface AcademicData {
   studentName: string;
   range: Range;
   zone?: string | null;
@@ -269,9 +269,18 @@ function formatFilterDate(value: string) {
   return `${day}-${month}-${year}`;
 }
 
-export default function AcademicPerformance({ clerkId }: { clerkId: string | null }) {
+export default function AcademicPerformance({
+  clerkId,
+  initialData = null,
+}: {
+  clerkId: string | null;
+  /** All-time data the parent already fetched in parallel, so the card doesn't load after the page. */
+  initialData?: AcademicData | null;
+}) {
   const [range, setRange] = useState<Range>("all");
-  const [data, setData] = useState<AcademicData | null>(null);
+  const [data, setData] = useState<AcademicData | null>(initialData);
+  const usedInitial = useRef(false);
+  const lastClerkId = useRef(clerkId);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [asTable, setAsTable] = useState(false);
@@ -285,6 +294,11 @@ export default function AcademicPerformance({ clerkId }: { clerkId: string | nul
   useEffect(() => {
     if (!clerkId) return;
     if (invalidRange) return;
+    // First paint with the parent's prefetched all-time data: nothing to fetch yet.
+    if (initialData && !usedInitial.current && range === "all" && !fromDate && !toDate) {
+      usedInitial.current = true;
+      return;
+    }
     const controller = new AbortController();
 
     (async () => {
@@ -314,6 +328,8 @@ export default function AcademicPerformance({ clerkId }: { clerkId: string | nul
 
   // Drop the previous student's data as soon as the selection changes.
   useEffect(() => {
+    if (lastClerkId.current === clerkId) return;
+    lastClerkId.current = clerkId;
     setData(null);
     setError(null);
   }, [clerkId]);
@@ -485,7 +501,19 @@ export default function AcademicPerformance({ clerkId }: { clerkId: string | nul
       ) : error ? (
         <p className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">{error}</p>
       ) : !data ? (
-        <p className="py-10 text-center text-sm text-white">{loading ? "Loading academic performance…" : invalidRange ? "Fix the date range to see data." : "No data"}</p>
+        loading ? (
+          // Same footprint as the loaded card, so nothing jumps when the data lands.
+          <div className="animate-pulse space-y-4" aria-label="Loading academic performance">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+              <div className="h-72 rounded-xl bg-slate-800/60 lg:col-span-2" />
+              <div className="h-72 rounded-xl bg-slate-800/60 lg:col-span-3" />
+            </div>
+            <div className="h-16 rounded-xl bg-slate-800/60" />
+            <div className="h-96 rounded-xl bg-slate-800/60" />
+          </div>
+        ) : (
+          <p className="py-10 text-center text-sm text-white">{invalidRange ? "Fix the date range to see data." : "No data"}</p>
+        )
       ) : (
         <div className={loading ? "opacity-60 transition-opacity" : "transition-opacity"}>
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
