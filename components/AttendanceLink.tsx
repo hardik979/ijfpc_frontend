@@ -5,8 +5,6 @@ import { useUser } from "@clerk/nextjs";
 import { CalendarCheck } from "lucide-react";
 import { useAttendanceAccess } from "@/lib/hooks/useAttendanceAccess";
 
-// Roles that open the attendance admin section instead of a personal record,
-// so they are never offered the personal entry.
 const ADMIN_ROLES = ["ATTENDANCE_ADMIN", "SUPER_ADMIN", "ADMIN"];
 
 /**

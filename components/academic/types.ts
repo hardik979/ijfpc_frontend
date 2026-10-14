@@ -10,12 +10,76 @@ export interface Participation {
   absentDates: string[];
 }
 
+export interface QuizOptions {
+  A?: string | null;
+  B?: string | null;
+  C?: string | null;
+  D?: string | null;
+}
+
+export interface AttemptedQuestion {
+  question: string;
+  questionType: "text" | "mcq";
+  options: QuizOptions | null;
+  correctAnswer: string | null;
+  marks: number | null;
+  studentAnswer: string | null;
+  marksObtained: number | null;
+  remark: string | null;
+}
+
+export interface AttemptedQuiz {
+  quizId: string;
+  date: string;
+  title: string | null;
+  category: string | null;
+  attemptedAt: string | null;
+  isEvaluated: boolean;
+  totalMarksObtained: number;
+  totalMarksPossible: number;
+  percentage: number | null;
+  questions: AttemptedQuestion[];
+}
+
+export interface AbsentQuizDay {
+  date: string;
+  quizzes: {
+    quizId: string;
+    title: string | null;
+    category: string | null;
+    questions: { question: string; questionType: "text" | "mcq"; options: QuizOptions | null; marks: number | null }[];
+  }[];
+}
+
 export interface DailyQuizParticipation extends Participation {
   compulsory: boolean;
   quizzesUploaded: number;
   quizzesAttempted: number;
   daysUploaded: number;
   daysAttempted: number;
+  scoreObtained: number;
+  scorePossible: number;
+  scorePercentage: number | null;
+  attemptedQuizzes: AttemptedQuiz[];
+  absentQuizzes: AbsentQuizDay[];
+}
+
+export interface MockInterviewDetail {
+  id: string;
+  callId: string | null;
+  date: string;
+  interviewType: string;
+  startedAt: string | null;
+  endedAt: string | null;
+  durationSeconds: number;
+  endedReason: string | null;
+  /** false when the provider returned no report: nothing was graded. */
+  analyzed: boolean;
+  status: "PASS" | "FAIL" | null;
+  summary: string | null;
+  score: { percentage: number; correctAnswers: number | null; totalQuestions: number | null } | null;
+  evaluation: Record<string, unknown> | null;
+  recordingUrl: string | null;
 }
 
 export interface MockParticipation extends Participation {
@@ -25,6 +89,33 @@ export interface MockParticipation extends Participation {
   attemptsLeft: number;
   attemptLimit: number;
   daysAttempted: number;
+  interviews: MockInterviewDetail[];
+}
+
+export interface AiCallDetail {
+  id: string;
+  date: string;
+  startedAt: string | null;
+  endedAt: string | null;
+  durationSeconds: number;
+  endReason: string | null;
+  dnp: boolean;
+  analysisStatus: string | null;
+  analysis: unknown;
+  recordingUrl: string | null;
+}
+
+export interface RealHrRecording {
+  id: string;
+  date: string;
+  time: string | null;
+  type: "recording" | "manual";
+  manualStatus: string | null;
+  durationSeconds: number;
+  durationLabel: string | null;
+  status: string | null;
+  publicUrl: string | null;
+  analysis: unknown;
 }
 
 export interface AiHrParticipation extends Participation {
@@ -35,6 +126,7 @@ export interface AiHrParticipation extends Participation {
   daysCalled: number;
   pendingToday: boolean;
   days: { date: string; calls: number; picked: boolean; pending: boolean }[];
+  callDetails: AiCallDetail[];
 }
 
 export interface RealHrParticipation extends Participation {
@@ -45,6 +137,7 @@ export interface RealHrParticipation extends Participation {
   daysCalled: number;
   pendingToday: boolean;
   days: { date: string; calls: number; recordings: number; picked: boolean; pending: boolean; reason: string | null }[];
+  recordings: RealHrRecording[];
 }
 
 export interface AttendanceParticipation extends Participation {
@@ -138,3 +231,12 @@ export interface ParticipationData {
   attendance: AttendanceParticipation;
   weeklyTest: WeeklyTestData;
 }
+
+/** The drill-down views a KPI tile can open. */
+export type DrillDown =
+  | "att-present" | "att-absent"
+  | "quiz-attempted" | "quiz-absent"
+  | "mega-exams"
+  | "mock-present"
+  | "ai-answered" | "ai-absent"
+  | "real-uploaded" | "real-missing";
