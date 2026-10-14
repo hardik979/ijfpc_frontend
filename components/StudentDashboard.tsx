@@ -3,8 +3,19 @@
 import { decodeStudentRef } from "@/lib/studentRef";
 import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { Undo2 } from "lucide-react";
 import AcademicPerformance, { type AcademicData } from "./AcademicPerformance";
-import type { ParticipationData } from "./academic/types";
+import { CallAnalysisPanel } from "@/app/(auth)/academic-results/callAnalysis";
+import KpiDashboard from "./academic/KpiDashboard";
+import type {
+  AiCallDetail,
+  AttendanceParticipation,
+  DailyQuizParticipation,
+  DrillDown,
+  ParticipationData,
+  QuizOptions,
+  RealHrRecording,
+} from "./academic/types";
 
 const API_LMS_URL = process.env.NEXT_PUBLIC_LMS_URL;
 
@@ -13,27 +24,19 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-type ModalType =
-  | "att-present" | "att-absent"
-  | "quiz-present" | "quiz-absent"
-  | "mega-exams"
-  | "mock-present" | "mock-absent"
-  | "ai-days" | "ai-absent"
-  | "real-days" | "real-absent"
-  | null;
+type ModalType = DrillDown | null;
 
 const MODAL_TITLES: Record<Exclude<ModalType, null>, string> = {
   "att-present": "Days Present (punched in & out)",
   "att-absent": "Days Absent",
-  "quiz-present": "Quiz Days Attempted",
-  "quiz-absent": "Quiz Days Missed",
+  "quiz-attempted": "Quizzes Attempted",
+  "quiz-absent": "Missed Days · Uploaded Question Papers",
   "mega-exams": "Mega Test Results",
-  "mock-present": "AI Mock Interview Days Attempted",
-  "mock-absent": "AI Mock Interview Days Missed",
-  "ai-days": "AI HR Calls by Day",
-  "ai-absent": "AI HR Days Not Answered",
-  "real-days": "HR Calls by Day",
-  "real-absent": "HR Days Without a Recording",
+  "mock-present": "AI Mock Interviews · Feedback by Date",
+  "ai-answered": "AI HR Calls · Days Answered",
+  "ai-absent": "AI HR Calls · Days Not Answered",
+  "real-uploaded": "HR Calls · Days With Recordings",
+  "real-missing": "HR Calls · Days Without a Recording",
 };
 
 const REASON_LABELS: Record<string, string> = {
@@ -69,13 +72,6 @@ function scoreColor(p: number | null | undefined) {
   return "#ef4444";
 }
 
-function participationColor(p: number | null | undefined) {
-  if (p === null || p === undefined) return "#94a3b8";
-  if (p >= 80) return "#10b981";
-  if (p >= 60) return "#f59e0b";
-  return "#ef4444";
-}
-
 function InfoCard({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-4 backdrop-blur-sm">
@@ -86,57 +82,6 @@ function InfoCard({ label, value }: { label: string; value: React.ReactNode }) {
         {value || "—"}
       </p>
     </div>
-  );
-}
-
-function ClickableStatCard({
-  label,
-  value,
-  sub,
-  accent,
-  icon,
-  onClick,
-}: {
-  label: string;
-  value: React.ReactNode;
-  sub: string;
-  accent: string;
-  icon: React.ReactNode;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={!onClick}
-      className="group relative overflow-hidden rounded-xl border border-slate-700/50 bg-gradient-to-br from-slate-800/60 to-slate-800/40 p-5 text-left backdrop-blur-sm transition-all hover:border-slate-600/70 hover:shadow-lg hover:shadow-black/20 disabled:cursor-default disabled:hover:border-slate-700/50 disabled:hover:shadow-none"
-    >
-      <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full opacity-10 blur-2xl transition-opacity group-hover:opacity-20" style={{ backgroundColor: accent }} />
-
-      <div className="relative flex items-start justify-between">
-        <div className="flex-1">
-          <p className="mb-2 text-xs font-medium uppercase tracking-wider text-slate-400">
-            {label}
-          </p>
-          <h3 className="mb-1 text-3xl font-bold transition-colors" style={{ color: accent }}>
-            {value}
-          </h3>
-          <p className="text-xs text-slate-400">{sub}</p>
-        </div>
-
-        <div className="ml-3 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-700/30 transition-colors group-hover:bg-slate-700/50" style={{ color: accent }}>
-          {icon}
-        </div>
-      </div>
-
-      {onClick && (
-        <div className="absolute bottom-3 right-3 flex items-center gap-1 text-xs text-slate-500 opacity-0 transition-opacity group-hover:opacity-100">
-          <span>View Details</span>
-          <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </div>
-      )}
-    </button>
   );
 }
 
@@ -171,28 +116,6 @@ function Modal({ isOpen, onClose, title, children }: {
   );
 }
 
-// A grid of day chips (newest first), used for every "which days" drill-down.
-function DateChips({ dates, tone, empty }: { dates: string[]; tone: "good" | "bad"; empty: string }) {
-  if (!dates.length) return <p className="py-8 text-center text-slate-400">{empty}</p>;
-  const cls =
-    tone === "good"
-      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
-      : "border-rose-500/30 bg-rose-500/10 text-rose-200";
-
-  return (
-    <div>
-      <p className="mb-3 text-sm text-slate-400">{dates.length} day{dates.length === 1 ? "" : "s"} · Sundays are never counted</p>
-      <div className="flex flex-wrap gap-2">
-        {[...dates].reverse().map((d) => (
-          <span key={d} className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${cls}`}>
-            {formatKey(d)}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function DayRow({ left, right, badge, tone }: { left: string; right?: React.ReactNode; badge: string; tone: "good" | "bad" | "wait" }) {
   const cls =
     tone === "good"
@@ -212,16 +135,652 @@ function DayRow({ left, right, badge, tone }: { left: string; right?: React.Reac
   );
 }
 
-const icons = {
-  calendar: <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
-  doc: <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
-  chart: <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>,
-  check: <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
-  cross: <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
-  phone: <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>,
-  people: <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>,
-  clock: <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
-};
+// ── date helpers (IST day keys, no timezone shifting) ───────────────────────────
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function addDaysKey(key: string, n: number) {
+  const d = new Date(`${key}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+// Monday of the week a day falls in (weeks run Monday to Saturday; Sunday is never counted).
+function weekStartKey(key: string) {
+  const d = new Date(`${key}T00:00:00Z`);
+  return addDaysKey(key, -((d.getUTCDay() + 6) % 7));
+}
+
+function formatWeekday(key: string) {
+  return `${WEEKDAYS[new Date(`${key}T00:00:00Z`).getUTCDay()]}, ${formatKey(key)}`;
+}
+
+function groupByWeek<T extends { date: string }>(items: T[]) {
+  const map = new Map<string, T[]>();
+  for (const item of items) {
+    const start = weekStartKey(item.date);
+    if (!map.has(start)) map.set(start, []);
+    map.get(start)!.push(item);
+  }
+  return [...map.entries()]
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([start, list]) => ({
+      start,
+      end: addDaysKey(start, 5),
+      items: list.sort((a, b) => a.date.localeCompare(b.date)),
+    }));
+}
+
+function formatClock(iso?: string | null) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Kolkata",
+  });
+}
+
+function formatDuration(seconds?: number | null) {
+  if (!seconds) return "—";
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return m ? `${m}m ${String(s).padStart(2, "0")}s` : `${s}s`;
+}
+
+function formatWorked(minutes?: number | null) {
+  if (minutes === null || minutes === undefined) return "—";
+  return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
+}
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+// ── shared drill-down pieces ─────────────────────────────────────────────────────
+function Empty({ text }: { text: string }) {
+  return <p className="py-8 text-center text-slate-400">{text}</p>;
+}
+
+function SummaryBar({ items }: { items: { label: string; value: React.ReactNode }[] }) {
+  return (
+    <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {items.map((item) => (
+        <div key={item.label} className="rounded-lg border border-slate-700 bg-slate-800/60 px-4 py-3">
+          <p className="text-[11px] uppercase tracking-wider text-slate-400">{item.label}</p>
+          <p className="mt-1 text-lg font-bold text-white">{item.value}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function OptionList({ options }: { options: QuizOptions | null }) {
+  const entries = Object.entries(options ?? {}).filter(([, v]) => v);
+  if (!entries.length) return null;
+  return (
+    <ul className="mt-2 space-y-0.5 text-xs text-slate-300">
+      {entries.map(([k, v]) => (
+        <li key={k}>
+          <span className="font-semibold text-slate-200">{k}.</span> {v}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// Light card: the shared call-analysis panel is designed for a white background.
+function AnalysisBox({ analysis }: { analysis: unknown }) {
+  if (!analysis) {
+    return <p className="mt-3 text-xs text-slate-400">Analysis isn&apos;t available for this call yet.</p>;
+  }
+  return (
+    <div className="mt-3 rounded-xl bg-white p-4 text-gray-900">
+      <CallAnalysisPanel analysis={analysis} />
+    </div>
+  );
+}
+
+// Attendance, split Monday to Saturday week by week.
+function AttendanceWeeks({
+  days,
+  status,
+}: {
+  days: AttendanceParticipation["days"];
+  status: "present" | "absent";
+}) {
+  const weeks = groupByWeek(days.filter((d) => d.status === status));
+  if (!weeks.length) return <Empty text={status === "present" ? "No days present" : "No days absent"} />;
+
+  return (
+    <div className="space-y-5">
+      {weeks.map((week) => (
+        <div key={week.start}>
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-sm font-semibold text-white">
+              Week · {formatKey(week.start)} – {formatKey(week.end)}
+            </p>
+            <span className="rounded-full bg-slate-700 px-3 py-1 text-xs font-semibold text-slate-200">
+              {plural(week.items.length, "day")} {status} of 6
+            </span>
+          </div>
+          <div className="space-y-2">
+            {week.items.map((d) => (
+              <DayRow
+                key={d.date}
+                left={formatWeekday(d.date)}
+                tone={status === "present" ? "good" : "bad"}
+                badge={status === "present" ? "Present" : REASON_LABELS[d.reason ?? ""] ?? "Absent"}
+                right={
+                  <span>
+                    In {d.inTime ?? "—"} · Out {d.outTime ?? "—"}
+                    {status === "present" ? ` · ${formatWorked(d.workedMinutes)}` : ""}
+                  </span>
+                }
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Every quiz the student attempted, with their answers, marks and the total score.
+function QuizAttemptedList({ quiz }: { quiz: DailyQuizParticipation }) {
+  const items = [...quiz.attemptedQuizzes].reverse();
+  if (!items.length) return <Empty text="No quizzes attempted" />;
+
+  return (
+    <div>
+      <SummaryBar
+        items={[
+          { label: "Total score", value: `${quiz.scoreObtained} / ${quiz.scorePossible}` },
+          { label: "Percentage", value: pct(quiz.scorePercentage) },
+          { label: "Quizzes", value: quiz.attemptedQuizzes.length },
+          { label: "Days", value: quiz.daysAttempted },
+        ]}
+      />
+      <div className="space-y-3">
+        {items.map((item) => {
+          const color = scoreColor(item.percentage);
+          return (
+            <details key={item.quizId} className="rounded-lg border border-slate-700 bg-slate-800/50">
+              <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-3 px-4 py-3">
+                <span>
+                  <span className="font-semibold text-white">{item.title ?? "Quiz"}</span>
+                  {item.category && (
+                    <span className="ml-2 rounded bg-slate-700 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-200">
+                      {item.category}
+                    </span>
+                  )}
+                  <span className="ml-2 text-xs text-slate-400">{formatKey(item.date)}</span>
+                </span>
+                <span className="flex items-center gap-3 text-sm">
+                  <span className="text-white">
+                    {item.totalMarksObtained} / {item.totalMarksPossible}
+                  </span>
+                  <span className="rounded-full px-3 py-1 text-xs font-semibold" style={{ color, background: `${color}22` }}>
+                    {item.isEvaluated ? pct(item.percentage) : "Not evaluated"}
+                  </span>
+                </span>
+              </summary>
+              <div className="space-y-3 border-t border-slate-700 p-4">
+                {item.questions.length === 0 && <Empty text="Question paper unavailable" />}
+                {item.questions.map((q, i) => (
+                  <div key={i} className="rounded-md border border-slate-700 bg-slate-900/60 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-sm font-medium text-white">
+                        Q{i + 1}. {q.question}
+                      </p>
+                      <span className="whitespace-nowrap text-xs font-semibold text-slate-200">
+                        {q.marksObtained ?? "—"} / {q.marks ?? "—"}
+                      </span>
+                    </div>
+                    <OptionList options={q.options} />
+                    <p className="mt-2 text-[11px] uppercase tracking-wider text-slate-400">Student answer</p>
+                    <p className="whitespace-pre-wrap text-sm text-slate-200">{q.studentAnswer ?? "Not answered"}</p>
+                    {q.correctAnswer && (
+                      <p className="mt-1 text-xs text-emerald-300">Correct answer: {q.correctAnswer}</p>
+                    )}
+                    {q.remark && <p className="mt-1 text-xs text-amber-200">Feedback: {q.remark}</p>}
+                  </div>
+                ))}
+              </div>
+            </details>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Question paper of every quiz that was uploaded on a day the student attempted nothing.
+function QuizAbsentList({ quiz }: { quiz: DailyQuizParticipation }) {
+  const days = [...quiz.absentQuizzes].reverse();
+  if (!days.length) return <Empty text="No missed quiz days" />;
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-slate-400">
+        {plural(days.length, "day")} with a quiz uploaded and nothing attempted · Sundays are never counted
+      </p>
+      {days.map((day) => (
+        <details key={day.date} className="rounded-lg border border-rose-500/30 bg-rose-500/5">
+          <summary className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3">
+            <span className="font-semibold text-white">{formatWeekday(day.date)}</span>
+            <span className="rounded-full bg-rose-500/20 px-3 py-1 text-xs font-semibold text-rose-300">
+              {plural(day.quizzes.length, "quiz")} missed
+            </span>
+          </summary>
+          <div className="space-y-4 border-t border-slate-700 p-4">
+            {day.quizzes.map((q) => (
+              <div key={q.quizId}>
+                <p className="mb-2 text-sm font-semibold text-white">
+                  {q.title ?? "Quiz"}
+                  {q.category && (
+                    <span className="ml-2 rounded bg-slate-700 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-200">
+                      {q.category}
+                    </span>
+                  )}
+                </p>
+                <div className="space-y-2">
+                  {q.questions.map((question, i) => (
+                    <div key={i} className="rounded-md border border-slate-700 bg-slate-900/60 p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-sm text-white">
+                          Q{i + 1}. {question.question}
+                        </p>
+                        <span className="whitespace-nowrap text-xs text-slate-300">{question.marks ?? "—"} marks</span>
+                      </div>
+                      <OptionList options={question.options} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </details>
+      ))}
+    </div>
+  );
+}
+
+function groupCallsByDay<T extends { date: string }>(calls: T[]) {
+  const map = new Map<string, T[]>();
+  for (const call of calls) {
+    if (!map.has(call.date)) map.set(call.date, []);
+    map.get(call.date)!.push(call);
+  }
+  return map;
+}
+
+// AI HR calls the student picked up, day by day, each with its analysis.
+function AiAnsweredList({ ai }: { ai: ParticipationData["aiHrCalling"] }) {
+  const byDay = groupCallsByDay(ai.callDetails);
+  const days = ai.days.filter((d) => d.picked).reverse();
+  if (!days.length) return <Empty text="No answered AI HR calls" />;
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-slate-400">
+        {plural(days.length, "day")} answered · {ai.callsPicked} calls picked up · {ai.callsDnp} not answered
+      </p>
+      {days.map((day) => {
+        const calls = byDay.get(day.date) ?? [];
+        const answered = calls.filter((c: AiCallDetail) => !c.dnp);
+        const missed = calls.length - answered.length;
+        return (
+          <details key={day.date} className="rounded-lg border border-slate-700 bg-slate-800/50">
+            <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-3 px-4 py-3">
+              <span className="font-semibold text-white">{formatWeekday(day.date)}</span>
+              <span className="flex items-center gap-2 text-xs">
+                <span className="rounded-full bg-emerald-500/20 px-3 py-1 font-semibold text-emerald-300">
+                  {plural(answered.length, "call")} answered
+                </span>
+                {missed > 0 && (
+                  <span className="rounded-full bg-amber-500/20 px-3 py-1 font-semibold text-amber-300">
+                    {missed} missed
+                  </span>
+                )}
+              </span>
+            </summary>
+            <div className="space-y-4 border-t border-slate-700 p-4">
+              {answered.map((call, i) => {
+                const score = (call.analysis as { scoreOutOf10?: number } | null)?.scoreOutOf10;
+                return (
+                  <div key={call.id}>
+                    <p className="flex flex-wrap items-center gap-2 text-sm text-slate-300">
+                      <span className="font-semibold text-white">Call {i + 1}</span>
+                      <span>{formatClock(call.startedAt)}</span>
+                      <span>· {formatDuration(call.durationSeconds)}</span>
+                      {typeof score === "number" && (
+                        <span className="rounded-full bg-violet-500/20 px-2.5 py-0.5 text-xs font-semibold text-violet-300">
+                          AI score {score}/10
+                        </span>
+                      )}
+                    </p>
+                    {call.recordingUrl && <audio controls preload="none" src={call.recordingUrl} className="mt-2 w-full" />}
+                    <AnalysisBox analysis={call.analysis} />
+                  </div>
+                );
+              })}
+            </div>
+          </details>
+        );
+      })}
+    </div>
+  );
+}
+
+// Days every AI HR call was missed, with the DNP calls grouped under each day.
+function AiAbsentList({ ai }: { ai: ParticipationData["aiHrCalling"] }) {
+  const byDay = groupCallsByDay(ai.callDetails);
+  const days = ai.days.filter((d) => !d.picked && !d.pending).reverse();
+  if (!days.length) return <Empty text="No days with every call missed" />;
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-slate-400">
+        {plural(days.length, "day")} where every call was missed · {days.reduce((n, d) => n + d.calls, 0)} DNP calls in total
+      </p>
+      {days.map((day) => {
+        const calls = byDay.get(day.date) ?? [];
+        return (
+          <div key={day.date} className="rounded-lg border border-rose-500/30 bg-rose-500/5 px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="font-semibold text-white">{formatWeekday(day.date)}</p>
+              <span className="rounded-full bg-rose-500/20 px-3 py-1 text-xs font-semibold text-rose-300">
+                {plural(day.calls, "DNP call")}
+              </span>
+            </div>
+            {calls.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {calls.map((call, i) => (
+                  <span key={call.id} className="rounded-md border border-slate-700 bg-slate-900/60 px-2.5 py-1 text-xs text-slate-300">
+                    #{i + 1} · {formatClock(call.startedAt)}
+                    {call.endReason ? ` · ${call.endReason.replace(/[_-]+/g, " ")}` : ""}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── AI mock interviews: every interview grouped by date, with all of its feedback ─────
+const RUBRIC_SCORES = [
+  "technical_correctness",
+  "troubleshooting_depth",
+  "communication_structure",
+  "confidence_delivery",
+  "behavioral_fit",
+];
+const prettyKey = (k: string) => k.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+// One rubric dimension scored out of 5, drawn as five segments.
+function ScoreMeter({ label, value }: { label: string; value: number }) {
+  const filled = Math.max(0, Math.min(5, Math.round(value)));
+  const tone = filled >= 4 ? "bg-emerald-400" : filled === 3 ? "bg-sky-400" : filled === 2 ? "bg-amber-400" : "bg-rose-400";
+  return (
+    <div className="rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2.5">
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <span className="text-slate-300">{label}</span>
+        <span className="font-semibold tabular-nums text-white">{value} / 5</span>
+      </div>
+      <div className="mt-2 flex gap-1">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <span key={n} className={`h-1.5 flex-1 rounded-full ${n <= filled ? tone : "bg-slate-700"}`} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// The interview_evaluation rubric. Known scores get meters; every other field the
+// evaluation carries (strengths, verdict, weaknesses...) is shown too, so nothing is dropped.
+function MockEvaluation({ evaluation, summary }: { evaluation: Record<string, unknown>; summary: string | null }) {
+  const scores = Object.entries(evaluation).filter(
+    ([k, v]) => typeof v === "number" && (RUBRIC_SCORES.includes(k) || k.endsWith("_score"))
+  ) as [string, number][];
+  const handled = new Set(["readiness_percent", "meets_threshold", ...scores.map(([k]) => k)]);
+
+  const readiness = typeof evaluation.readiness_percent === "number" ? evaluation.readiness_percent : null;
+  const meets = typeof evaluation.meets_threshold === "boolean" ? evaluation.meets_threshold : null;
+
+  const extras = Object.entries(evaluation).filter(([k, v]) => {
+    if (handled.has(k) || v === null || v === undefined || v === "") return false;
+    // the rubric's own summary is the same text as the feedback summary above it
+    if (k === "summary" && typeof v === "string" && v.trim() === (summary ?? "").trim()) return false;
+    return true;
+  });
+
+  return (
+    <div className="space-y-3">
+      {(readiness !== null || meets !== null) && (
+        <div className="flex flex-wrap items-center gap-2">
+          {readiness !== null && (
+            <span className="rounded-full bg-sky-500/10 px-3 py-1 text-xs font-semibold text-sky-300 ring-1 ring-inset ring-sky-500/30">
+              Interview readiness {readiness}%
+            </span>
+          )}
+          {meets !== null && (
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset ${
+                meets
+                  ? "bg-emerald-500/10 text-emerald-300 ring-emerald-500/30"
+                  : "bg-amber-500/10 text-amber-300 ring-amber-500/30"
+              }`}
+            >
+              {meets ? "Meets the threshold" : "Below the threshold"}
+            </span>
+          )}
+        </div>
+      )}
+
+      {scores.length > 0 && (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {scores.map(([k, v]) => (
+            <ScoreMeter key={k} label={prettyKey(k.replace(/_score$/, ""))} value={v} />
+          ))}
+        </div>
+      )}
+
+      {extras.map(([k, v]) => (
+        <div key={k}>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{prettyKey(k)}</p>
+          {Array.isArray(v) ? (
+            <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-slate-200">
+              {v.map((item, i) => (
+                <li key={i}>{typeof item === "string" ? item : JSON.stringify(item)}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-1 whitespace-pre-wrap text-sm text-slate-200">
+              {typeof v === "object" ? JSON.stringify(v) : String(v)}
+            </p>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MockInterviewList({ mock }: { mock: ParticipationData["aiMockInterview"] }) {
+  const byDay = groupCallsByDay(mock.interviews);
+  const days = [...byDay.keys()].sort().reverse();
+  if (!days.length) return <Empty text="No AI mock interviews in this period" />;
+
+  return (
+    <div className="space-y-6">
+      <SummaryBar
+        items={[
+          { label: "Interviews", value: mock.interviews.length },
+          { label: "Days", value: days.length },
+          { label: "Attempts used", value: `${mock.attemptsUsed} / ${mock.attemptLimit}` },
+          { label: "Attempts left", value: mock.attemptsLeft },
+        ]}
+      />
+      {days.map((day) => {
+        const list = byDay.get(day) ?? [];
+        return (
+          <div key={day}>
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-sm font-semibold text-white">{formatWeekday(day)}</p>
+              <span className="rounded-full bg-slate-700 px-3 py-1 text-xs font-semibold text-slate-200">
+                {plural(list.length, "interview")}
+              </span>
+            </div>
+            <div className="space-y-3">
+              {list.map((item, i) => {
+                const tone = !item.analyzed
+                  ? "bg-slate-600/40 text-slate-300"
+                  : item.status === "PASS"
+                    ? "bg-emerald-500/20 text-emerald-300"
+                    : "bg-rose-500/20 text-rose-300";
+                return (
+                  <details
+                    key={item.id}
+                    open={day === days[0] && i === 0}
+                    className="rounded-lg border border-slate-700 bg-slate-800/50"
+                  >
+                    <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-3 px-4 py-3">
+                      <span className="flex flex-wrap items-center gap-2 text-sm">
+                        <span className="font-semibold text-white">Interview {i + 1}</span>
+                        <span className="text-slate-300">{formatClock(item.startedAt)}</span>
+                        <span className="text-slate-400">· {formatDuration(item.durationSeconds)}</span>
+                      </span>
+                      <span className="flex items-center gap-2 text-xs">
+                        {item.score && (
+                          <span className="rounded-full bg-violet-500/20 px-2.5 py-1 font-semibold text-violet-300">
+                            {item.score.correctAnswers !== null && item.score.totalQuestions !== null
+                              ? `${item.score.correctAnswers}/${item.score.totalQuestions} · `
+                              : ""}
+                            {item.score.percentage}%
+                          </span>
+                        )}
+                        <span className={`rounded-full px-2.5 py-1 font-semibold ${tone}`}>
+                          {item.analyzed ? item.status : "Not analyzed"}
+                        </span>
+                      </span>
+                    </summary>
+                    <div className="space-y-4 border-t border-slate-700 p-4">
+                      {item.analyzed ? (
+                        <>
+                          {item.summary && (
+                            <div>
+                              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Feedback summary</p>
+                              <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-slate-200">{item.summary}</p>
+                            </div>
+                          )}
+                          {item.evaluation && <MockEvaluation evaluation={item.evaluation} summary={item.summary} />}
+                        </>
+                      ) : (
+                        <p className="text-sm leading-relaxed text-slate-300">
+                          The interview system couldn&apos;t generate a report for this attempt — a technical issue on the
+                          provider&apos;s side. It doesn&apos;t count against the student or mean they failed.
+                        </p>
+                      )}
+                      {item.recordingUrl && (
+                        <div>
+                          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Recording</p>
+                          <audio controls preload="none" src={item.recordingUrl} className="w-full" />
+                        </div>
+                      )}
+                      {item.endedReason && (
+                        <p className="text-xs text-slate-400">Ended: {item.endedReason.replace(/[-_.]+/g, " ")}</p>
+                      )}
+                    </div>
+                  </details>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// Real HR recordings, day by day, each with its analysis.
+function RealUploadedList({ real }: { real: Extract<ParticipationData["realHrCalling"], { applicable: true }> }) {
+  const byDay = groupCallsByDay(real.recordings);
+  const days = real.days.filter((d) => d.picked).reverse();
+  if (!days.length) return <Empty text="No recordings uploaded" />;
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-slate-400">
+        {plural(days.length, "day")} with a recording · {real.callsConnected} recordings in total
+      </p>
+      {days.map((day) => {
+        const recordings = (byDay.get(day.date) ?? []).filter((r: RealHrRecording) => r.type === "recording");
+        return (
+          <details key={day.date} className="rounded-lg border border-slate-700 bg-slate-800/50">
+            <summary className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3">
+              <span className="font-semibold text-white">{formatWeekday(day.date)}</span>
+              <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-300">
+                {plural(recordings.length, "recording")}
+              </span>
+            </summary>
+            <div className="space-y-4 border-t border-slate-700 p-4">
+              {recordings.map((rec, i) => {
+                const outcome = (rec.analysis as { outcome?: string } | null)?.outcome;
+                return (
+                  <div key={rec.id}>
+                    <p className="flex flex-wrap items-center gap-2 text-sm text-slate-300">
+                      <span className="font-semibold text-white">Recording {i + 1}</span>
+                      <span>{formatClock(rec.time)}</span>
+                      <span>· {rec.durationLabel ?? formatDuration(rec.durationSeconds)}</span>
+                      {outcome && (
+                        <span className="rounded-full bg-sky-500/20 px-2.5 py-0.5 text-xs font-semibold text-sky-300">
+                          {String(outcome).replace(/_/g, " ")}
+                        </span>
+                      )}
+                    </p>
+                    {rec.publicUrl && <audio controls preload="none" src={rec.publicUrl} className="mt-2 w-full" />}
+                    <AnalysisBox analysis={rec.analysis} />
+                  </div>
+                );
+              })}
+            </div>
+          </details>
+        );
+      })}
+    </div>
+  );
+}
+
+// Days HR called but no recording was uploaded (DNP, invalid number, out of service...).
+function RealMissingList({ real }: { real: Extract<ParticipationData["realHrCalling"], { applicable: true }> }) {
+  const byDay = groupCallsByDay(real.recordings);
+  const days = real.days.filter((d) => !d.picked && !d.pending).reverse();
+  if (!days.length) return <Empty text="No days without a recording" />;
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-slate-400">{plural(days.length, "day")} with no recording uploaded</p>
+      {days.map((day) => (
+        <div key={day.date} className="rounded-lg border border-rose-500/30 bg-rose-500/5 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="font-semibold text-white">{formatWeekday(day.date)}</p>
+            <span className="rounded-full bg-rose-500/20 px-3 py-1 text-xs font-semibold text-rose-300">
+              {REASON_LABELS[day.reason ?? ""] ?? "Not connected"}
+            </span>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {(byDay.get(day.date) ?? []).map((rec, i) => (
+              <span key={rec.id} className="rounded-md border border-slate-700 bg-slate-900/60 px-2.5 py-1 text-xs text-slate-300">
+                #{i + 1} · {formatClock(rec.time)}
+                {rec.manualStatus ? ` · ${REASON_LABELS[rec.manualStatus] ?? rec.manualStatus}` : ""}
+              </span>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function StudentDashboard() {
   const searchParams = useSearchParams();
@@ -355,103 +914,48 @@ export default function StudentDashboard() {
 
   const renderModalContent = () => {
     if (!data) return null;
-    const att = data.attendance;
-    const quiz = data.dailyQuiz;
-    const mock = data.aiMockInterview;
-    const ai = data.aiHrCalling;
     const real = data.realHrCalling;
     const mega = data.weeklyTest;
 
     switch (activeModal) {
       case "att-present":
-      case "att-absent": {
-        const wanted = activeModal === "att-present" ? "present" : "absent";
-        const days = att.days.filter((d) => d.status === wanted).reverse();
-        if (days.length === 0) {
-          return <p className="py-8 text-center text-slate-400">No days found</p>;
-        }
-        return (
-          <div className="space-y-2">
-            {days.map((d) => (
-              <DayRow
-                key={d.date}
-                left={formatKey(d.date)}
-                tone={d.status === "present" ? "good" : "bad"}
-                badge={d.status === "present" ? "Present" : REASON_LABELS[d.reason ?? ""] ?? "Absent"}
-                right={
-                  <span>
-                    In {d.inTime ?? "—"} · Out {d.outTime ?? "—"}
-                  </span>
-                }
-              />
-            ))}
-          </div>
-        );
-      }
+        return <AttendanceWeeks days={data.attendance.days} status="present" />;
+      case "att-absent":
+        return <AttendanceWeeks days={data.attendance.days} status="absent" />;
 
-      case "quiz-present":
-        return <DateChips dates={quiz.presentDates} tone="good" empty="No quiz days attempted" />;
+      case "quiz-attempted":
+        return <QuizAttemptedList quiz={data.dailyQuiz} />;
       case "quiz-absent":
-        return <DateChips dates={quiz.absentDates} tone="bad" empty="No missed quiz days" />;
+        return <QuizAbsentList quiz={data.dailyQuiz} />;
+
       case "mock-present":
-        return <DateChips dates={mock.presentDates} tone="good" empty="No mock interview days" />;
-      case "mock-absent":
-        return <DateChips dates={mock.absentDates} tone="bad" empty="No missed mock interview days" />;
+        return <MockInterviewList mock={data.aiMockInterview} />;
+
+      case "ai-answered":
+        return <AiAnsweredList ai={data.aiHrCalling} />;
       case "ai-absent":
-        return <DateChips dates={ai.absentDates} tone="bad" empty="No days with every call missed" />;
-      case "real-absent":
-        return real.applicable ? (
-          <DateChips dates={real.absentDates} tone="bad" empty="No days without a recording" />
-        ) : null;
+        return <AiAbsentList ai={data.aiHrCalling} />;
 
-      case "ai-days": {
-        const days = [...ai.days].reverse();
-        if (days.length === 0) {
-          return <p className="py-8 text-center text-slate-400">No AI HR calls found</p>;
-        }
-        return (
-          <div className="space-y-2">
-            {days.map((d) => (
-              <DayRow
-                key={d.date}
-                left={formatKey(d.date)}
-                tone={d.pending ? "wait" : d.picked ? "good" : "bad"}
-                badge={d.pending ? "Pending" : d.picked ? "Picked up" : "All not answered"}
-                right={<span>{d.calls} call{d.calls === 1 ? "" : "s"}</span>}
-              />
-            ))}
-          </div>
-        );
-      }
-
-      case "real-days": {
-        if (!real.applicable) return null;
-        const days = [...real.days].reverse();
-        if (days.length === 0) {
-          return <p className="py-8 text-center text-slate-400">No HR calls found</p>;
-        }
-        return (
-          <div className="space-y-2">
-            {days.map((d) => (
-              <DayRow
-                key={d.date}
-                left={formatKey(d.date)}
-                tone={d.pending ? "wait" : d.picked ? "good" : "bad"}
-                badge={d.pending ? "Pending" : d.picked ? "Recorded" : REASON_LABELS[d.reason ?? ""] ?? "Not connected"}
-                right={<span>{d.calls} call{d.calls === 1 ? "" : "s"} · {d.recordings} recorded</span>}
-              />
-            ))}
-          </div>
-        );
-      }
+      case "real-uploaded":
+        return real.applicable ? <RealUploadedList real={real} /> : null;
+      case "real-missing":
+        return real.applicable ? <RealMissingList real={real} /> : null;
 
       case "mega-exams": {
         const exams = [...mega.exams].reverse();
         if (exams.length === 0) {
-          return <p className="py-8 text-center text-slate-400">No evaluated mega tests found</p>;
+          return <Empty text="No evaluated mega tests found" />;
         }
         return (
           <div className="space-y-3">
+            <SummaryBar
+              items={[
+                { label: "Exams", value: mega.evaluatedAttempts },
+                { label: "Total marks", value: `${mega.totalObtained} / ${mega.totalPossible}` },
+                { label: "Overall", value: pct(mega.overallPercentage) },
+                { label: "Average", value: pct(mega.averagePercentage) },
+              ]}
+            />
             {exams.map((exam) => {
               const color = scoreColor(exam.percentage);
               return (
@@ -470,39 +974,28 @@ export default function StudentDashboard() {
                       </span>
                     </span>
                   </summary>
-                  <div className="border-t border-slate-700 px-4 py-3 text-sm text-slate-200">
+                  <div className="space-y-3 border-t border-slate-700 p-4 text-sm text-slate-200">
                     <p className="text-xs text-slate-400">
                       {exam.questionsFullMarks} full marks · {exam.questionsPartial} partial · {exam.questionsZero} zero ({exam.questionsTotal} questions)
                     </p>
                     {exam.overallFeedback && (
-                      <p className="mt-2 whitespace-pre-wrap rounded-md bg-slate-900/60 p-3">{exam.overallFeedback}</p>
+                      <p className="whitespace-pre-wrap rounded-md bg-slate-900/60 p-3">{exam.overallFeedback}</p>
                     )}
-                    {exam.questionWiseResult.length > 0 && (
-                      <div className="mt-3 max-h-72 overflow-auto">
-                        <table className="w-full text-left text-xs">
-                          <thead className="sticky top-0 bg-slate-900 text-slate-400">
-                            <tr>
-                              <th className="px-2 py-1.5">#</th>
-                              <th className="px-2 py-1.5">Question</th>
-                              <th className="px-2 py-1.5">Marks</th>
-                              <th className="px-2 py-1.5">Feedback</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {exam.questionWiseResult.map((q, i) => (
-                              <tr key={i} className="border-t border-slate-800 align-top">
-                                <td className="px-2 py-1.5">{q.questionNo ?? i + 1}</td>
-                                <td className="px-2 py-1.5">{q.question ?? "—"}</td>
-                                <td className="whitespace-nowrap px-2 py-1.5 font-semibold text-white">
-                                  {q.marksAwarded ?? "—"} / {q.maxMarks ?? "—"}
-                                </td>
-                                <td className="px-2 py-1.5">{q.feedback ?? "—"}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                    {exam.questionWiseResult.map((q, i) => (
+                      <div key={i} className="rounded-md border border-slate-700 bg-slate-900/60 p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="text-sm font-medium text-white">
+                            Q{q.questionNo ?? i + 1}. {q.question ?? "—"}
+                          </p>
+                          <span className="whitespace-nowrap text-xs font-semibold text-slate-200">
+                            {q.marksAwarded ?? "—"} / {q.maxMarks ?? "—"}
+                          </span>
+                        </div>
+                        <p className="mt-2 text-[11px] uppercase tracking-wider text-slate-400">Student answer</p>
+                        <p className="whitespace-pre-wrap text-sm text-slate-200">{q.studentAnswer || "Not answered"}</p>
+                        {q.feedback && <p className="mt-1 text-xs text-amber-200">Feedback: {q.feedback}</p>}
                       </div>
-                    )}
+                    ))}
                   </div>
                 </details>
               );
@@ -522,70 +1015,71 @@ export default function StudentDashboard() {
     }
   };
 
-  // Absent days are always counted; for zones where the activity isn't compulsory the card says so.
-  const optionalNote = (compulsory: boolean) => (compulsory ? "" : " · optional for this zone");
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
       <div className="mx-auto w-full max-w-7xl px-4 pb-12 pt-8 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
-          <button
-            onClick={() => router.back()}
-            className="mb-4 inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/60 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
-          >
-            ← Back
-          </button>
-          <div className="mb-6">
-            <h1 className="mb-2 text-4xl font-bold tracking-tight text-white">
-              Student Dashboard
-            </h1>
-            <p className="text-slate-400">
-              {applied
-                ? `Performance overview for ${MONTHS[applied.month - 1]} ${applied.year}`
-                : "Complete academic performance overview"}
-            </p>
-          </div>
-
-          {/* Filters */}
-          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-700/50 bg-slate-800/40 p-4 backdrop-blur-sm">
-            <select
-              value={month ?? ""}
-              onChange={(e) => setMonth(e.target.value ? Number(e.target.value) : null)}
-              className="rounded-lg border border-slate-600 bg-slate-700 px-4 py-2.5 text-sm text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-            >
-              <option value="">Select Month</option>
-              {MONTHS.map((m, i) => (
-                <option key={m} value={i + 1}>{m}</option>
-              ))}
-            </select>
-
-            <select
-              value={year ?? ""}
-              onChange={(e) => setYear(e.target.value ? Number(e.target.value) : null)}
-              className="rounded-lg border border-slate-600 bg-slate-700 px-4 py-2.5 text-sm text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-            >
-              <option value="">Select Year</option>
-              {years.map((y) => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
-
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-4">
             <button
-              onClick={handleSearch}
-              disabled={!month || !year || loading}
-              className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => router.back()}
+              aria-label="Go back"
+              title="Back"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-800/60 text-white transition hover:bg-slate-700"
             >
-              {loading ? "Loading..." : "Apply Filter"}
+              <Undo2 className="h-5 w-5" />
             </button>
+            <div>
+              <h1 className="mb-1 text-4xl font-bold tracking-tight text-white">
+                Student Dashboard
+              </h1>
+              <p className="text-slate-400">
+                {applied
+                  ? `Performance overview for ${MONTHS[applied.month - 1]} ${applied.year}`
+                  : "Complete academic performance overview"}
+              </p>
+            </div>
+            {/* Filters: sit on the same row as the title, pushed to the right (wraps below on narrow screens) */}
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-700/50 bg-slate-800/40 p-3 backdrop-blur-sm lg:ml-auto">
+              <select
+                value={month ?? ""}
+                onChange={(e) => setMonth(e.target.value ? Number(e.target.value) : null)}
+                className="rounded-lg border border-slate-600 bg-slate-700 px-4 py-2.5 text-sm text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              >
+                <option value="">Select Month</option>
+                {MONTHS.map((m, i) => (
+                  <option key={m} value={i + 1}>{m}</option>
+                ))}
+              </select>
 
-            <button
-              onClick={handleReset}
-              disabled={loading}
-              className="rounded-lg border border-slate-600 bg-slate-700 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Reset
-            </button>
+              <select
+                value={year ?? ""}
+                onChange={(e) => setYear(e.target.value ? Number(e.target.value) : null)}
+                className="rounded-lg border border-slate-600 bg-slate-700 px-4 py-2.5 text-sm text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              >
+                <option value="">Select Year</option>
+                {years.map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+
+              <button
+                onClick={handleSearch}
+                disabled={!month || !year || loading}
+                className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loading ? "Loading..." : "Apply Filter"}
+              </button>
+
+              <button
+                onClick={handleReset}
+                disabled={loading}
+                className="rounded-lg border border-slate-600 bg-slate-700 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Reset
+              </button>
+            </div>
           </div>
         </div>
 
@@ -602,7 +1096,7 @@ export default function StudentDashboard() {
           <div className="space-y-8">
             {/* Student Info */}
             <div className="rounded-2xl border border-slate-700/50 bg-gradient-to-br from-slate-800/60 to-slate-800/40 p-6 backdrop-blur-sm">
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              {/* <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <h2 className="text-lg font-semibold text-white">Student Information</h2>
                 <div className="flex items-center gap-3">
                   <span
@@ -628,7 +1122,7 @@ export default function StudentDashboard() {
                         : "Mark as Placed"}
                   </button>
                 </div>
-              </div>
+              </div> */}
               {placementMessage && (
                 <p className="mb-3 text-sm text-slate-300">{placementMessage}</p>
               )}
@@ -645,240 +1139,7 @@ export default function StudentDashboard() {
             {/* Academic performance from the admin API (own range filter) */}
             <AcademicPerformance clerkId={clerkId} initialData={academic} />
 
-            {/* Class Attendance */}
-            <div>
-              <h2 className="mb-4 text-xl font-semibold text-white">Class Attendance</h2>
-              {data.attendance.matched ? (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  <ClickableStatCard
-                    label="Days Present"
-                    value={data.attendance.presentDays}
-                    sub="Punched in and out"
-                    accent="#10b981"
-                    icon={icons.check}
-                    onClick={() => setActiveModal("att-present")}
-                  />
-                  <ClickableStatCard
-                    label="Days Absent"
-                    value={data.attendance.absentDays}
-                    sub={
-                      data.attendance.noPunchOutDays
-                        ? `${data.attendance.noPunchOutDays} missed punch-out`
-                        : "No punch or missed punch-out"
-                    }
-                    accent="#ef4444"
-                    icon={icons.cross}
-                    onClick={() => setActiveModal("att-absent")}
-                  />
-                  <ClickableStatCard
-                    label="Attendance"
-                    value={pct(data.attendance.attendancePercentage)}
-                    sub={`Of ${data.attendance.expectedDays} expected days`}
-                    accent={participationColor(data.attendance.attendancePercentage)}
-                    icon={icons.chart}
-                  />
-                </div>
-              ) : (
-                <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-6 text-sm text-slate-400">
-                  Attendance isn&apos;t tracked for this student yet — no biometric ID is linked.
-                </div>
-              )}
-            </div>
-
-            {/* Quiz Performance */}
-            <div>
-              <h2 className="mb-4 text-xl font-semibold text-white">Quiz Performance</h2>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <ClickableStatCard
-                  label="Days Attempted"
-                  value={data.dailyQuiz.daysAttempted}
-                  sub={`Of ${data.dailyQuiz.daysUploaded} days a quiz was uploaded`}
-                  accent="#3b82f6"
-                  icon={icons.calendar}
-                  onClick={() => setActiveModal("quiz-present")}
-                />
-                <ClickableStatCard
-                  label="Days Absent"
-                  value={data.dailyQuiz.absentDays}
-                  sub={`Quiz uploaded, none attempted${optionalNote(data.dailyQuiz.compulsory)}`}
-                  accent="#ef4444"
-                  icon={icons.cross}
-                  onClick={() => setActiveModal("quiz-absent")}
-                />
-                <ClickableStatCard
-                  label="Quizzes Attempted"
-                  value={`${data.dailyQuiz.quizzesAttempted} / ${data.dailyQuiz.quizzesUploaded}`}
-                  sub="Uploaded for the student's batch"
-                  accent="#f97316"
-                  icon={icons.doc}
-                />
-                <ClickableStatCard
-                  label="Participation"
-                  value={pct(data.dailyQuiz.attendancePercentage)}
-                  sub={`${data.dailyQuiz.presentDays} present · ${data.dailyQuiz.absentDays} absent`}
-                  accent={participationColor(data.dailyQuiz.attendancePercentage)}
-                  icon={icons.chart}
-                />
-              </div>
-            </div>
-
-            {/* Mega Test */}
-            <div>
-              <h2 className="mb-4 text-xl font-semibold text-white">Mega Test Performance</h2>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <ClickableStatCard
-                  label="Exams Taken"
-                  value={data.weeklyTest.evaluatedAttempts}
-                  sub={
-                    data.weeklyTest.notEvaluatedAttempts
-                      ? `${data.weeklyTest.notEvaluatedAttempts} awaiting evaluation`
-                      : "Evaluated mega tests"
-                  }
-                  accent="#f472b6"
-                  icon={icons.doc}
-                  onClick={() => setActiveModal("mega-exams")}
-                />
-                <ClickableStatCard
-                  label="Marks Scored"
-                  value={`${data.weeklyTest.totalObtained} / ${data.weeklyTest.totalPossible}`}
-                  sub={`Overall ${pct(data.weeklyTest.overallPercentage)}`}
-                  accent="#10b981"
-                  icon={icons.chart}
-                  onClick={() => setActiveModal("mega-exams")}
-                />
-                <ClickableStatCard
-                  label="Average Score"
-                  value={pct(data.weeklyTest.averagePercentage)}
-                  sub={
-                    data.weeklyTest.change === null
-                      ? "Mean of all exams"
-                      : `${data.weeklyTest.change >= 0 ? "Up" : "Down"} ${Math.abs(data.weeklyTest.change)} pts vs previous exam`
-                  }
-                  accent={scoreColor(data.weeklyTest.averagePercentage)}
-                  icon={icons.chart}
-                />
-                <ClickableStatCard
-                  label="Best Score"
-                  value={pct(data.weeklyTest.highest?.percentage)}
-                  sub={data.weeklyTest.highest?.examTitle ?? "No exam yet"}
-                  accent="#a78bfa"
-                  icon={icons.check}
-                />
-              </div>
-            </div>
-
-            {/* AI Mock Interviews */}
-            <div>
-              <h2 className="mb-4 text-xl font-semibold text-white">AI Mock Interview Performance</h2>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <ClickableStatCard
-                  label="Total Attempts"
-                  value={`${data.aiMockInterview.attemptsUsed} / ${data.aiMockInterview.attemptLimit}`}
-                  sub={`${data.aiMockInterview.attemptsLeft} attempt${data.aiMockInterview.attemptsLeft === 1 ? "" : "s"} left`}
-                  accent="#f97316"
-                  icon={icons.people}
-                />
-                <ClickableStatCard
-                  label="Days Attempted"
-                  value={data.aiMockInterview.daysAttempted}
-                  sub="Days with an interview"
-                  accent="#10b981"
-                  icon={icons.check}
-                  onClick={() => setActiveModal("mock-present")}
-                />
-                <ClickableStatCard
-                  label="Days Absent"
-                  value={data.aiMockInterview.absentDays}
-                  sub={`Working days with no interview${optionalNote(data.aiMockInterview.compulsory)}`}
-                  accent="#ef4444"
-                  icon={icons.cross}
-                  onClick={() => setActiveModal("mock-absent")}
-                />
-                <ClickableStatCard
-                  label="Participation"
-                  value={pct(data.aiMockInterview.attendancePercentage)}
-                  sub={`Of ${data.aiMockInterview.expectedDays} expected days`}
-                  accent={participationColor(data.aiMockInterview.attendancePercentage)}
-                  icon={icons.chart}
-                />
-              </div>
-            </div>
-
-            {/* AI HR Calling */}
-            <div>
-              <h2 className="mb-4 text-xl font-semibold text-white">AI HR Calling</h2>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <ClickableStatCard
-                  label="Total Calls"
-                  value={data.aiHrCalling.totalCalls}
-                  sub={`Up to ${data.aiHrCalling.maxCallsPerDay} calls a day`}
-                  accent="#3b82f6"
-                  icon={icons.phone}
-                  onClick={() => setActiveModal("ai-days")}
-                />
-                <ClickableStatCard
-                  label="Picked Up"
-                  value={data.aiHrCalling.callsPicked}
-                  sub={`${data.aiHrCalling.presentDays} day${data.aiHrCalling.presentDays === 1 ? "" : "s"} answered`}
-                  accent="#10b981"
-                  icon={icons.check}
-                />
-                <ClickableStatCard
-                  label="Not Answered"
-                  value={data.aiHrCalling.callsDnp}
-                  sub="Calls never picked up"
-                  accent="#f59e0b"
-                  icon={icons.cross}
-                />
-                <ClickableStatCard
-                  label="Days Absent"
-                  value={data.aiHrCalling.absentDays}
-                  sub="Every call of the day missed"
-                  accent="#ef4444"
-                  icon={icons.cross}
-                  onClick={() => setActiveModal("ai-absent")}
-                />
-              </div>
-            </div>
-
-            {/* HR Calls — green zone only */}
-            {data.realHrCalling.applicable && (
-              <div>
-                <h2 className="mb-4 text-xl font-semibold text-white">HR Call Records</h2>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <ClickableStatCard
-                    label="Total Calls"
-                    value={data.realHrCalling.totalCalls}
-                    sub="All logged calls"
-                    accent="#3b82f6"
-                    icon={icons.phone}
-                    onClick={() => setActiveModal("real-days")}
-                  />
-                  <ClickableStatCard
-                    label="Recorded"
-                    value={data.realHrCalling.callsConnected}
-                    sub="Calls with a recording"
-                    accent="#10b981"
-                    icon={icons.check}
-                  />
-                  <ClickableStatCard
-                    label="Not Connected"
-                    value={data.realHrCalling.callsNotConnected}
-                    sub="DNP, invalid or out of service"
-                    accent="#f59e0b"
-                    icon={icons.clock}
-                  />
-                  <ClickableStatCard
-                    label="Days Absent"
-                    value={data.realHrCalling.absentDays}
-                    sub="Called but never recorded"
-                    accent="#ef4444"
-                    icon={icons.cross}
-                    onClick={() => setActiveModal("real-absent")}
-                  />
-                </div>
-              </div>
-            )}
+            <KpiDashboard data={data} onOpen={setActiveModal} />
           </div>
         ) : (
           <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-16 text-center backdrop-blur-sm">
