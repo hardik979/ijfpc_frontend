@@ -211,6 +211,7 @@ export interface StudentProfile {
   fullName?: string;
   email?: string;
   joinedMonth?: string | null;
+  createdAt?: string | null;
   isPlaced?: boolean;
   batch?: string | null;
   courseName?: string | null;

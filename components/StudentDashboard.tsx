@@ -835,11 +835,28 @@ export default function StudentDashboard() {
 
   const years = Array.from({ length: 5 }, (_, i) => now.getFullYear() - 2 + i);
 
-  // First / last quiz day in the selected period, shown as the student's "Active Period".
-  const activePeriod = useMemo(() => {
-    const days = data?.dailyQuiz?.presentDates ?? [];
-    return days.length ? `${formatKey(days[0])} - ${formatKey(days[days.length - 1])}` : "—";
-  }, [data]);
+  // How long a not-yet-placed student has been enrolled: admission date (createdAt) to
+  // now, as calendar months + remaining days — "1 month 15 day" style. Only meaningful
+  // while they're still active/not placed, so it's hidden once they are placed.
+  const timeSinceAdmission = useMemo(() => {
+    const createdAt = data?.student?.createdAt;
+    if (!createdAt) return null;
+
+    const start = new Date(createdAt);
+    if (Number.isNaN(start.getTime())) return null;
+
+    const end = new Date();
+    let months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+    let days = end.getDate() - start.getDate();
+
+    if (days < 0) {
+      months -= 1;
+      days += new Date(end.getFullYear(), end.getMonth(), 0).getDate();
+    }
+    if (months < 0) return null;
+
+    return `${months} month ${days} day`;
+  }, [data?.student?.createdAt]);
 
   const fetchStudentDetails = async (filter?: {
     month?: number | null;
@@ -1131,7 +1148,9 @@ export default function StudentDashboard() {
                 <InfoCard label="Email" value={data.student?.email} />
                 <InfoCard label="Joined" value={data.student?.joinedMonth} />
                 <InfoCard label="Batch" value={data.student?.batch} />
-                <InfoCard label="Active Period" value={activePeriod} />
+                {!isPlaced && timeSinceAdmission && (
+                  <InfoCard label="Time Since Admission" value={timeSinceAdmission} />
+                )}
                 <InfoCard label="Course" value={data.student?.courseName} />
               </div>
             </div>

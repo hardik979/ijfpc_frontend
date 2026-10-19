@@ -99,6 +99,18 @@ export const ACCESS: Record<string, readonly Role[]> = {
     ROLES.SUPER_ADMIN,
     ROLES?.PREEPLACEMENT_STAFF,
   ],
+  "/student-academic-report": [
+    ROLES.STUDENT_MANAGEMENT,
+    ROLES.ADMIN,
+    ROLES.SUPER_ADMIN,
+    ROLES?.PREEPLACEMENT_STAFF,
+  ],
+  "/student-attendance-report": [
+    ROLES.STUDENT_MANAGEMENT,
+    ROLES.ADMIN,
+    ROLES.SUPER_ADMIN,
+    ROLES?.PREEPLACEMENT_STAFF,
+  ],
   "/feedback-dash": [ROLES?.FOUNDER, ROLES?.SUPER_ADMIN],
 } as const;
 

@@ -17,6 +17,8 @@ import {
   PauseCircle,
   Phone,
   CalendarCheck,
+  ClipboardList,
+  UserCheck,
 } from "lucide-react";
 import { useAttendanceEntry } from "@/components/AttendanceLink";
 import ZoneStudentAnalytics from "./ZoneStudentAnalytics";
@@ -933,6 +935,30 @@ const StudentsListPage = () => {
                 >
                   <GraduationCap className="h-4 w-4 text-[var(--so-text-muted)]" />
                   Academic Results
+                </Link>
+                <Link
+                  href="/student-academic-report"
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-[var(--so-text-primary)] transition hover:bg-[var(--so-bg-hover)]"
+                >
+                  <ClipboardList className="h-4 w-4 text-[var(--so-text-muted)]" />
+                  <span className="flex flex-col">
+                    Student Academic Report
+                    <span className="text-xs text-[var(--so-text-muted)]">
+                      Overall, attendance, quiz &amp; test score per student
+                    </span>
+                  </span>
+                </Link>
+                <Link
+                  href="/student-attendance-report"
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-[var(--so-text-primary)] transition hover:bg-[var(--so-bg-hover)]"
+                >
+                  <UserCheck className="h-4 w-4 text-[var(--so-text-muted)]" />
+                  <span className="flex flex-col">
+                    Student Attendance
+                    <span className="text-xs text-[var(--so-text-muted)]">
+                      Total active students &amp; their attendance
+                    </span>
+                  </span>
                 </Link>
                 <Link
                   href="/communication-analytics"
