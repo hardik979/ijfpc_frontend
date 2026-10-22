@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { apiPost } from "@/lib/api";
+import { API_LMS_URL } from "@/lib/api";
 import { Upload, X, Check, Loader2, Music } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -28,38 +28,23 @@ export default function UploadRecording() {
       const token = await getToken();
       if (!token) throw new Error("No token");
 
-      // 1. Get Presigned URL
-      const presign = await apiPost<{
-        ok: boolean;
-        uploadUrl: string;
-        recordingId: string;
-      }>(
-        "/recordings/presign",
-        {
-          leadId,
-          originalFileName: file.name,
-          mimeType: file.type,
-        },
-        token,
-      );
+      // Proxied through the backend (lms-backend uploads straight to R2 on
+      // the server side) rather than a presigned direct-to-R2 PUT — see
+      // routes/recording.routes.js's POST /upload there.
+      const formData = new FormData();
+      formData.append("userId", leadId);
+      formData.append("files", file);
 
-      if (!presign.ok) throw new Error("Presign failed");
-
-      // 2. Upload to R2
-      await fetch(presign.uploadUrl, {
-        method: "PUT",
-        body: file,
-        headers: {
-          "Content-Type": file.type,
-        },
+      const res = await fetch(`${API_LMS_URL}/api/recordings/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
       });
 
-      // 3. Confirm Upload
-      await apiPost(
-        `/recordings/${presign.recordingId}/confirm-upload`,
-        {},
-        token,
-      );
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || `Upload failed: ${res.status}`);
+      }
 
       setIsOpen(false);
       setFile(null);

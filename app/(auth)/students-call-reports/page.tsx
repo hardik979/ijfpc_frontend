@@ -24,6 +24,7 @@ import RealHrPerformers from "@/components/reports/RealHrPerformers";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import InterviewSummaryPanel, { type ExternalInterviewRaw, type GroupSummary } from "@/components/reports/Interviewsummarypanel.js";
 import { AttendanceGate } from "@/components/AttendanceLink";
+import { API_LMS_URL } from "@/lib/api";
  
 
 interface RecordingReport {
@@ -107,8 +108,9 @@ export default function StudentsCallReports() {
       const token = await getToken();
       if (!token) return;
 
-      const baseUrl = process.env.NEXT_PUBLIC_HR_URL;
-      let url = `${baseUrl}/api/reports/all-reports`;
+      // Migrated from the HR backend (ijfhr_backend) to lms-backend — see
+      // routes/callReports.routes.js there.
+      let url = `${API_LMS_URL}/api/reports/all-reports`;
 
       if (filterType === "day") {
         url += `?filterType=day&date=${selectedDate}`;
